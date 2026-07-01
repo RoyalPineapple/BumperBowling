@@ -31,6 +31,7 @@ The `domain_models` rule is deliberately syntax-first in 0.0. It checks explicit
 swift test
 swift run bumper lint .
 swift run bumper scan .
+swift run bumper diagram .
 swift run bumper explain Sources/BumperBowlingCore/ArchitectureLinter.swift
 ```
 
@@ -42,6 +43,7 @@ swift run bumper explain Sources/BumperBowlingCore/ArchitectureLinter.swift
 bumper init [root]
 bumper lint [root]
 bumper scan [root]
+bumper diagram [root]
 bumper explain <path>
 ```
 
@@ -105,7 +107,7 @@ DSL constructors parse strings into typed values at the boundary. The rule engin
 
 ## Architecture
 
-Bumper Bowling is adapter-driven. See [SYSTEM_DIAGRAM.md](SYSTEM_DIAGRAM.md) for the command flow, conceptual layers, and 0.0 boundaries.
+Bumper Bowling is adapter-driven. See [SYSTEM_DIAGRAM.md](SYSTEM_DIAGRAM.md) for the generated command flow, conceptual layers, and 0.0 boundaries.
 
 Swift is the only language adapter in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftLanguageAdapter`; the adapter boundary exists so parsing stays isolated from the rule engine.
 
@@ -121,6 +123,12 @@ swift run bumper lint .
 CI runs both commands on macOS.
 
 SwiftLint is intentionally adjacent. The repo includes `.swiftlint.yml`, but Bumper Bowling does not shell out to SwiftLint and is not a replacement for it.
+
+Regenerate the checked-in system diagram with:
+
+```bash
+swift run -q bumper diagram . > SYSTEM_DIAGRAM.md
+```
 
 ## Non-Goals For 0.0
 

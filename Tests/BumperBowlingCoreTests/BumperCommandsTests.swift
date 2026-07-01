@@ -33,6 +33,17 @@ struct BumperCommandsTests {
         #expect(report.violations.map(\.ruleID).contains(.forbiddenImport))
     }
 
+    @Test
+    func diagramIsDeterministicCommandOutput() throws {
+        let root = repositoryRoot()
+        let checkedInDiagram = try String(
+            contentsOf: root.appendingPathComponent("SYSTEM_DIAGRAM.md"),
+            encoding: .utf8
+        )
+
+        #expect(checkedInDiagram == (try BumperCommands.diagram(root: root)))
+    }
+
     private func makeRepository(source: String) throws -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
@@ -43,5 +54,12 @@ struct BumperCommandsTests {
         )
         try source.write(to: sourceFile, atomically: true, encoding: .utf8)
         return root
+    }
+
+    private func repositoryRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }

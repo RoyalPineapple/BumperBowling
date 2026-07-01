@@ -433,7 +433,7 @@ public struct ArchitectureViolation: Equatable, Sendable {
     }
 }
 
-public enum RuleID: String, Equatable, Sendable {
+public enum RuleID: String, CaseIterable, Equatable, Sendable {
     case forbiddenImport = "forbidden_import"
     case subsystemBoundary = "subsystem_boundary"
     case duplicateOwnership = "duplicate_ownership"
