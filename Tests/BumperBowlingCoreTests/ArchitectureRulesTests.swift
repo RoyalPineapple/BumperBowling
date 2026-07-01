@@ -1,0 +1,54 @@
+import Testing
+@testable import BumperBowlingCore
+
+@Suite("ArchitectureRules")
+struct ArchitectureRulesTests {
+    @Test
+    func rejectsUnknownDependencies() {
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(
+                    name: "Recording",
+                    paths: ["Sources/Recording"],
+                    mayDependOn: ["Playback"]
+                ),
+            ]
+        )
+
+        #expect(throws: ConfigurationError.unknownDependency("recording", "playback")) {
+            try ArchitectureRules(configuration: configuration)
+        }
+    }
+
+    @Test
+    func rejectsDuplicateModuleAliases() {
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "Recording", modules: ["FeatureKit"], paths: ["Sources/Recording"]),
+                SubsystemConfiguration(name: "Playback", modules: ["FeatureKit"], paths: ["Sources/Playback"]),
+            ]
+        )
+
+        #expect(throws: ConfigurationError.duplicateModule("FeatureKit")) {
+            try ArchitectureRules(configuration: configuration)
+        }
+    }
+
+    @Test
+    func recordsOverlappingPathOwnership() throws {
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "Core", paths: ["Sources/Core"]),
+                SubsystemConfiguration(name: "Models", paths: ["Sources/Core/Models"]),
+            ]
+        )
+
+        let rules = try ArchitectureRules(configuration: configuration)
+        let conflict = try #require(rules.pathOwnershipConflicts.first)
+
+        #expect(conflict.path == (try RelativePathPrefix("Sources/Core/Models")))
+        #expect(conflict.owner == (try SubsystemID("Models")))
+        #expect(conflict.overlappingPath == (try RelativePathPrefix("Sources/Core")))
+        #expect(conflict.overlappingOwner == (try SubsystemID("Core")))
+    }
+}
