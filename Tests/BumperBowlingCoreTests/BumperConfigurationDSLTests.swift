@@ -15,22 +15,23 @@ struct BumperConfigurationDSLTests {
             }
 
             Architecture {
-                Layer(.core) {
+                Component(.core) {
                     Owns("Sources/Core")
                     Modules("CoreKit")
                     DoesNotUse("XCTest", severity: .error)
-                    Requires(.immutableState, .functionalCore, severity: .warning)
+                    Requires(.immutableStoredState, severity: .warning)
+                    Disallows(.assignment, .mutableBinding, severity: .warning)
                 }
 
-                Layer(.cli) {
+                Component(.cli) {
                     Owns("Sources/CLI")
                     Modules("CLI")
-                    DependsOn(.core)
+                    MayDependOn(.core)
                 }
             }
 
-            Rules {
-                SubsystemBoundary(.error)
+            Assertions {
+                DependencyBoundaries(.error)
             }
         }.architectureConfiguration
 
@@ -40,7 +41,14 @@ struct BumperConfigurationDSLTests {
         #expect(!rules.includes(try RelativeFilePath(".build/debug/Thing.swift")))
         #expect(rules.forbiddenImports == Set([try ModuleName("XCTest")]))
         #expect(rules.ruleConfiguration.forbiddenImports.first?.paths == ["Sources/Core"])
-        #expect(rules.ruleConfiguration.domainModels.disallowances == [.storedVar, .imperativeConstructs])
+        #expect(
+            rules.ruleConfiguration.domainModels.disallowances ==
+                Set<DomainModelDisallowance>([.storedVar, .imperativeConstructs])
+        )
+        #expect(
+            rules.ruleConfiguration.domainModels.imperativeConstructs ==
+                Set<ImperativeConstruct>([.assignment, .mutableBinding])
+        )
         #expect(rules.ruleConfiguration.domainModels.paths == ["Sources/Core"])
     }
 }

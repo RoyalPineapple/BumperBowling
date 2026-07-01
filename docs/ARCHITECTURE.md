@@ -6,7 +6,7 @@ The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). The DSL is the typed a
 
 Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, baselines, reporters, and a primary `bumper lint` command.
 
-It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns the positive architecture contract: what each layer owns, depends on, may depend on, does not use, and requires from its models.
+It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns the formal codebase shape: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
 
 SwiftLint configuration lives in `.swiftlint.yml`.
 
@@ -15,22 +15,22 @@ The tool should stay tiny. Prefer a small SwiftSyntax-first core, simple Swift D
 ## Core Model
 
 ```text
-SwiftSyntax observes source syntax
-Bumper DSL declares architectural expectations
-Bumper builds deterministic facts
-Bumper normalizes facts into an ArchitectureGraph
-Rules assert over the graph
+SwiftSyntax reads the code
+Bumper keeps the facts that matter
+Those facts form an ArchitectureGraph
+Your DSL defines the lanes
+Lint fails when the graph drifts
 ```
 
 Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane.
 
-The DSL should declare the architecture the repository wants, then derive violations from that contract. Prefer `Layer`, `Owns`, `DependsOn`, `MayDependOn`, `DoesNotUse`, and `Requires` over free-floating negative rules.
+The DSL should declare the architecture the repository wants, then derive violations from that contract. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and `Requires` over free-floating negative rules.
 
 `scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence, not policy. The DSL turns chosen parts of the observed architecture into enforced bounds.
 
-SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Add graph facts only when they support an assertion Bumper Bowling can explain.
+SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Add graph facts only when they support an assertion Bumper Bowling can explain. Keep receipts for every finding: report the observed graph fact, the declared lane, and why they do not match.
 
-Future discovery should surface candidate assertions from that graph: possible layers, dependency edges, framework boundaries, and modeling conventions the code already appears to follow. Candidate assertions are suggestions, not policy, until a human promotes them into the DSL.
+Future discovery should surface candidate assertions from that graph: possible components, dependency edges, framework boundaries, and modeling conventions the code already appears to follow. Candidate assertions are suggestions, not policy, until a human promotes them into the DSL.
 
 ## Subsystems
 

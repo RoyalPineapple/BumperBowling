@@ -1,16 +1,16 @@
 # Bumper Bowling Swift DSL Specification
 
-Bumper Bowling's assertion surface is Swift. The DSL is intentionally small and familiar to SwiftLint users, but its center is positive architecture: layers own code, depend on other layers, declare what they do not use, and require modeling guarantees.
+Bumper Bowling's assertion surface is Swift. The DSL is intentionally small and familiar to SwiftLint users, but its center is codebase shape: components own code, declare allowed dependencies and capabilities, and require modeling guarantees.
 
 In 0.0, the DSL is the typed library API and sample authoring shape. The CLI still uses its built-in repository configuration; executing `BumperBowling.swift` as a config file is post-MVP.
 
-The DSL declares the architecture the repository wants. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed syntax facts satisfy the declared architecture.
+The DSL declares the shape the repository wants. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed graph facts satisfy the declared shape.
 
 `bumper scan` discovers the architecture graph the code currently expresses. The DSL declares which parts of that graph are intended bounds.
 
 Candidate assertions may be discovered from the graph, but they are not enforced until written into the DSL.
 
-The graph is intentionally not a second AST. It is a compact projection of facts Bumper rules can use.
+The graph is intentionally not a second AST. It is a compact projection of facts Bumper rules can use, and it is the receipt trail for every finding.
 
 The DSL compiles into typed architecture rules:
 
@@ -45,47 +45,54 @@ let configuration = BumperConfiguration {
     }
 
     Architecture {
-        Layer(.core) {
+        Component(.core) {
             Owns("Sources/BumperBowlingCore")
             Modules("BumperBowlingCore")
-            DoesNotUse("XCTest", "Testing", severity: .error)
-            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableState, severity: .warning)
-            Requires(.enumStateMachine, severity: .error, in: "Sources/BumperBowlingCore/SwiftFileParser.swift")
+            MayUse(.foundation)
+            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
+            RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
-        Layer(.cli) {
+        Component(.cli) {
             Owns("Sources/BumperBowling")
             Modules("BumperBowling")
-            DependsOn(.core)
-            DoesNotUse("XCTest", "Testing", severity: .error)
+            MayDependOn(.core)
+            MayUse(.foundation)
         }
     }
 
-    Rules {
-        SubsystemBoundary(.error)
-        DuplicateOwnership(.error)
-        DependencyCycle(.error)
+    Assertions {
+        DependencyBoundaries(.error)
+        SingleOwner(.error)
+        AcyclicDependencies(.error)
     }
 }
 ```
 
 ## Core Vocabulary
 
-- `Layer`: a named architectural area.
-- `Owns`: paths owned by that layer.
-- `Modules`: module aliases that identify that layer in imports.
-- `DependsOn`: an intended dependency edge.
+- `Component`: a named architectural area.
+- `Owns`: paths owned by that component.
+- `Modules`: module aliases that identify that component in imports.
 - `MayDependOn`: an allowed optional dependency edge.
-- `DoesNotUse`: layer-scoped modules or frameworks that must not appear in imports.
+- `MayUse`: allowed capability imports for a component.
+- `DoesNotUse`: component-scoped modules or frameworks that must not appear in imports.
 - `Requires`: positive modeling guarantees that derive syntax-first checks.
+- `Disallows`: concrete syntax facts that must not appear in a component.
+- `Assertions`: graph-level assertions such as ownership and dependency shape.
 
 Current modeling requirements include:
 
 - `.explicitDomainSurfaces`: disallow `Any` and broad existentials where configured.
 - `.typedIdentity`: disallow raw `String` stored identity where configured.
-- `.immutableState`: disallow mutable stored properties where configured.
-- `.functionalCore`: disallow observed imperative constructs where configured, such as loops, assignments, mutable bindings, `inout` expressions, and `mutating` declarations.
+- `.immutableStoredState`: disallow mutable stored properties where configured.
 - `.enumStateMachine`: require parser/workflow files to declare an enum state machine where configured.
+
+Concrete imperative facts can be disallowed directly:
+
+```swift
+Disallows(.assignment, .loop, .mutableBinding)
+```
 
 ## MVP Commands
 
@@ -125,7 +132,7 @@ See [MODELING_ASSERTIONS.md](MODELING_ASSERTIONS.md) for an example of using Bum
 Bumper Bowling is SwiftSyntax-driven:
 
 ```text
-SwiftSyntax -> SourceFileFacts -> RepositoryFacts -> RuleRegistry
+SwiftSyntax -> SourceFileFacts -> RepositoryFacts -> ArchitectureGraph -> RuleRegistry
 ```
 
 Swift is the only language surface in 0.0. The DSL must not promise facts SwiftSyntax cannot observe, such as symbol resolution, inferred types, or compiler-level dependency truth.

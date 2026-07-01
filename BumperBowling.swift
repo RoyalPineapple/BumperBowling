@@ -15,25 +15,25 @@ let configuration = BumperConfiguration {
     }
 
     Architecture {
-        Layer(.core) {
+        Component(.core) {
             Owns("Sources/BumperBowlingCore")
             Modules("BumperBowlingCore")
-            DoesNotUse("XCTest", "Testing", severity: .error)
-            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableState, severity: .warning)
-            Requires(.enumStateMachine, severity: .error, in: "Sources/BumperBowlingCore/SwiftFileParser.swift")
+            MayUse(.foundation)
+            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
+            RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
-        Layer(.cli) {
+        Component(.cli) {
             Owns("Sources/BumperBowling")
             Modules("BumperBowling")
-            DependsOn(.core)
-            DoesNotUse("XCTest", "Testing", severity: .error)
+            MayDependOn(.core)
+            MayUse(.foundation)
         }
     }
 
-    Rules {
-        SubsystemBoundary(.error)
-        DuplicateOwnership(.error)
-        DependencyCycle(.error)
+    Assertions {
+        DependencyBoundaries(.error)
+        SingleOwner(.error)
+        AcyclicDependencies(.error)
     }
 }

@@ -264,8 +264,16 @@ public enum ArchitectureRule: Sendable {
                 return propertyViolations
             }
 
-            return propertyViolations + file.imperativeConstructs.map { construct in
-                violation(
+            let disallowedConstructs = configuration.imperativeConstructs.isEmpty
+                ? Set(file.imperativeConstructs)
+                : configuration.imperativeConstructs
+
+            return propertyViolations + file.imperativeConstructs.compactMap { construct in
+                guard disallowedConstructs.contains(construct) else {
+                    return nil
+                }
+
+                return violation(
                     severity: configuration.severity,
                     path: file.path,
                     message: "Uses imperative construct \(construct.rawValue)"

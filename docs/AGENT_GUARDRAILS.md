@@ -1,5 +1,8 @@
 # Agent Guardrails
 
+- Bumper Bowling keeps agents in their lane by validating changes against the declared codebase shape.
+- Treat every violation as a receipt: observed graph fact, declared lane, mismatch.
+- Fix the code first; update the lane only when the intended architecture actually changed.
 - Keep changes scoped to the subsystem named by the task.
 - Update `BumperBowling.swift` only when the architectural contract intentionally changes.
 - Regenerate `docs/ARCHITECTURE_SNAPSHOT.md` with `swift run -q bumper snapshot . > docs/ARCHITECTURE_SNAPSHOT.md` when command flow, core pipeline types, or rule IDs change.

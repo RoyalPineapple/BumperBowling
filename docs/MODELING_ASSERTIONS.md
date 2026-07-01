@@ -4,11 +4,11 @@ Bumper Bowling does not overlap with SwiftLint.
 
 SwiftLint owns Swift style: formatting, naming, whitespace, line length, sorted imports, brace placement, and local code smells.
 
-Bumper Bowling owns architecture and modeling policy when that policy is visible to SwiftSyntax. It starts by declaring the architecture the repository wants, then derives violations from that contract.
+Bumper Bowling owns architecture and modeling policy when that policy is visible to SwiftSyntax. It starts by declaring the shape the repository wants, then derives violations from that contract.
 
 ## Example
 
-This configuration says the domain layer owns its paths, avoids test frameworks, exposes explicit domain surfaces, uses typed identity, keeps state immutable, prefers a functional core, and models parser progress as an enum state machine.
+This configuration says the domain component owns its paths, may use Foundation, exposes explicit domain surfaces, uses typed identity, keeps stored state immutable, disallows selected imperative constructs, and models parser progress as an enum state machine.
 
 ```swift
 import BumperBowlingCore
@@ -24,12 +24,13 @@ let configuration = BumperConfiguration {
     }
 
     Architecture {
-        Layer(.core) {
+        Component(.core) {
             Owns("Sources/Core")
             Modules("Core")
-            DoesNotUse("XCTest", "Testing", severity: .error)
-            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableState, .functionalCore, severity: .error)
-            Requires(.enumStateMachine, severity: .error, in: "Sources/Core/**/*Parser.swift")
+            MayUse(.foundation)
+            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .error)
+            Disallows(.assignment, .loop, .mutableBinding, .inoutExpression, .mutatingDeclaration, severity: .error)
+            RequiresScoped(.enumStateMachine, "Sources/Core/**/*Parser.swift", severity: .error)
         }
     }
 }
@@ -47,10 +48,10 @@ Owns("Sources/Core")
 
 That keeps a rule from becoming vague repo-wide pressure.
 
-Layer usage and modeling assertions have a severity:
+Component usage and modeling assertions have a severity:
 
 ```swift
-DoesNotUse("XCTest", "Testing", severity: .error)
+MayUse(.foundation, severity: .error)
 Requires(.typedIdentity, severity: .error)
 ```
 
@@ -67,16 +68,16 @@ That keeps Bumper Bowling tied to observable SwiftSyntax facts instead of subjec
 Every opt-in assertion is explicit:
 
 ```swift
-Requires(.enumStateMachine, severity: .error, in: "Sources/Core/**/*Parser.swift")
+RequiresScoped(.enumStateMachine, "Sources/Core/**/*Parser.swift", severity: .error)
 ```
 
 That keeps strong modeling constraints intentional, local, and reviewable.
 
 ## What This Means
 
-`Requires(.immutableState)` is not a formatting preference. It asserts that domain state should be immutable after construction.
+`Requires(.immutableStoredState)` is not a formatting preference. It asserts that domain state should be immutable after construction.
 
-`Requires(.functionalCore)` is not a formatting preference. It asserts that configured paths should not contain imperative constructs SwiftSyntax can observe, such as loops, assignments, mutable bindings, `inout` expressions, and `mutating` declarations.
+`Disallows(.assignment, .loop, .mutableBinding)` is not a formatting preference. It asserts that configured paths should not contain those imperative constructs when SwiftSyntax observes them.
 
 `Requires(.typedIdentity)` is not a naming convention. It asserts that identity and validation should be modeled as types at the boundary instead of carried through the domain as raw strings.
 

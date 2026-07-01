@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling is a tiny Swift DSL for asserting architecture over SwiftSyntax-observed source facts.
+Bumper Bowling keeps agents in their lane: declare the shape your Swift codebase should have, then validate every change against that shape.
 
-It is meant to run beside SwiftLint. SwiftLint owns local Swift style and code smells; Bumper Bowling owns the positive architecture contract: what each layer owns, depends on, may depend on, does not use, and requires from its models.
+It is meant to run beside SwiftLint. SwiftLint owns local Swift style and code smells; Bumper Bowling owns the formal codebase shape: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
 
 ## Status
 
@@ -15,23 +15,25 @@ The current CLI is useful for proving the core model on this repository. The Swi
 ## Model
 
 ```text
-SwiftSyntax observes source syntax
-Bumper DSL declares architectural expectations
-Bumper builds deterministic facts
-Bumper normalizes facts into an ArchitectureGraph
-Rules assert over the graph
+SwiftSyntax reads the code
+Bumper keeps the facts that matter
+Those facts form an ArchitectureGraph
+Your DSL defines the lanes
+Lint fails when the graph drifts
 ```
 
 Bumper Bowling only asserts architecture visible to SwiftSyntax plus configured repo shape. It does not resolve symbols, infer types, expand macros semantically, or prove compiler-level dependencies.
 
-The DSL starts from the architecture you want:
+Bumper keeps receipts. Every finding should trace back to an observed graph fact, and `scan`, `explain`, and `snapshot` expose the evidence Bumper used.
+
+The DSL starts from the shape you want:
 
 ```swift
-Layer(.core) {
+Component(.core) {
     Owns("Sources/BumperBowlingCore")
     Modules("BumperBowlingCore")
-    DoesNotUse("XCTest", "Testing", severity: .error)
-    Requires(.explicitDomainSurfaces, .typedIdentity, .immutableState, severity: .warning)
+    MayUse(.foundation)
+    Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
 }
 ```
 
@@ -43,6 +45,18 @@ The graph is a normalized projection of SwiftSyntax facts, not a copy of the ful
 
 That gives Bumper Bowling a useful loop: inspect the current graph, surface candidate assertions the code appears to follow, and let humans promote the meaningful ones into `BumperBowling.swift`.
 
+## Agent Workflow
+
+Bumper Bowling is designed for agentic coding loops:
+
+1.  Declare the lanes in the DSL.
+2.  Let an agent make a change.
+3.  Run `bumper lint`.
+4.  Use the receipt to see the observed graph fact, the declared lane, and the mismatch.
+5.  Repair the smallest thing: move the code, change the dependency, or intentionally update the lane.
+
+The goal is not to make agents timid. The goal is to give them fast, formal feedback when they cross an architectural boundary.
+
 ## What It Checks
 
 MVP rules:
@@ -51,7 +65,7 @@ MVP rules:
 - `subsystem_boundary`: require subsystem imports to match declared dependencies.
 - `duplicate_ownership`: detect overlapping subsystem path ownership.
 - `dependency_cycle`: reject cycles in configured subsystem dependencies.
-- `domain_models`: enforce syntax-first domain modeling rules, including optional functional-core constraints.
+- `domain_models`: enforce syntax-first domain modeling rules, including concrete imperative-construct constraints.
 - `enum_state_machine`: require parser files to declare an enum state machine.
 
 The `domain_models` rule is deliberately syntax-first in 0.0. It checks explicit stored-property type annotations for mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not perform compiler-level type inference or full public API analysis. See [docs/MODELING_ASSERTIONS.md](docs/MODELING_ASSERTIONS.md) for an example of using these assertions without overlapping SwiftLint.
@@ -96,31 +110,31 @@ let configuration = BumperConfiguration {
     }
 
     Architecture {
-        Layer(.core) {
+        Component(.core) {
             Owns("Sources/BumperBowlingCore")
             Modules("BumperBowlingCore")
-            DoesNotUse("XCTest", "Testing", severity: .error)
-            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableState, severity: .warning)
-            Requires(.enumStateMachine, severity: .error, in: "Sources/BumperBowlingCore/SwiftFileParser.swift")
+            MayUse(.foundation)
+            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
+            RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
-        Layer(.cli) {
+        Component(.cli) {
             Owns("Sources/BumperBowling")
             Modules("BumperBowling")
-            DependsOn(.core)
-            DoesNotUse("XCTest", "Testing", severity: .error)
+            MayDependOn(.core)
+            MayUse(.foundation)
         }
     }
 
-    Rules {
-        SubsystemBoundary(.error)
-        DuplicateOwnership(.error)
-        DependencyCycle(.error)
+    Assertions {
+        DependencyBoundaries(.error)
+        SingleOwner(.error)
+        AcyclicDependencies(.error)
     }
 }
 ```
 
-DSL constructors parse strings into typed values at the boundary. `Owns`, `DependsOn`, `MayDependOn`, `DoesNotUse`, and `Requires` compile down to typed rules over `SubsystemID`, `ModuleName`, and `RelativeFilePath`, not loose strings.
+DSL constructors parse strings into typed values at the boundary. `Owns`, `MayDependOn`, `MayUse`, `DoesNotUse`, `Requires`, and `Disallows` compile down to typed graph assertions, not loose strings.
 
 ## Architecture
 
