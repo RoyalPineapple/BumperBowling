@@ -30,10 +30,10 @@ struct BumperCLI {
             let root = URL(fileURLWithPath: arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
             let report = try await BumperCommands.scan(root: root)
             print(report)
-        case "diagram":
+        case "snapshot":
             let root = URL(fileURLWithPath: arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
-            let diagram = try BumperCommands.diagram(root: root)
-            FileHandle.standardOutput.write(Data(diagram.utf8))
+            let snapshot = try BumperCommands.snapshot(root: root)
+            FileHandle.standardOutput.write(Data(snapshot.utf8))
         case "lint":
             let root = URL(fileURLWithPath: arguments.dropFirst().first ?? FileManager.default.currentDirectoryPath)
             let report = try await BumperCommands.lint(root: root)
@@ -67,7 +67,7 @@ struct BumperCLI {
       bumper init [root]
       bumper lint [root]
       bumper scan [root]
-      bumper diagram [root]
+      bumper snapshot [root]
       bumper explain <path>
     """
 }

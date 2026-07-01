@@ -34,14 +34,14 @@ struct BumperCommandsTests {
     }
 
     @Test
-    func diagramIsDeterministicCommandOutput() throws {
+    func architectureSnapshotIsDeterministicCommandOutput() throws {
         let root = repositoryRoot()
-        let checkedInDiagram = try String(
-            contentsOf: root.appendingPathComponent("SYSTEM_DIAGRAM.md"),
+        let checkedInSnapshot = try String(
+            contentsOf: root.appendingPathComponent("ARCHITECTURE_SNAPSHOT.md"),
             encoding: .utf8
         )
 
-        #expect(checkedInDiagram == (try BumperCommands.diagram(root: root)))
+        #expect(checkedInSnapshot == (try BumperCommands.snapshot(root: root)))
     }
 
     private func makeRepository(source: String) throws -> URL {

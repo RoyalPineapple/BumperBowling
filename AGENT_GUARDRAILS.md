@@ -2,7 +2,7 @@
 
 - Keep changes scoped to the subsystem named by the task.
 - Update `BumperBowling.swift` only when the architectural contract intentionally changes.
-- Regenerate `SYSTEM_DIAGRAM.md` with `swift run -q bumper diagram . > SYSTEM_DIAGRAM.md` when command flow, core pipeline types, or rule IDs change.
+- Regenerate `ARCHITECTURE_SNAPSHOT.md` with `swift run -q bumper snapshot . > ARCHITECTURE_SNAPSHOT.md` when command flow, core pipeline types, or rule IDs change.
 - Run `swift test` before reporting implementation work complete.
 - Run `swiftlint lint` when SwiftLint is available.
 - Run `swift run bumper lint .` after architectural model or rule changes.
