@@ -6,9 +6,7 @@ In 0.0, the DSL is the typed library API and sample authoring shape. The CLI sti
 
 The DSL declares the shape the repository wants. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed graph facts satisfy the declared shape.
 
-`bumper scan` discovers the architecture graph the code currently expresses. The DSL declares which parts of that graph are intended bounds.
-
-Candidate assertions may be discovered from the graph, but they are not enforced until written into the DSL.
+`bumper scan` shows the architecture graph the code currently expresses. The DSL declares the bounds; scan is evidence for those bounds.
 
 The graph is intentionally not a second AST. It is a compact projection of facts Bumper rules can use, and it is the receipt trail for every finding.
 

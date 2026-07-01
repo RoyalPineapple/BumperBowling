@@ -39,11 +39,9 @@ Component(.core) {
 
 The rule engine derives violations from that contract. Bumper Bowling should not be a pile of disconnected "do not" rules.
 
-`bumper scan` and `bumper snapshot` expose the architecture the code currently expresses: owned files, imports, declarations, properties, selected imperative constructs, subsystem edges, and enabled assertions. The scan is discovery; the DSL is the contract you choose to enforce.
+`bumper scan` and `bumper snapshot` expose the architecture the code currently expresses: owned files, imports, declarations, properties, selected imperative constructs, subsystem edges, and enabled assertions. They are receipts for the declared shape.
 
 The graph is a normalized projection of SwiftSyntax facts, not a copy of the full SwiftSyntax tree. Bumper Bowling should add graph facts only when a rule can use them.
-
-That gives Bumper Bowling a useful loop: inspect the current graph, surface candidate assertions the code appears to follow, and let humans promote the meaningful ones into `BumperBowling.swift`.
 
 ## Agent Workflow
 

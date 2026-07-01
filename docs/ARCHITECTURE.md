@@ -26,11 +26,9 @@ Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe somethi
 
 The DSL should declare the architecture the repository wants, then derive violations from that contract. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and `Requires` over free-floating negative rules.
 
-`scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence, not policy. The DSL turns chosen parts of the observed architecture into enforced bounds.
+`scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence for the declared bounds, not a source of generated policy.
 
 SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Add graph facts only when they support an assertion Bumper Bowling can explain. Keep receipts for every finding: report the observed graph fact, the declared lane, and why they do not match.
-
-Future discovery should surface candidate assertions from that graph: possible components, dependency edges, framework boundaries, and modeling conventions the code already appears to follow. Candidate assertions are suggestions, not policy, until a human promotes them into the DSL.
 
 ## Subsystems
 
