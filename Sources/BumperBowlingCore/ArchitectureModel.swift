@@ -46,10 +46,6 @@ public struct SourceFileFacts: Equatable, Sendable {
 
 public enum SourceLanguage: String, Equatable, Sendable {
     case swift
-    case objectiveC
-    case c
-    case cpp
-    case metal
 }
 
 public struct PublicDeclaration: Equatable, Sendable {

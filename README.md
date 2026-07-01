@@ -115,9 +115,7 @@ RepositoryScanner
   -> RuleRegistry
 ```
 
-Swift is the only implemented language adapter in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftLanguageAdapter`; the shared model remains language-neutral through `SourceFileFacts`.
-
-Objective-C, C, C++, and Metal adapters are future work.
+Swift is the only language adapter in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftLanguageAdapter`; the adapter boundary exists so parsing stays isolated from the rule engine.
 
 ## Development
 

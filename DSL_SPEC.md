@@ -113,7 +113,7 @@ Bumper Bowling is adapter-driven:
 Swift adapter -> SourceFileFacts -> RepositoryFacts -> RuleRegistry
 ```
 
-Swift is the only implemented adapter in the MVP. Objective-C, C, C++, and Metal are future adapters.
+Swift is the only language adapter in 0.0.
 
 ## MVP Testing Pattern
 

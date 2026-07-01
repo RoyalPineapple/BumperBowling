@@ -17,7 +17,7 @@ The tool should stay tiny. Prefer a small syntax-first core, simple Swift DSL co
 - `BumperBowlingCore` owns parsing, rule construction, repository scanning, architecture modeling, and linting.
 - `BumperBowling` is the CLI adapter. It may depend on `BumperBowlingCore`; core must not depend on the CLI.
 - Tests may import product modules and testing frameworks, but production targets must not import test frameworks.
-- Language parsing is adapter-driven. SwiftSyntax belongs to the Swift adapter; future Objective-C, C, C++, and Metal parsing belongs in separate adapters.
+- Language parsing is adapter-driven. SwiftSyntax belongs to the Swift adapter. Swift is the only language surface in 0.0.
 
 ## Architectural Rules
 
