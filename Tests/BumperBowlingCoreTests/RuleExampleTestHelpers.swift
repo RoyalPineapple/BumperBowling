@@ -52,12 +52,10 @@ private func violations(
     )
     try source.write(to: fileURL, atomically: true, encoding: .utf8)
 
-    let facts = try await SwiftLanguageAdapter().parse(
-        SourceFileInput(
-            url: fileURL,
-            relativePath: example.path,
-            subsystem: example.subsystem
-        )
+    let facts = try SwiftFileParser().parseFile(
+        at: fileURL,
+        relativePath: example.path,
+        subsystem: example.subsystem
     )
     let rules = try ArchitectureRules(configuration: configuration)
 

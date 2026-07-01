@@ -2,15 +2,26 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling is a tiny Swift 6 architectural linter for Swift repositories.
+Bumper Bowling is a tiny Swift DSL for asserting architecture over SwiftSyntax-observed source facts.
 
-It is meant to run beside SwiftLint. SwiftLint owns local Swift style and code smells; Bumper Bowling owns architectural boundaries, dependency direction, and repo-specific taste.
+It is meant to run beside SwiftLint. SwiftLint owns local Swift style and code smells; Bumper Bowling owns architectural boundaries, dependency direction, and repo-specific taste that can be seen in Swift syntax and configured repo shape.
 
 ## Status
 
 Bumper Bowling is 0.0 shaping work.
 
-The current CLI is useful for proving the core model on this repository. The Swift DSL is available as the typed configuration API and sample authoring shape, but `bumper lint` still uses the built-in repository configuration. Loading `BumperBowling.swift` from disk is intentionally post-MVP.
+The current CLI is useful for proving the core model on this repository. The Swift DSL is available as the typed assertion API and sample authoring shape, but `bumper lint` still uses the built-in repository configuration. Loading `BumperBowling.swift` from disk is intentionally post-MVP.
+
+## Model
+
+```text
+SwiftSyntax observes source syntax
+Bumper DSL declares architectural expectations
+Bumper builds deterministic facts
+Rules assert over those facts
+```
+
+Bumper Bowling only asserts architecture visible to SwiftSyntax plus configured repo shape. It does not resolve symbols, infer types, expand macros semantically, or prove compiler-level dependencies.
 
 ## What It Checks
 
@@ -107,9 +118,9 @@ DSL constructors parse strings into typed values at the boundary. The rule engin
 
 ## Architecture
 
-Bumper Bowling is adapter-driven. See [ARCHITECTURE_SNAPSHOT.md](ARCHITECTURE_SNAPSHOT.md) for the generated commands, pipeline, and rule snapshots.
+Bumper Bowling is SwiftSyntax-driven. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the system shape and [docs/ARCHITECTURE_SNAPSHOT.md](docs/ARCHITECTURE_SNAPSHOT.md) for the generated commands, pipeline, and rule snapshots.
 
-Swift is the only language adapter in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftLanguageAdapter`; the adapter boundary exists so parsing stays isolated from the rule engine.
+Swift is the only language surface in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftFileParser`; Bumper Bowling wraps those facts with DSL assertions.
 
 ## Development
 
@@ -127,7 +138,7 @@ SwiftLint is intentionally adjacent. The repo includes `.swiftlint.yml`, but Bum
 Regenerate the checked-in architecture snapshot with:
 
 ```bash
-swift run -q bumper snapshot . > ARCHITECTURE_SNAPSHOT.md
+swift run -q bumper snapshot . > docs/ARCHITECTURE_SNAPSHOT.md
 ```
 
 ## Non-Goals For 0.0

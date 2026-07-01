@@ -19,7 +19,6 @@ struct ArchitectureLinterTests {
 
         let facts = RepositoryFacts(files: [
             SourceFileFacts(
-                language: .swift,
                 path: try RelativeFilePath("Sources/Recording/Recorder.swift"),
                 subsystem: try SubsystemID("Recording"),
                 imports: [try ModuleName("CoreKit"), try ModuleName("PlaybackKit"), try ModuleName("XCTest")],
@@ -37,7 +36,6 @@ struct ArchitectureLinterTests {
     @Test
     func warningSeverityDoesNotFailReport() throws {
         let file = SourceFileFacts(
-            language: .swift,
             path: try RelativeFilePath("Sources/Core/Thing.swift"),
             subsystem: try SubsystemID("core"),
             imports: [try ModuleName("XCTest")],
@@ -62,7 +60,6 @@ struct ArchitectureLinterTests {
     @Test
     func flagsDomainModelTasteViolations() throws {
         let file = SourceFileFacts(
-            language: .swift,
             path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
             subsystem: try SubsystemID("core"),
             imports: [],
@@ -99,7 +96,6 @@ struct ArchitectureLinterTests {
     @Test
     func flagsParserWithoutEnumStateMachine() throws {
         let file = SourceFileFacts(
-            language: .swift,
             path: try RelativeFilePath("Sources/Core/FooParser.swift"),
             subsystem: try SubsystemID("core"),
             imports: [],

@@ -37,7 +37,7 @@ struct BumperCommandsTests {
     func architectureSnapshotIsDeterministicCommandOutput() throws {
         let root = repositoryRoot()
         let checkedInSnapshot = try String(
-            contentsOf: root.appendingPathComponent("ARCHITECTURE_SNAPSHOT.md"),
+            contentsOf: root.appendingPathComponent("docs/ARCHITECTURE_SNAPSHOT.md"),
             encoding: .utf8
         )
 

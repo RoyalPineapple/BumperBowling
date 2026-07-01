@@ -31,6 +31,26 @@ public struct SwiftFileParser: Sendable {
 
         return visitor.state.summary
     }
+
+    public func parseFile(
+        at url: URL,
+        relativePath: RelativeFilePath,
+        subsystem: SubsystemID
+    ) throws -> SourceFileFacts {
+        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+            throw BumperError.unreadableFile(relativePath.rawValue)
+        }
+
+        let summary = parse(source)
+        return SourceFileFacts(
+            path: relativePath,
+            subsystem: subsystem,
+            imports: summary.imports,
+            publicDeclarations: summary.publicDeclarations,
+            storedProperties: summary.storedProperties,
+            enums: summary.enums
+        )
+    }
 }
 
 enum SwiftParseState: Equatable, Sendable {

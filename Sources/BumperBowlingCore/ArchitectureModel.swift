@@ -17,7 +17,6 @@ public struct RepositoryFacts: Equatable, Sendable {
 }
 
 public struct SourceFileFacts: Equatable, Sendable {
-    public let language: SourceLanguage
     public let path: RelativeFilePath
     public let subsystem: SubsystemID
     public let imports: [ModuleName]
@@ -26,7 +25,6 @@ public struct SourceFileFacts: Equatable, Sendable {
     public let enums: [DeclarationName]
 
     public init(
-        language: SourceLanguage,
         path: RelativeFilePath,
         subsystem: SubsystemID,
         imports: [ModuleName],
@@ -34,7 +32,6 @@ public struct SourceFileFacts: Equatable, Sendable {
         storedProperties: [StoredProperty] = [],
         enums: [DeclarationName] = []
     ) {
-        self.language = language
         self.path = path
         self.subsystem = subsystem
         self.imports = imports
@@ -42,10 +39,6 @@ public struct SourceFileFacts: Equatable, Sendable {
         self.storedProperties = storedProperties
         self.enums = enums
     }
-}
-
-public enum SourceLanguage: String, Equatable, Sendable {
-    case swift
 }
 
 public struct PublicDeclaration: Equatable, Sendable {

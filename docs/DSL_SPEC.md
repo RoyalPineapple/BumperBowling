@@ -1,10 +1,12 @@
 # Bumper Bowling Swift DSL Specification
 
-Bumper Bowling's configuration surface is Swift. The DSL is intentionally small and familiar to SwiftLint users: included/excluded paths, subsystems, opt-in rules, and configured rules with severities.
+Bumper Bowling's assertion surface is Swift. The DSL is intentionally small and familiar to SwiftLint users: included/excluded paths, subsystems, opt-in rules, and configured rules with severities.
 
 In 0.0, the DSL is the typed library API and sample authoring shape. The CLI still uses its built-in repository configuration; executing `BumperBowling.swift` as a config file is post-MVP.
 
-The DSL compiles into architecture rules:
+The DSL declares what should be allowed. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed syntax facts satisfy the declared architecture.
+
+The DSL compiles into typed architecture rules:
 
 ```text
 BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner/validator
@@ -16,7 +18,7 @@ BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner
 - Keep the tool tiny.
 - Parse strings into typed values at the boundary.
 - Avoid generated accessors, dynamic lookup, JSON config, plugins, and clever DSL machinery.
-- Keep language parsing inside adapters; SwiftSyntax belongs only to the Swift adapter.
+- Keep parsing SwiftSyntax-first and Swift-only in 0.0.
 
 ## Default File Shape
 
@@ -105,15 +107,15 @@ Only `error` fails `bumper lint`.
 
 `domain_models` is syntax-first in 0.0. It checks explicit stored-property type annotations exactly enough to catch mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not claim compiler-level type inference or full signature analysis.
 
-## Language Adapters
+## SwiftSyntax Boundary
 
-Bumper Bowling is adapter-driven:
+Bumper Bowling is SwiftSyntax-driven:
 
 ```text
-Swift adapter -> SourceFileFacts -> RepositoryFacts -> RuleRegistry
+SwiftSyntax -> SourceFileFacts -> RepositoryFacts -> RuleRegistry
 ```
 
-Swift is the only language adapter in 0.0.
+Swift is the only language surface in 0.0. The DSL must not promise facts SwiftSyntax cannot observe, such as symbol resolution, inferred types, or compiler-level dependency truth.
 
 ## MVP Testing Pattern
 

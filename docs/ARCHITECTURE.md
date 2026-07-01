@@ -1,23 +1,34 @@
 # Bumper Bowling Architecture
 
-Bumper Bowling is a Swift 6 command line tool and core library for syntax-first architectural linting.
+Bumper Bowling is a Swift 6 command line tool and core library for asserting architecture over SwiftSyntax-observed source facts.
 
-The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). The DSL is the typed configuration API for now. In 0.0, CLI commands use the built-in repository configuration; loading `BumperBowling.swift` from disk is intentionally post-MVP.
+The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). The DSL is the typed assertion API for now. In 0.0, CLI commands use the built-in repository configuration; loading `BumperBowling.swift` from disk is intentionally post-MVP.
 
 Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, baselines, reporters, and a primary `bumper lint` command.
 
-It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns architectural boundaries and repository-specific taste.
+It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns architectural boundaries and repository-specific taste that can be seen in Swift syntax and configured repo shape.
 
 SwiftLint configuration lives in `.swiftlint.yml`.
 
-The tool should stay tiny. Prefer a small syntax-first core, simple Swift DSL constructors, and boring CLI behavior over generated accessors, dynamic lookup, plugins, or clever configuration machinery.
+The tool should stay tiny. Prefer a small SwiftSyntax-first core, simple Swift DSL constructors, and boring CLI behavior over generated accessors, dynamic lookup, plugins, or clever configuration machinery.
+
+## Core Model
+
+```text
+SwiftSyntax observes source syntax
+Bumper DSL declares architectural expectations
+Bumper builds deterministic facts
+Rules assert over those facts
+```
+
+Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane.
 
 ## Subsystems
 
 - `BumperBowlingCore` owns parsing, rule construction, repository scanning, architecture modeling, and linting.
 - `BumperBowling` is the CLI adapter. It may depend on `BumperBowlingCore`; core must not depend on the CLI.
 - Tests may import product modules and testing frameworks, but production targets must not import test frameworks.
-- Language parsing is adapter-driven. SwiftSyntax belongs to the Swift adapter. Swift is the only language surface in 0.0.
+- Language parsing is SwiftSyntax-driven. Swift is the only language surface in 0.0.
 
 ## Architectural Rules
 
@@ -26,7 +37,7 @@ The tool should stay tiny. Prefer a small syntax-first core, simple Swift DSL co
 - Strings are parsed into domain types at boundaries. Core models should carry `SubsystemID`, `ModuleName`, paths, declaration names, and attributes as types.
 - Empty subsystem names, module names, path prefixes, and unknown dependency references are invalid.
 - Duplicate subsystem IDs, module aliases, and path ownership are invalid.
-- SwiftSyntax parsing is syntax-only in the first phase. Reports must not imply compiler-level symbol resolution.
+- SwiftSyntax parsing is syntax-only. Reports must not imply compiler-level symbol resolution.
 - Public API detection is syntactic and covers declarations marked `public` or `open`.
 - Parsers use explicit enum-based state machines. State cases carry their data; parsing transitions produce the next state.
 - Avoid `Any` and broad existential abstractions in domain code.
