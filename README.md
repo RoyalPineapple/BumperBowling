@@ -105,15 +105,7 @@ DSL constructors parse strings into typed values at the boundary. The rule engin
 
 ## Architecture
 
-Bumper Bowling is adapter-driven:
-
-```text
-RepositoryScanner
-  -> RepositoryLanguageAdapter
-  -> SourceFileFacts
-  -> RepositoryFacts
-  -> RuleRegistry
-```
+Bumper Bowling is adapter-driven. See [SYSTEM_DIAGRAM.md](SYSTEM_DIAGRAM.md) for the command flow, conceptual layers, and 0.0 boundaries.
 
 Swift is the only language adapter in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftLanguageAdapter`; the adapter boundary exists so parsing stays isolated from the rule engine.
 
