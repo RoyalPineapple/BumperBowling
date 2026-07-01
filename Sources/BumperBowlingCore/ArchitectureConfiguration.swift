@@ -40,6 +40,9 @@ public struct ArchitectureConfiguration: Equatable, Sendable {
                 severity: .error,
                 values: ["XCTest"]
             ),
+            subsystemBoundary: .error,
+            duplicateOwnership: .error,
+            dependencyCycle: .error,
             domainModels: DomainModelRuleConfiguration(
                 severity: .warning,
                 paths: ["Sources/BumperBowlingCore"],
@@ -162,6 +165,8 @@ public enum ConfigurationLoader {
     private static let sampleDSL = """
     import BumperBowlingCore
 
+    // Bumper Bowling 0.0 exposes the Swift DSL as the typed configuration API.
+    // The CLI still uses its built-in repository config until config loading lands.
     let configuration = BumperConfiguration {
         Defaults(.strict)
 
@@ -190,7 +195,6 @@ public enum ConfigurationLoader {
         Rules {
             ForbiddenImport(.error) {
                 Modules("XCTest", "Testing")
-                AppliesTo(.production)
             }
 
             SubsystemBoundary(.error)

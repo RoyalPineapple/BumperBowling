@@ -33,4 +33,22 @@ struct ArchitectureRulesTests {
             try ArchitectureRules(configuration: configuration)
         }
     }
+
+    @Test
+    func recordsOverlappingPathOwnership() throws {
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "Core", paths: ["Sources/Core"]),
+                SubsystemConfiguration(name: "Models", paths: ["Sources/Core/Models"]),
+            ]
+        )
+
+        let rules = try ArchitectureRules(configuration: configuration)
+        let conflict = try #require(rules.pathOwnershipConflicts.first)
+
+        #expect(conflict.path == (try RelativePathPrefix("Sources/Core/Models")))
+        #expect(conflict.owner == (try SubsystemID("Models")))
+        #expect(conflict.overlappingPath == (try RelativePathPrefix("Sources/Core")))
+        #expect(conflict.overlappingOwner == (try SubsystemID("Core")))
+    }
 }

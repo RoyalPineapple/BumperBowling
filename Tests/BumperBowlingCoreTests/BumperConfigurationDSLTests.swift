@@ -30,7 +30,6 @@ struct BumperConfigurationDSLTests {
             Rules {
                 ForbiddenImport(.error) {
                     Modules("XCTest")
-                    AppliesTo(.production)
                 }
 
                 DomainModels(.warning) {

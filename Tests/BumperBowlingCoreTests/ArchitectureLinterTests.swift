@@ -139,4 +139,25 @@ struct ArchitectureLinterTests {
 
         #expect(report.violations.map(\.ruleID).contains(.dependencyCycle))
     }
+
+    @Test
+    func flagsDuplicatePathOwnershipWithConfiguredSeverity() throws {
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "core", paths: ["Sources/Core"]),
+                SubsystemConfiguration(name: "models", paths: ["Sources/Core/Models"]),
+            ],
+            rules: RuleConfiguration(duplicateOwnership: .warning)
+        )
+
+        let report = try ArchitectureLinter(configuration: configuration)
+            .lint(RepositoryFacts(files: []))
+
+        let violation = try #require(report.violations.first)
+        #expect(violation.ruleID == .duplicateOwnership)
+        #expect(violation.severity == .warning)
+        #expect(violation.path == (try RelativeFilePath("Sources/Core/Models")))
+        #expect(violation.message == "models path Sources/Core/Models overlaps core path Sources/Core")
+        #expect(!report.hasErrors)
+    }
 }

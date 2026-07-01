@@ -105,8 +105,8 @@ public enum ArchitectureRule: Sendable {
             evaluateForbiddenImports(facts: facts, setting: setting)
         case .subsystemBoundary(let severity):
             evaluateSubsystemBoundaries(facts: facts, rules: rules, severity: severity)
-        case .duplicateOwnership:
-            []
+        case .duplicateOwnership(let severity):
+            evaluateDuplicateOwnership(rules: rules, severity: severity)
         case .dependencyCycle(let severity):
             evaluateDependencyCycles(facts: facts, rules: rules, severity: severity)
         case .domainModels(let configuration):
@@ -199,6 +199,19 @@ public enum ArchitectureRule: Sendable {
         }
 
         return []
+    }
+
+    private func evaluateDuplicateOwnership(
+        rules: ArchitectureRules,
+        severity: Severity
+    ) -> [ArchitectureViolation] {
+        rules.pathOwnershipConflicts.map { conflict in
+            violation(
+                severity: severity,
+                path: conflict.path.asFilePath ?? fallbackPath,
+                message: "\(conflict.owner) path \(conflict.path) overlaps \(conflict.overlappingOwner) path \(conflict.overlappingPath)"
+            )
+        }
     }
 
     private func reaches(
@@ -371,6 +384,12 @@ public enum ArchitectureRule: Sendable {
             path: path,
             message: message
         )
+    }
+}
+
+private extension RelativePathPrefix {
+    var asFilePath: RelativeFilePath? {
+        try? RelativeFilePath(rawValue)
     }
 }
 

@@ -3,7 +3,8 @@ import Foundation
 public enum BumperCommands {
     public static func initialize(at root: URL) throws {
         try ConfigurationLoader.writeSample(to: root)
-        print("Created \(ConfigurationLoader.fileName)")
+        print("Created sample \(ConfigurationLoader.fileName)")
+        print("Note: bumper 0.0 still uses its built-in config for CLI commands.")
     }
 
     public static func scan(root: URL) async throws -> String {

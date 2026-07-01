@@ -178,8 +178,6 @@ public func ForbiddenImport(
         switch element {
         case .modules(let values):
             values
-        case .appliesTo:
-            [String]()
         }
     }
     return RuleConfiguration(forbiddenImports: RuleSetting(severity: severity, values: modules))
@@ -202,15 +200,6 @@ public enum ForbiddenImportBuilder {
 
 public enum ForbiddenImportElement: Equatable, Sendable {
     case modules([String])
-    case appliesTo(ImportRuleScope)
-}
-
-public enum ImportRuleScope: Equatable, Sendable {
-    case production
-}
-
-public func AppliesTo(_ scope: ImportRuleScope) -> ForbiddenImportElement {
-    .appliesTo(scope)
 }
 
 public func SubsystemBoundary(_ severity: Severity) -> RuleConfiguration {

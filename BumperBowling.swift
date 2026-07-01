@@ -1,5 +1,7 @@
 import BumperBowlingCore
 
+// Bumper Bowling 0.0 exposes the Swift DSL as the typed configuration API.
+// The CLI still uses its built-in config until config loading lands.
 let configuration = BumperConfiguration {
     Defaults(.strict)
 
@@ -28,7 +30,6 @@ let configuration = BumperConfiguration {
     Rules {
         ForbiddenImport(.error) {
             Modules("XCTest", "Testing")
-            AppliesTo(.production)
         }
 
         SubsystemBoundary(.error)

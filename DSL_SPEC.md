@@ -2,6 +2,8 @@
 
 Bumper Bowling's configuration surface is Swift. The DSL is intentionally small and familiar to SwiftLint users: included/excluded paths, subsystems, opt-in rules, and configured rules with severities.
 
+In 0.0, the DSL is the typed library API and sample authoring shape. The CLI still uses its built-in repository configuration; executing `BumperBowling.swift` as a config file is post-MVP.
+
 The DSL compiles into architecture rules:
 
 ```text
@@ -49,7 +51,6 @@ let configuration = BumperConfiguration {
     Rules {
         ForbiddenImport(.error) {
             Modules("XCTest", "Testing")
-            AppliesTo(.production)
         }
 
         SubsystemBoundary(.error)
@@ -101,6 +102,8 @@ error
 ```
 
 Only `error` fails `bumper lint`.
+
+`domain_models` is syntax-first in 0.0. It checks explicit stored-property type annotations exactly enough to catch mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not claim compiler-level type inference or full signature analysis.
 
 ## Language Adapters
 

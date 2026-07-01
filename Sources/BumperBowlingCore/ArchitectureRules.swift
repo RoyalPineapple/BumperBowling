@@ -6,6 +6,7 @@ public struct ArchitectureRules: Equatable, Sendable {
     public let subsystems: [SubsystemRule]
     public let subsystemByID: [SubsystemID: SubsystemRule]
     public let subsystemByModule: [ModuleName: SubsystemID]
+    public let pathOwnershipConflicts: [PathOwnershipConflict]
     public let forbiddenImports: Set<ModuleName>
     public let ruleConfiguration: RuleConfiguration
 
@@ -16,7 +17,8 @@ public struct ArchitectureRules: Equatable, Sendable {
         var subsystems: [SubsystemRule] = []
         var subsystemByID: [SubsystemID: SubsystemRule] = [:]
         var subsystemByModule: [ModuleName: SubsystemID] = [:]
-        var ownedPaths: [RelativePathPrefix: SubsystemID] = [:]
+        var ownedPaths: [PathOwnership] = []
+        var pathOwnershipConflicts: [PathOwnershipConflict] = []
 
         for subsystemConfiguration in configuration.subsystems {
             let subsystem = try SubsystemRule(configuration: subsystemConfiguration)
@@ -32,11 +34,18 @@ public struct ArchitectureRules: Equatable, Sendable {
                 subsystemByModule[module] = subsystem.id
             }
 
-            for path in subsystem.paths {
-                guard ownedPaths[path] == nil else {
-                    throw ConfigurationError.duplicatePath(path.rawValue)
+            for path in subsystem.paths.sorted(by: { $0.rawValue < $1.rawValue }) {
+                if let overlappingOwnership = ownedPaths.first(where: { $0.path.overlaps(path) }) {
+                    pathOwnershipConflicts.append(
+                        PathOwnershipConflict(
+                            path: path,
+                            owner: subsystem.id,
+                            overlappingPath: overlappingOwnership.path,
+                            overlappingOwner: overlappingOwnership.owner
+                        )
+                    )
                 }
-                ownedPaths[path] = subsystem.id
+                ownedPaths.append(PathOwnership(path: path, owner: subsystem.id))
             }
 
             subsystems.append(subsystem)
@@ -53,6 +62,7 @@ public struct ArchitectureRules: Equatable, Sendable {
         self.subsystems = subsystems
         self.subsystemByID = subsystemByID
         self.subsystemByModule = subsystemByModule
+        self.pathOwnershipConflicts = pathOwnershipConflicts
         self.forbiddenImports = Set(try configuration.rules.forbiddenImports.values.map(ModuleName.init))
         self.ruleConfiguration = configuration.rules
     }
@@ -92,6 +102,18 @@ public struct SubsystemRule: Equatable, Sendable {
             throw ConfigurationError.emptySubsystemPaths(id.rawValue)
         }
     }
+}
+
+public struct PathOwnershipConflict: Equatable, Sendable {
+    public let path: RelativePathPrefix
+    public let owner: SubsystemID
+    public let overlappingPath: RelativePathPrefix
+    public let overlappingOwner: SubsystemID
+}
+
+private struct PathOwnership {
+    let path: RelativePathPrefix
+    let owner: SubsystemID
 }
 
 public struct SubsystemID: Hashable, Sendable, CustomStringConvertible {
@@ -155,6 +177,12 @@ public struct RelativePathPrefix: Hashable, Sendable, CustomStringConvertible {
 
     public func contains(_ relativePath: RelativeFilePath) -> Bool {
         relativePath.rawValue == rawValue || relativePath.rawValue.hasPrefix(rawValue + "/")
+    }
+
+    public func overlaps(_ other: RelativePathPrefix) -> Bool {
+        rawValue == other.rawValue
+            || rawValue.hasPrefix(other.rawValue + "/")
+            || other.rawValue.hasPrefix(rawValue + "/")
     }
 
     public var description: String {

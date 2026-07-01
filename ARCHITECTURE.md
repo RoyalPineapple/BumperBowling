@@ -2,7 +2,7 @@
 
 Bumper Bowling is a Swift 6 command line tool and core library for syntax-first architectural linting.
 
-The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). The DSL is the configuration surface for now. It is an authoring layer that compiles into architecture rules; linting does not depend on the authoring format.
+The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). The DSL is the typed configuration API for now. In 0.0, CLI commands use the built-in repository configuration; loading `BumperBowling.swift` from disk is intentionally post-MVP.
 
 Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, baselines, reporters, and a primary `bumper lint` command.
 
