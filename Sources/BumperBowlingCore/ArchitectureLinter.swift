@@ -13,8 +13,9 @@ public struct ArchitectureLinter: Sendable {
 
     public func lint(_ facts: RepositoryFacts) -> LintReport {
         let registry = RuleRegistry(configuration: rules.ruleConfiguration)
+        let graph = ArchitectureGraph(facts: facts, rules: rules)
         let violations = registry.enabledRules.flatMap { rule in
-            rule.evaluate(facts: facts, rules: rules)
+            rule.evaluate(graph: graph, rules: rules)
         }
 
         return LintReport(violations: violations)
@@ -37,7 +38,7 @@ public struct RuleRegistry: Sendable {
 }
 
 public enum ArchitectureRule: Sendable {
-    case forbiddenImport(RuleSetting)
+    case forbiddenImport([RuleSetting])
     case subsystemBoundary(Severity)
     case duplicateOwnership(Severity)
     case dependencyCycle(Severity)
@@ -72,7 +73,7 @@ public enum ArchitectureRule: Sendable {
         case .dependencyCycle:
             "Disallows cycles in configured subsystem dependencies."
         case .domainModels:
-            "Applies configured domain-model taste rules."
+            "Applies configured domain modeling assertions."
         case .enumStateMachine:
             "Requires parser files to declare an enum state machine."
         }
@@ -84,8 +85,10 @@ public enum ArchitectureRule: Sendable {
 
     private var severity: Severity {
         switch self {
-        case .forbiddenImport(let setting):
-            setting.severity
+        case .forbiddenImport(let settings):
+            settings.map(\.severity).reduce(.off) { partialResult, severity in
+                partialResult.merging(severity)
+            }
         case .subsystemBoundary(let severity):
             severity
         case .duplicateOwnership(let severity):
@@ -99,75 +102,78 @@ public enum ArchitectureRule: Sendable {
         }
     }
 
-    func evaluate(facts: RepositoryFacts, rules: ArchitectureRules) -> [ArchitectureViolation] {
+    func evaluate(graph: ArchitectureGraph, rules: ArchitectureRules) -> [ArchitectureViolation] {
         switch self {
-        case .forbiddenImport(let setting):
-            evaluateForbiddenImports(facts: facts, setting: setting)
+        case .forbiddenImport(let settings):
+            evaluateForbiddenImports(graph: graph, settings: settings)
         case .subsystemBoundary(let severity):
-            evaluateSubsystemBoundaries(facts: facts, rules: rules, severity: severity)
+            evaluateSubsystemBoundaries(graph: graph, rules: rules, severity: severity)
         case .duplicateOwnership(let severity):
             evaluateDuplicateOwnership(rules: rules, severity: severity)
         case .dependencyCycle(let severity):
-            evaluateDependencyCycles(facts: facts, rules: rules, severity: severity)
+            evaluateDependencyCycles(graph: graph, rules: rules, severity: severity)
         case .domainModels(let configuration):
-            evaluateDomainModels(facts: facts, configuration: configuration)
+            evaluateDomainModels(graph: graph, configuration: configuration)
         case .enumStateMachine(let configuration):
-            evaluateEnumStateMachines(facts: facts, configuration: configuration)
+            evaluateEnumStateMachines(graph: graph, configuration: configuration)
         }
     }
 
-    private func evaluateForbiddenImports(facts: RepositoryFacts, setting: RuleSetting) -> [ArchitectureViolation] {
-        let forbiddenImports = Set((try? setting.values.map(ModuleName.init)) ?? [])
+    private func evaluateForbiddenImports(graph: ArchitectureGraph, settings: [RuleSetting]) -> [ArchitectureViolation] {
+        settings.flatMap { setting in
+            let forbiddenImports = Set((try? setting.values.map(ModuleName.init)) ?? [])
+            let scopedPaths = (try? setting.paths.map(RelativePathPrefix.init)) ?? []
 
-        return facts.files.flatMap { file in
-            file.imports.compactMap { importedModule in
-                guard forbiddenImports.contains(importedModule) else {
-                    return nil
+            return graph.sourceFiles.flatMap { file in
+                guard scopedPaths.isEmpty || scopedPaths.contains(where: { $0.contains(file.path) }) else {
+                    return [ArchitectureViolation]()
                 }
 
-                return violation(
-                    severity: setting.severity,
-                    path: file.path,
-                    message: "\(file.subsystem) imports forbidden module \(importedModule)"
-                )
+                return file.imports.compactMap { importedModule in
+                    guard forbiddenImports.contains(importedModule) else {
+                        return nil
+                    }
+
+                    return violation(
+                        severity: setting.severity,
+                        path: file.path,
+                        message: "\(file.subsystem) imports forbidden module \(importedModule)"
+                    )
+                }
             }
         }
     }
 
     private func evaluateSubsystemBoundaries(
-        facts: RepositoryFacts,
+        graph: ArchitectureGraph,
         rules: ArchitectureRules,
         severity: Severity
     ) -> [ArchitectureViolation] {
         let subsystemByName = rules.subsystemByID
         var violations: [ArchitectureViolation] = []
 
-        for file in facts.files {
-            for importedModule in file.imports {
-                guard let importedSubsystemName = rules.subsystemByModule[importedModule],
-                      let sourceSubsystem = subsystemByName[file.subsystem]
-                else {
-                    continue
-                }
+        for edge in graph.subsystemImportEdges {
+            guard let sourceSubsystem = subsystemByName[edge.sourceSubsystem] else {
+                continue
+            }
 
-                if sourceSubsystem.forbiddenDependencies.contains(importedSubsystemName) {
-                    violations.append(
-                        violation(
-                            severity: severity,
-                            path: file.path,
-                            message: "\(file.subsystem) must not depend on \(importedModule) (\(importedSubsystemName.rawValue))"
-                        )
+            if sourceSubsystem.forbiddenDependencies.contains(edge.targetSubsystem) {
+                violations.append(
+                    violation(
+                        severity: severity,
+                        path: edge.sourcePath,
+                        message: "\(edge.sourceSubsystem) must not depend on \(edge.importedModule) (\(edge.targetSubsystem.rawValue))"
                     )
-                } else if !sourceSubsystem.allowedDependencies.contains(importedSubsystemName),
-                          importedSubsystemName != file.subsystem {
-                    violations.append(
-                        violation(
-                            severity: severity,
-                            path: file.path,
-                            message: "\(file.subsystem) imports undeclared subsystem \(importedModule) (\(importedSubsystemName.rawValue))"
-                        )
+                )
+            } else if !sourceSubsystem.allowedDependencies.contains(edge.targetSubsystem),
+                      edge.targetSubsystem != edge.sourceSubsystem {
+                violations.append(
+                    violation(
+                        severity: severity,
+                        path: edge.sourcePath,
+                        message: "\(edge.sourceSubsystem) imports undeclared subsystem \(edge.importedModule) (\(edge.targetSubsystem.rawValue))"
                     )
-                }
+                )
             }
         }
 
@@ -175,7 +181,7 @@ public enum ArchitectureRule: Sendable {
     }
 
     private func evaluateDependencyCycles(
-        facts: RepositoryFacts,
+        graph architectureGraph: ArchitectureGraph,
         rules: ArchitectureRules,
         severity: Severity
     ) -> [ArchitectureViolation] {
@@ -187,7 +193,7 @@ public enum ArchitectureRule: Sendable {
 
         for subsystem in rules.subsystems {
             if reaches(subsystem.id, from: subsystem.id, graph: graph, visited: []) {
-                let path = firstPath(for: subsystem.id, facts: facts, rules: rules)
+                let path = firstPath(for: subsystem.id, graph: architectureGraph, rules: rules)
                 return [
                     violation(
                         severity: severity,
@@ -236,21 +242,33 @@ public enum ArchitectureRule: Sendable {
     }
 
     private func evaluateDomainModels(
-        facts: RepositoryFacts,
+        graph: ArchitectureGraph,
         configuration: DomainModelRuleConfiguration
     ) -> [ArchitectureViolation] {
         let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
 
-        return facts.files.flatMap { file in
+        return graph.sourceFiles.flatMap { file in
             guard paths.isEmpty || paths.contains(where: { $0.contains(file.path) }) else {
                 return [ArchitectureViolation]()
             }
 
-            return file.storedProperties.flatMap { property in
+            let propertyViolations = file.storedProperties.flatMap { property in
                 domainModelViolations(
                     file: file,
                     property: property,
                     configuration: configuration
+                )
+            }
+
+            guard configuration.disallowances.contains(.imperativeConstructs) else {
+                return propertyViolations
+            }
+
+            return propertyViolations + file.imperativeConstructs.map { construct in
+                violation(
+                    severity: configuration.severity,
+                    path: file.path,
+                    message: "Uses imperative construct \(construct.rawValue)"
                 )
             }
         }
@@ -308,10 +326,10 @@ public enum ArchitectureRule: Sendable {
     }
 
     private func evaluateEnumStateMachines(
-        facts: RepositoryFacts,
+        graph: ArchitectureGraph,
         configuration: PathRuleConfiguration
     ) -> [ArchitectureViolation] {
-        facts.files.compactMap { file in
+        graph.sourceFiles.compactMap { file in
             guard matchesAny(configuration.paths, file.path) else {
                 return nil
             }
@@ -351,10 +369,10 @@ public enum ArchitectureRule: Sendable {
 
     private func firstPath(
         for subsystem: SubsystemID,
-        facts: RepositoryFacts,
+        graph: ArchitectureGraph,
         rules: ArchitectureRules
     ) -> RelativeFilePath {
-        if let file = facts.files.first(where: { $0.subsystem == subsystem }) {
+        if let file = graph.sourceFiles.first(where: { $0.subsystem == subsystem }) {
             return file.path
         }
 

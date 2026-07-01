@@ -41,7 +41,9 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
         lines.append("    Config[\"ArchitectureRules\"] --> Scanner[\"RepositoryScanner\"]")
         lines.append("    Scanner --> SwiftSyntax[\"SwiftFileParser + SwiftSyntax\"]")
         lines.append("    SwiftSyntax --> Facts[\"RepositoryFacts\"]")
-        lines.append("    Facts --> Rules[\"RuleRegistry\"]")
+        lines.append("    Facts --> Graph[\"ArchitectureGraph\"]")
+        lines.append("    Config --> Graph")
+        lines.append("    Graph --> Rules[\"RuleRegistry\"]")
         lines.append("    Config --> Rules")
         lines.append("    Rules --> Report[\"LintReport\"]")
         lines.append("```")
@@ -77,10 +79,10 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
 
         switch rule.id {
         case .forbiddenImport:
-            lines.append("    Imports[\"SourceFileFacts.imports\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Imports[\"ArchitectureGraph.sourceFiles.imports\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Forbidden[\"RuleSetting.values\"] --> \(ruleNode)")
         case .subsystemBoundary:
-            lines.append("    Imports[\"SourceFileFacts.imports\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Imports[\"ArchitectureGraph.subsystemImportEdges\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Modules[\"subsystemByModule\"] --> \(ruleNode)")
             lines.append("    Dependencies[\"allowed + forbidden dependencies\"] --> \(ruleNode)")
         case .duplicateOwnership:
@@ -90,10 +92,11 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
             lines.append("    Dependencies[\"SubsystemRule.allowedDependencies\"] --> Graph[\"dependency graph\"]")
             lines.append("    Graph --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
         case .domainModels:
-            lines.append("    Properties[\"SourceFileFacts.storedProperties\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
-            lines.append("    Taste[\"DomainModelRuleConfiguration\"] --> \(ruleNode)")
+            lines.append("    Properties[\"ArchitectureGraph.sourceFiles.storedProperties\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Imperative[\"ArchitectureGraph.sourceFiles.imperativeConstructs\"] --> \(ruleNode)")
+            lines.append("    Policy[\"DomainModelRuleConfiguration\"] --> \(ruleNode)")
         case .enumStateMachine:
-            lines.append("    Enums[\"SourceFileFacts.enums\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Enums[\"ArchitectureGraph.sourceFiles.enums\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Paths[\"PathRuleConfiguration.paths\"] --> \(ruleNode)")
         }
 

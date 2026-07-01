@@ -13,6 +13,9 @@ public struct BumperConfiguration: Equatable, Sendable {
             switch element {
             case .defaults:
                 continue
+            case .architecture(let definition):
+                subsystems = definition.subsystems
+                rules = rules.merging(definition.rules)
             case .included(let paths):
                 includedPaths = paths
             case .excluded(let paths):
@@ -37,6 +40,7 @@ public struct BumperConfiguration: Equatable, Sendable {
 
 public enum BumperConfigurationElement: Equatable, Sendable {
     case defaults(ConfigurationProfile)
+    case architecture(ArchitectureDefinition)
     case included([String])
     case excluded([String])
     case subsystems([SubsystemConfiguration])
@@ -68,6 +72,10 @@ public func Excluded(@StringListBuilder _ content: () -> [String]) -> BumperConf
     .excluded(content())
 }
 
+public func Architecture(@ArchitectureBuilder _ content: () -> [LayerConfiguration]) -> BumperConfigurationElement {
+    .architecture(ArchitectureDefinition(layers: content()))
+}
+
 public func Subsystems(@SubsystemsBuilder _ content: () -> [SubsystemConfiguration]) -> BumperConfigurationElement {
     .subsystems(content())
 }
@@ -96,6 +104,141 @@ public enum SubsystemsBuilder {
     public static func buildBlock(_ components: SubsystemConfiguration...) -> [SubsystemConfiguration] {
         components
     }
+}
+
+public struct ArchitectureDefinition: Equatable, Sendable {
+    public let subsystems: [SubsystemConfiguration]
+    public let rules: RuleConfiguration
+
+    public init(layers: [LayerConfiguration]) {
+        self.subsystems = layers.map(\.subsystem)
+        self.rules = layers
+            .map(\.derivedRules)
+            .combined()
+    }
+}
+
+@resultBuilder
+public enum ArchitectureBuilder {
+    public static func buildBlock(_ components: LayerConfiguration...) -> [LayerConfiguration] {
+        components
+    }
+}
+
+public struct LayerConfiguration: Equatable, Sendable {
+    public let subsystem: SubsystemConfiguration
+    public let derivedRules: RuleConfiguration
+}
+
+public func Layer(
+    _ id: SubsystemID,
+    @LayerBuilder _ content: () -> [LayerElement]
+) -> LayerConfiguration {
+    var paths: [String] = []
+    var modules: [String] = []
+    var dependencies: [String] = []
+    var useRestrictions: [LayerUseRestriction] = []
+    var requirements: [LayerRequirementSetting] = []
+
+    for element in content() {
+        switch element {
+        case .owns(let values):
+            paths.append(contentsOf: values)
+        case .modules(let values):
+            modules.append(contentsOf: values)
+        case .mayDependOn(let values):
+            dependencies.append(contentsOf: values.map(\.rawValue))
+        case .doesNotUse(let values):
+            useRestrictions.append(contentsOf: values)
+        case .requires(let values):
+            requirements.append(contentsOf: values)
+        }
+    }
+
+    return LayerConfiguration(
+        subsystem: SubsystemConfiguration(
+            name: id.rawValue,
+            modules: modules,
+            paths: paths,
+            mayDependOn: dependencies
+        ),
+        derivedRules: requirements.derivedRules(defaultPaths: paths)
+            .merging(useRestrictions.derivedRules(defaultPaths: paths))
+    )
+}
+
+@resultBuilder
+public enum LayerBuilder {
+    public static func buildBlock(_ components: LayerElement...) -> [LayerElement] {
+        components
+    }
+
+    public static func buildExpression(_ expression: DSLPathList) -> LayerElement {
+        .owns(expression.values)
+    }
+
+    public static func buildExpression(_ expression: DSLModuleList) -> LayerElement {
+        .modules(expression.values)
+    }
+
+    public static func buildExpression(_ expression: LayerElement) -> LayerElement {
+        expression
+    }
+}
+
+public enum LayerElement: Equatable, Sendable {
+    case owns([String])
+    case modules([String])
+    case mayDependOn([SubsystemID])
+    case doesNotUse([LayerUseRestriction])
+    case requires([LayerRequirementSetting])
+}
+
+public struct LayerUseRestriction: Equatable, Sendable {
+    public let modules: [String]
+    public let severity: Severity
+}
+
+public enum LayerRequirement: Equatable, Sendable {
+    case explicitDomainSurfaces
+    case typedIdentity
+    case immutableState
+    case functionalCore
+    case enumStateMachine
+}
+
+public struct LayerRequirementSetting: Equatable, Sendable {
+    public let requirement: LayerRequirement
+    public let severity: Severity
+    public let paths: [String]
+}
+
+public func Owns(_ paths: String...) -> DSLPathList {
+    DSLPathList(values: paths)
+}
+
+public func MayDependOn(_ dependencies: SubsystemID...) -> LayerElement {
+    .mayDependOn(dependencies)
+}
+
+public func DependsOn(_ dependencies: SubsystemID...) -> LayerElement {
+    .mayDependOn(dependencies)
+}
+
+public func DoesNotUse(_ modules: String..., severity: Severity) -> LayerElement {
+    .doesNotUse([LayerUseRestriction(modules: modules, severity: severity)])
+}
+
+public func Requires(_ requirements: LayerRequirement..., severity: Severity) -> LayerElement {
+    .requires(
+        requirements.map { requirement in
+            LayerRequirementSetting(requirement: requirement, severity: severity, paths: [])
+        }
+    )
+}
+
+public func Requires(_ requirement: LayerRequirement, severity: Severity, in paths: String...) -> LayerElement {
+    .requires([LayerRequirementSetting(requirement: requirement, severity: severity, paths: paths)])
 }
 
 public func Subsystem(
@@ -314,22 +457,101 @@ private extension Array where Element == RuleConfiguration {
     }
 }
 
-private extension RuleConfiguration {
-    func merging(_ other: RuleConfiguration) -> RuleConfiguration {
-        RuleConfiguration(
-            forbiddenImports: other.forbiddenImports.isConfigured ? other.forbiddenImports : forbiddenImports,
-            subsystemBoundary: other.subsystemBoundary.isConfigured ? other.subsystemBoundary : subsystemBoundary,
-            duplicateOwnership: other.duplicateOwnership.isConfigured ? other.duplicateOwnership : duplicateOwnership,
-            dependencyCycle: other.dependencyCycle.isConfigured ? other.dependencyCycle : dependencyCycle,
-            domainModels: other.domainModels.isConfigured ? other.domainModels : domainModels,
-            enumStateMachine: other.enumStateMachine.isConfigured ? other.enumStateMachine : enumStateMachine
+private extension Array where Element == LayerRequirementSetting {
+    func derivedRules(defaultPaths: [String]) -> RuleConfiguration {
+        var domainSeverity = Severity.off
+        var domainDisallowances = Set<DomainModelDisallowance>()
+        var domainPaths: [String] = []
+        var enumStateMachine = PathRuleConfiguration()
+
+        for setting in self {
+            let scopedPaths = setting.paths.isEmpty ? defaultPaths : setting.paths
+
+            switch setting.requirement {
+            case .explicitDomainSurfaces:
+                domainSeverity = domainSeverity.merging(setting.severity)
+                domainPaths.append(contentsOf: scopedPaths)
+                domainDisallowances.formUnion([.any, .broadExistential])
+            case .typedIdentity:
+                domainSeverity = domainSeverity.merging(setting.severity)
+                domainPaths.append(contentsOf: scopedPaths)
+                domainDisallowances.insert(.rawStringIdentity)
+            case .immutableState:
+                domainSeverity = domainSeverity.merging(setting.severity)
+                domainPaths.append(contentsOf: scopedPaths)
+                domainDisallowances.insert(.storedVar)
+            case .functionalCore:
+                domainSeverity = domainSeverity.merging(setting.severity)
+                domainPaths.append(contentsOf: scopedPaths)
+                domainDisallowances.insert(.imperativeConstructs)
+            case .enumStateMachine:
+                enumStateMachine = PathRuleConfiguration(
+                    severity: enumStateMachine.severity.merging(setting.severity),
+                    paths: enumStateMachine.paths + scopedPaths
+                )
+            }
+        }
+
+        return RuleConfiguration(
+            domainModels: DomainModelRuleConfiguration(
+                severity: domainSeverity,
+                paths: Swift.Array(Set(domainPaths)).sorted(),
+                disallowances: domainDisallowances
+            ),
+            enumStateMachine: enumStateMachine
         )
     }
 }
 
-private extension RuleSetting {
+private extension Array where Element == LayerUseRestriction {
+    func derivedRules(defaultPaths: [String]) -> RuleConfiguration {
+        RuleConfiguration(
+            forbiddenImports: map { restriction in
+                RuleSetting(
+                    severity: restriction.severity,
+                    values: restriction.modules,
+                    paths: defaultPaths
+                )
+            }
+        )
+    }
+}
+
+private extension RuleConfiguration {
+    func merging(_ other: RuleConfiguration) -> RuleConfiguration {
+        RuleConfiguration(
+            forbiddenImports: forbiddenImports + other.forbiddenImports,
+            subsystemBoundary: other.subsystemBoundary.isConfigured ? other.subsystemBoundary : subsystemBoundary,
+            duplicateOwnership: other.duplicateOwnership.isConfigured ? other.duplicateOwnership : duplicateOwnership,
+            dependencyCycle: other.dependencyCycle.isConfigured ? other.dependencyCycle : dependencyCycle,
+            domainModels: domainModels.merging(other.domainModels),
+            enumStateMachine: enumStateMachine.merging(other.enumStateMachine)
+        )
+    }
+}
+
+private extension DomainModelRuleConfiguration {
+    func merging(_ other: DomainModelRuleConfiguration) -> DomainModelRuleConfiguration {
+        DomainModelRuleConfiguration(
+            severity: severity.merging(other.severity),
+            paths: Array(Set(paths + other.paths)).sorted(),
+            disallowances: disallowances.union(other.disallowances)
+        )
+    }
+}
+
+private extension PathRuleConfiguration {
+    func merging(_ other: PathRuleConfiguration) -> PathRuleConfiguration {
+        PathRuleConfiguration(
+            severity: severity.merging(other.severity),
+            paths: Array(Set(paths + other.paths)).sorted()
+        )
+    }
+}
+
+private extension Array where Element == RuleSetting {
     var isConfigured: Bool {
-        severity != .off || !values.isEmpty
+        !isEmpty
     }
 }
 

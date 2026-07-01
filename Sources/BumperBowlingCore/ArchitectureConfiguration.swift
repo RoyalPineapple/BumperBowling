@@ -36,10 +36,18 @@ public struct ArchitectureConfiguration: Equatable, Sendable {
             ),
         ],
         rules: RuleConfiguration(
-            forbiddenImports: RuleSetting(
-                severity: .error,
-                values: ["XCTest"]
-            ),
+            forbiddenImports: [
+                RuleSetting(
+                    severity: .error,
+                    values: ["XCTest", "Testing"],
+                    paths: ["Sources/BumperBowlingCore"]
+                ),
+                RuleSetting(
+                    severity: .error,
+                    values: ["XCTest", "Testing"],
+                    paths: ["Sources/BumperBowling"]
+                ),
+            ],
             subsystemBoundary: .error,
             duplicateOwnership: .error,
             dependencyCycle: .error,
@@ -79,7 +87,7 @@ public struct SubsystemConfiguration: Equatable, Sendable {
 }
 
 public struct RuleConfiguration: Equatable, Sendable {
-    public let forbiddenImports: RuleSetting
+    public let forbiddenImports: [RuleSetting]
     public let subsystemBoundary: Severity
     public let duplicateOwnership: Severity
     public let dependencyCycle: Severity
@@ -94,7 +102,23 @@ public struct RuleConfiguration: Equatable, Sendable {
         domainModels: DomainModelRuleConfiguration = DomainModelRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
-        self.forbiddenImports = forbiddenImports
+        self.forbiddenImports = forbiddenImports.isConfigured ? [forbiddenImports] : []
+        self.subsystemBoundary = subsystemBoundary
+        self.duplicateOwnership = duplicateOwnership
+        self.dependencyCycle = dependencyCycle
+        self.domainModels = domainModels
+        self.enumStateMachine = enumStateMachine
+    }
+
+    public init(
+        forbiddenImports: [RuleSetting],
+        subsystemBoundary: Severity = .off,
+        duplicateOwnership: Severity = .off,
+        dependencyCycle: Severity = .off,
+        domainModels: DomainModelRuleConfiguration = DomainModelRuleConfiguration(),
+        enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
+    ) {
+        self.forbiddenImports = forbiddenImports.filter(\.isConfigured)
         self.subsystemBoundary = subsystemBoundary
         self.duplicateOwnership = duplicateOwnership
         self.dependencyCycle = dependencyCycle
@@ -106,10 +130,16 @@ public struct RuleConfiguration: Equatable, Sendable {
 public struct RuleSetting: Equatable, Sendable {
     public let severity: Severity
     public let values: [String]
+    public let paths: [String]
 
-    public init(severity: Severity, values: [String]) {
+    public init(severity: Severity, values: [String], paths: [String] = []) {
         self.severity = severity
         self.values = values
+        self.paths = paths
+    }
+
+    var isConfigured: Bool {
+        severity != .off || !values.isEmpty || !paths.isEmpty
     }
 }
 
@@ -144,6 +174,22 @@ public enum DomainModelDisallowance: String, Equatable, Hashable, Sendable {
     case broadExistential
     case storedVar
     case rawStringIdentity
+    case imperativeConstructs
+}
+
+extension Severity {
+    func merging(_ other: Severity) -> Severity {
+        switch (self, other) {
+        case (.error, _), (_, .error):
+            .error
+        case (.warning, _), (_, .warning):
+            .warning
+        case (.note, _), (_, .note):
+            .note
+        case (.off, .off):
+            .off
+        }
+    }
 }
 
 public enum ConfigurationLoader {
@@ -179,41 +225,27 @@ public enum ConfigurationLoader {
             "DerivedData"
         }
 
-        Subsystems {
-            Subsystem(.core) {
-                Paths("Sources/BumperBowlingCore")
+        Architecture {
+            Layer(.core) {
+                Owns("Sources/BumperBowlingCore")
                 Modules("BumperBowlingCore")
+                DoesNotUse("XCTest", "Testing", severity: .error)
+                Requires(.explicitDomainSurfaces, .typedIdentity, .immutableState, severity: .warning)
+                Requires(.enumStateMachine, severity: .error, in: "Sources/BumperBowlingCore/SwiftFileParser.swift")
             }
 
-            Subsystem(.cli) {
-                Paths("Sources/BumperBowling")
+            Layer(.cli) {
+                Owns("Sources/BumperBowling")
                 Modules("BumperBowling")
-                Dependencies(.core)
+                DependsOn(.core)
+                DoesNotUse("XCTest", "Testing", severity: .error)
             }
         }
 
         Rules {
-            ForbiddenImport(.error) {
-                Modules("XCTest", "Testing")
-            }
-
             SubsystemBoundary(.error)
             DuplicateOwnership(.error)
             DependencyCycle(.error)
-
-            DomainModels(.warning) {
-                Paths("Sources/BumperBowlingCore")
-                Disallow(.any)
-                Disallow(.broadExistential)
-                Disallow(.storedVar)
-                Disallow(.rawStringIdentity)
-            }
-        }
-
-        OptInRules {
-            EnumStateMachine(.error) {
-                Paths("Sources/**/*Parser.swift")
-            }
         }
     }
     """

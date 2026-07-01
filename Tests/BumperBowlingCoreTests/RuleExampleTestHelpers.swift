@@ -58,6 +58,8 @@ private func violations(
         subsystem: example.subsystem
     )
     let rules = try ArchitectureRules(configuration: configuration)
+    let repositoryFacts = RepositoryFacts(files: [facts])
+    let graph = ArchitectureGraph(facts: repositoryFacts, rules: rules)
 
-    return rule.evaluate(facts: RepositoryFacts(files: [facts]), rules: rules)
+    return rule.evaluate(graph: graph, rules: rules)
 }

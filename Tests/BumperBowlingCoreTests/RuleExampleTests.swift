@@ -6,7 +6,7 @@ struct RuleExampleTests {
     @Test
     func forbiddenImportExamples() async throws {
         try await verifyRule(
-            .forbiddenImport(RuleSetting(severity: .error, values: ["XCTest"]))
+            .forbiddenImport([RuleSetting(severity: .error, values: ["XCTest"])])
         )
     }
 

@@ -19,7 +19,9 @@ flowchart LR
     Config["ArchitectureRules"] --> Scanner["RepositoryScanner"]
     Scanner --> SwiftSyntax["SwiftFileParser + SwiftSyntax"]
     SwiftSyntax --> Facts["RepositoryFacts"]
-    Facts --> Rules["RuleRegistry"]
+    Facts --> Graph["ArchitectureGraph"]
+    Config --> Graph
+    Graph --> Rules["RuleRegistry"]
     Config --> Rules
     Rules --> Report["LintReport"]
 ```
@@ -32,7 +34,7 @@ Disallows configured imports in linted source files.
 
 ```mermaid
 flowchart LR
-    Imports["SourceFileFacts.imports"] --> ForbiddenImport["forbidden_import"]
+    Imports["ArchitectureGraph.sourceFiles.imports"] --> ForbiddenImport["forbidden_import"]
     Forbidden["RuleSetting.values"] --> ForbiddenImport
     ForbiddenImport --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
@@ -44,7 +46,7 @@ Requires subsystem imports to match declared dependencies.
 
 ```mermaid
 flowchart LR
-    Imports["SourceFileFacts.imports"] --> SubsystemBoundary["subsystem_boundary"]
+    Imports["ArchitectureGraph.subsystemImportEdges"] --> SubsystemBoundary["subsystem_boundary"]
     Modules["subsystemByModule"] --> SubsystemBoundary
     Dependencies["allowed + forbidden dependencies"] --> SubsystemBoundary
     SubsystemBoundary --> Findings["ArchitectureViolation[]"]
@@ -77,12 +79,13 @@ flowchart LR
 
 ### `domain_models`
 
-Applies configured domain-model taste rules.
+Applies configured domain modeling assertions.
 
 ```mermaid
 flowchart LR
-    Properties["SourceFileFacts.storedProperties"] --> DomainModels["domain_models"]
-    Taste["DomainModelRuleConfiguration"] --> DomainModels
+    Properties["ArchitectureGraph.sourceFiles.storedProperties"] --> DomainModels["domain_models"]
+    Imperative["ArchitectureGraph.sourceFiles.imperativeConstructs"] --> DomainModels
+    Policy["DomainModelRuleConfiguration"] --> DomainModels
     DomainModels --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
 ```
@@ -93,7 +96,7 @@ Requires parser files to declare an enum state machine.
 
 ```mermaid
 flowchart LR
-    Enums["SourceFileFacts.enums"] --> EnumStateMachine["enum_state_machine"]
+    Enums["ArchitectureGraph.sourceFiles.enums"] --> EnumStateMachine["enum_state_machine"]
     Paths["PathRuleConfiguration.paths"] --> EnumStateMachine
     EnumStateMachine --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
