@@ -50,8 +50,8 @@ public struct ArchitectureConfiguration: Equatable, Sendable {
             ],
             subsystemBoundary: .error,
             duplicateOwnership: .error,
-            dependencyCycle: .error,
-            domainModels: DomainModelRuleConfiguration(
+            declaredDependencyCycle: .error,
+            storedProperties: StoredPropertyRuleConfiguration(
                 severity: .warning,
                 paths: ["Sources/BumperBowlingCore"],
                 disallowances: [.any, .broadExistential, .storedVar, .rawStringIdentity]
@@ -90,23 +90,26 @@ public struct RuleConfiguration: Equatable, Sendable {
     public let forbiddenImports: [RuleSetting]
     public let subsystemBoundary: Severity
     public let duplicateOwnership: Severity
-    public let dependencyCycle: Severity
-    public let domainModels: DomainModelRuleConfiguration
+    public let declaredDependencyCycle: Severity
+    public let storedProperties: StoredPropertyRuleConfiguration
+    public let syntaxConstructs: SyntaxConstructRuleConfiguration
     public let enumStateMachine: PathRuleConfiguration
 
     public init(
         forbiddenImports: RuleSetting = RuleSetting(severity: .off, values: []),
         subsystemBoundary: Severity = .off,
         duplicateOwnership: Severity = .off,
-        dependencyCycle: Severity = .off,
-        domainModels: DomainModelRuleConfiguration = DomainModelRuleConfiguration(),
+        declaredDependencyCycle: Severity = .off,
+        storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
+        syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
         self.forbiddenImports = forbiddenImports.isConfigured ? [forbiddenImports] : []
         self.subsystemBoundary = subsystemBoundary
         self.duplicateOwnership = duplicateOwnership
-        self.dependencyCycle = dependencyCycle
-        self.domainModels = domainModels
+        self.declaredDependencyCycle = declaredDependencyCycle
+        self.storedProperties = storedProperties
+        self.syntaxConstructs = syntaxConstructs
         self.enumStateMachine = enumStateMachine
     }
 
@@ -114,15 +117,17 @@ public struct RuleConfiguration: Equatable, Sendable {
         forbiddenImports: [RuleSetting],
         subsystemBoundary: Severity = .off,
         duplicateOwnership: Severity = .off,
-        dependencyCycle: Severity = .off,
-        domainModels: DomainModelRuleConfiguration = DomainModelRuleConfiguration(),
+        declaredDependencyCycle: Severity = .off,
+        storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
+        syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
         self.forbiddenImports = forbiddenImports.filter(\.isConfigured)
         self.subsystemBoundary = subsystemBoundary
         self.duplicateOwnership = duplicateOwnership
-        self.dependencyCycle = dependencyCycle
-        self.domainModels = domainModels
+        self.declaredDependencyCycle = declaredDependencyCycle
+        self.storedProperties = storedProperties
+        self.syntaxConstructs = syntaxConstructs
         self.enumStateMachine = enumStateMachine
     }
 }
@@ -143,22 +148,35 @@ public struct RuleSetting: Equatable, Sendable {
     }
 }
 
-public struct DomainModelRuleConfiguration: Equatable, Sendable {
+public struct StoredPropertyRuleConfiguration: Equatable, Sendable {
     public let severity: Severity
     public let paths: [String]
-    public let disallowances: Set<DomainModelDisallowance>
-    public let imperativeConstructs: Set<ImperativeConstruct>
+    public let disallowances: Set<StoredPropertyDisallowance>
 
     public init(
         severity: Severity = .off,
         paths: [String] = [],
-        disallowances: Set<DomainModelDisallowance> = [],
-        imperativeConstructs: Set<ImperativeConstruct> = []
+        disallowances: Set<StoredPropertyDisallowance> = []
     ) {
         self.severity = severity
         self.paths = paths
         self.disallowances = disallowances
-        self.imperativeConstructs = imperativeConstructs
+    }
+}
+
+public struct SyntaxConstructRuleConfiguration: Equatable, Sendable {
+    public let severity: Severity
+    public let paths: [String]
+    public let disallowedConstructs: Set<ImperativeConstruct>
+
+    public init(
+        severity: Severity = .off,
+        paths: [String] = [],
+        disallowedConstructs: Set<ImperativeConstruct> = []
+    ) {
+        self.severity = severity
+        self.paths = paths
+        self.disallowedConstructs = disallowedConstructs
     }
 }
 
@@ -172,12 +190,11 @@ public struct PathRuleConfiguration: Equatable, Sendable {
     }
 }
 
-public enum DomainModelDisallowance: String, Equatable, Hashable, Sendable {
+public enum StoredPropertyDisallowance: String, Equatable, Hashable, Sendable {
     case any
     case broadExistential
     case storedVar
     case rawStringIdentity
-    case imperativeConstructs
 }
 
 extension Severity {
@@ -217,8 +234,6 @@ public enum ConfigurationLoader {
     // Bumper Bowling 0.0 exposes the Swift DSL as the typed configuration API.
     // The CLI still uses its built-in repository config until config loading lands.
     let configuration = BumperConfiguration {
-        Defaults(.strict)
-
         Included {
             "Sources"
         }
@@ -233,7 +248,13 @@ public enum ConfigurationLoader {
                 Owns("Sources/BumperBowlingCore")
                 Modules("BumperBowlingCore")
                 MayUse(.foundation)
-                Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
+                Requires(
+                    .noAnyStoredProperties,
+                    .noBroadExistentialStoredProperties,
+                    .noRawStringStoredProperties,
+                    .immutableStoredState,
+                    severity: .warning
+                )
                 RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
             }
 
@@ -248,7 +269,7 @@ public enum ConfigurationLoader {
         Assertions {
             DependencyBoundaries(.error)
             SingleOwner(.error)
-            AcyclicDependencies(.error)
+            AcyclicDeclaredDependencies(.error)
         }
     }
     """

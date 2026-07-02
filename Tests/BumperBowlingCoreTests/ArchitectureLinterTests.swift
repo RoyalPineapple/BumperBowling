@@ -97,7 +97,7 @@ struct ArchitectureLinterTests {
     }
 
     @Test
-    func flagsDomainModelingViolations() throws {
+    func flagsStoredPropertyFactViolations() throws {
         let file = SourceFileFacts(
             path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
             subsystem: try SubsystemID("core"),
@@ -114,7 +114,7 @@ struct ArchitectureLinterTests {
                 SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
             ],
             rules: RuleConfiguration(
-                domainModels: DomainModelRuleConfiguration(
+                storedProperties: StoredPropertyRuleConfiguration(
                     severity: .error,
                     paths: ["Sources/Core/Domain"],
                     disallowances: [.any, .broadExistential, .storedVar, .rawStringIdentity]
@@ -146,10 +146,10 @@ struct ArchitectureLinterTests {
                 SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
             ],
             rules: RuleConfiguration(
-                domainModels: DomainModelRuleConfiguration(
+                syntaxConstructs: SyntaxConstructRuleConfiguration(
                     severity: .error,
                     paths: ["Sources/Core/Domain"],
-                    disallowances: [.imperativeConstructs]
+                    disallowedConstructs: [.mutableBinding, .assignment]
                 )
             )
         )
@@ -196,13 +196,13 @@ struct ArchitectureLinterTests {
                 SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"], mayDependOn: ["ui"]),
                 SubsystemConfiguration(name: "ui", modules: ["UI"], paths: ["Sources/UI"], mayDependOn: ["core"]),
             ],
-            rules: RuleConfiguration(dependencyCycle: .error)
+            rules: RuleConfiguration(declaredDependencyCycle: .error)
         )
 
         let report = try ArchitectureLinter(configuration: configuration)
             .lint(RepositoryFacts(files: []))
 
-        #expect(report.violations.map(\.ruleID).contains(.dependencyCycle))
+        #expect(report.violations.map(\.ruleID).contains(.declaredDependencyCycle))
     }
 
     @Test

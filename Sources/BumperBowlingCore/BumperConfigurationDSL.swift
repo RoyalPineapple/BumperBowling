@@ -11,8 +11,6 @@ public struct BumperConfiguration: Equatable, Sendable {
 
         for element in content() {
             switch element {
-            case .defaults:
-                continue
             case .architecture(let definition):
                 subsystems = definition.subsystems
                 rules = rules.merging(definition.rules)
@@ -35,7 +33,6 @@ public struct BumperConfiguration: Equatable, Sendable {
 }
 
 public enum BumperConfigurationElement: Equatable, Sendable {
-    case defaults(ConfigurationProfile)
     case architecture(ArchitectureDefinition)
     case included([String])
     case excluded([String])
@@ -47,15 +44,6 @@ public enum BumperConfigurationBuilder {
     public static func buildBlock(_ components: BumperConfigurationElement...) -> [BumperConfigurationElement] {
         components
     }
-}
-
-public enum ConfigurationProfile: Equatable, Sendable {
-    case standard
-    case strict
-}
-
-public func Defaults(_ profile: ConfigurationProfile) -> BumperConfigurationElement {
-    .defaults(profile)
 }
 
 public func Included(@StringListBuilder _ content: () -> [String]) -> BumperConfigurationElement {
@@ -116,6 +104,7 @@ public func Component(
     var paths: [String] = []
     var modules: [String] = []
     var dependencies: [String] = []
+    var forbiddenDependencies: [String] = []
     var usePolicies: [ComponentUsePolicy] = []
     var requirements: [ComponentRequirementSetting] = []
     var disallowances: [ImperativeDisallowanceSetting] = []
@@ -128,6 +117,8 @@ public func Component(
             modules.append(contentsOf: values)
         case .mayDependOn(let values):
             dependencies.append(contentsOf: values.map(\.rawValue))
+        case .doesNotDependOn(let values):
+            forbiddenDependencies.append(contentsOf: values.map(\.rawValue))
         case .usePolicy(let values):
             usePolicies.append(contentsOf: values)
         case .requires(let values):
@@ -142,7 +133,8 @@ public func Component(
             name: id.rawValue,
             modules: modules,
             paths: paths,
-            mayDependOn: dependencies
+            mayDependOn: dependencies,
+            mustNotDependOn: forbiddenDependencies
         ),
         derivedRules: requirements.derivedRules(defaultPaths: paths)
             .merging(usePolicies.derivedRules(defaultPaths: paths))
@@ -173,6 +165,7 @@ public enum ComponentElement: Equatable, Sendable {
     case owns([String])
     case modules([String])
     case mayDependOn([SubsystemID])
+    case doesNotDependOn([SubsystemID])
     case usePolicy([ComponentUsePolicy])
     case requires([ComponentRequirementSetting])
     case disallows([ImperativeDisallowanceSetting])
@@ -189,13 +182,7 @@ public enum Capability: CaseIterable, Equatable, Hashable, Sendable {
     case uiKit
     case persistence
     case networking
-    case fileSystem
-    case clock
-    case randomness
-    case taskSpawning
-    case mainActor
     case testing
-    case unsafeRuntime
 
     var modules: [String] {
         switch self {
@@ -211,15 +198,14 @@ public enum Capability: CaseIterable, Equatable, Hashable, Sendable {
             ["FoundationNetworking"]
         case .testing:
             ["XCTest", "Testing"]
-        case .fileSystem, .clock, .randomness, .taskSpawning, .mainActor, .unsafeRuntime:
-            []
         }
     }
 }
 
 public enum ComponentRequirement: Equatable, Sendable {
-    case explicitDomainSurfaces
-    case typedIdentity
+    case noAnyStoredProperties
+    case noBroadExistentialStoredProperties
+    case noRawStringStoredProperties
     case immutableStoredState
     case enumStateMachine
 }
@@ -242,6 +228,10 @@ public func Owns(_ paths: String...) -> DSLPathList {
 
 public func MayDependOn(_ dependencies: SubsystemID...) -> ComponentElement {
     .mayDependOn(dependencies)
+}
+
+public func DoesNotDependOn(_ dependencies: SubsystemID...) -> ComponentElement {
+    .doesNotDependOn(dependencies)
 }
 
 public func MayUse(_ capabilities: Capability..., severity: Severity = .error) -> ComponentElement {
@@ -299,8 +289,8 @@ public func SingleOwner(_ severity: Severity) -> RuleConfiguration {
     RuleConfiguration(duplicateOwnership: severity)
 }
 
-public func AcyclicDependencies(_ severity: Severity) -> RuleConfiguration {
-    RuleConfiguration(dependencyCycle: severity)
+public func AcyclicDeclaredDependencies(_ severity: Severity) -> RuleConfiguration {
+    RuleConfiguration(declaredDependencyCycle: severity)
 }
 
 public struct DSLPathList: Equatable, Sendable {
@@ -329,27 +319,31 @@ private extension Array where Element == RuleConfiguration {
 
 private extension Array where Element == ComponentRequirementSetting {
     func derivedRules(defaultPaths: [String]) -> RuleConfiguration {
-        var domainSeverity = Severity.off
-        var domainDisallowances = Set<DomainModelDisallowance>()
-        var domainPaths: [String] = []
+        var storedPropertySeverity = Severity.off
+        var storedPropertyDisallowances = Set<StoredPropertyDisallowance>()
+        var storedPropertyPaths: [String] = []
         var enumStateMachine = PathRuleConfiguration()
 
         for setting in self {
             let scopedPaths = setting.paths.isEmpty ? defaultPaths : setting.paths
 
             switch setting.requirement {
-            case .explicitDomainSurfaces:
-                domainSeverity = domainSeverity.merging(setting.severity)
-                domainPaths.append(contentsOf: scopedPaths)
-                domainDisallowances.formUnion([.any, .broadExistential])
-            case .typedIdentity:
-                domainSeverity = domainSeverity.merging(setting.severity)
-                domainPaths.append(contentsOf: scopedPaths)
-                domainDisallowances.insert(.rawStringIdentity)
+            case .noAnyStoredProperties:
+                storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
+                storedPropertyPaths.append(contentsOf: scopedPaths)
+                storedPropertyDisallowances.insert(.any)
+            case .noBroadExistentialStoredProperties:
+                storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
+                storedPropertyPaths.append(contentsOf: scopedPaths)
+                storedPropertyDisallowances.insert(.broadExistential)
+            case .noRawStringStoredProperties:
+                storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
+                storedPropertyPaths.append(contentsOf: scopedPaths)
+                storedPropertyDisallowances.insert(.rawStringIdentity)
             case .immutableStoredState:
-                domainSeverity = domainSeverity.merging(setting.severity)
-                domainPaths.append(contentsOf: scopedPaths)
-                domainDisallowances.insert(.storedVar)
+                storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
+                storedPropertyPaths.append(contentsOf: scopedPaths)
+                storedPropertyDisallowances.insert(.storedVar)
             case .enumStateMachine:
                 enumStateMachine = PathRuleConfiguration(
                     severity: enumStateMachine.severity.merging(setting.severity),
@@ -359,10 +353,10 @@ private extension Array where Element == ComponentRequirementSetting {
         }
 
         return RuleConfiguration(
-            domainModels: DomainModelRuleConfiguration(
-                severity: domainSeverity,
-                paths: Swift.Array(Set(domainPaths)).sorted(),
-                disallowances: domainDisallowances
+            storedProperties: StoredPropertyRuleConfiguration(
+                severity: storedPropertySeverity,
+                paths: Swift.Array(Set(storedPropertyPaths)).sorted(),
+                disallowances: storedPropertyDisallowances
             ),
             enumStateMachine: enumStateMachine
         )
@@ -418,11 +412,10 @@ private extension Array where Element == ImperativeDisallowanceSetting {
         }
 
         return RuleConfiguration(
-            domainModels: DomainModelRuleConfiguration(
+            syntaxConstructs: SyntaxConstructRuleConfiguration(
                 severity: severity,
                 paths: Swift.Array(Set(paths)).sorted(),
-                disallowances: [.imperativeConstructs],
-                imperativeConstructs: constructs
+                disallowedConstructs: constructs
             )
         )
     }
@@ -434,20 +427,30 @@ private extension RuleConfiguration {
             forbiddenImports: forbiddenImports + other.forbiddenImports,
             subsystemBoundary: other.subsystemBoundary.isConfigured ? other.subsystemBoundary : subsystemBoundary,
             duplicateOwnership: other.duplicateOwnership.isConfigured ? other.duplicateOwnership : duplicateOwnership,
-            dependencyCycle: other.dependencyCycle.isConfigured ? other.dependencyCycle : dependencyCycle,
-            domainModels: domainModels.merging(other.domainModels),
+            declaredDependencyCycle: other.declaredDependencyCycle.isConfigured ? other.declaredDependencyCycle : declaredDependencyCycle,
+            storedProperties: storedProperties.merging(other.storedProperties),
+            syntaxConstructs: syntaxConstructs.merging(other.syntaxConstructs),
             enumStateMachine: enumStateMachine.merging(other.enumStateMachine)
         )
     }
 }
 
-private extension DomainModelRuleConfiguration {
-    func merging(_ other: DomainModelRuleConfiguration) -> DomainModelRuleConfiguration {
-        DomainModelRuleConfiguration(
+private extension StoredPropertyRuleConfiguration {
+    func merging(_ other: StoredPropertyRuleConfiguration) -> StoredPropertyRuleConfiguration {
+        StoredPropertyRuleConfiguration(
             severity: severity.merging(other.severity),
             paths: Array(Set(paths + other.paths)).sorted(),
-            disallowances: disallowances.union(other.disallowances),
-            imperativeConstructs: imperativeConstructs.union(other.imperativeConstructs)
+            disallowances: disallowances.union(other.disallowances)
+        )
+    }
+}
+
+private extension SyntaxConstructRuleConfiguration {
+    func merging(_ other: SyntaxConstructRuleConfiguration) -> SyntaxConstructRuleConfiguration {
+        SyntaxConstructRuleConfiguration(
+            severity: severity.merging(other.severity),
+            paths: Array(Set(paths + other.paths)).sorted(),
+            disallowedConstructs: disallowedConstructs.union(other.disallowedConstructs)
         )
     }
 }
@@ -467,9 +470,15 @@ private extension Severity {
     }
 }
 
-private extension DomainModelRuleConfiguration {
+private extension StoredPropertyRuleConfiguration {
     var isConfigured: Bool {
-        severity != .off || !paths.isEmpty || !disallowances.isEmpty || !imperativeConstructs.isEmpty
+        severity != .off || !paths.isEmpty || !disallowances.isEmpty
+    }
+}
+
+private extension SyntaxConstructRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !disallowedConstructs.isEmpty
     }
 }
 

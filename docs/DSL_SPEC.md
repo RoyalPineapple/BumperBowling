@@ -1,16 +1,16 @@
 # Bumper Bowling Swift DSL Specification
 
-Bumper Bowling's assertion surface is Swift. The DSL is intentionally small and familiar to SwiftLint users, but its center is codebase shape: components own code, declare allowed dependencies and capabilities, and require modeling guarantees.
+Bumper Bowling's assertion surface is Swift. The DSL is intentionally small and familiar to SwiftLint users, but its center is codebase shape: components own code, declare dependency edges and import capabilities, and require specific SwiftSyntax-observed facts.
 
 In 0.0, the DSL is the typed library API and sample authoring shape. The CLI still uses its built-in repository configuration; executing `BumperBowling.swift` as a config file is post-MVP.
 
-The DSL declares the shape the repository wants. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed graph facts satisfy the declared shape.
+The DSL declares the shape the repository wants using Swift types. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed graph facts satisfy the declared shape.
 
 `bumper scan` shows the architecture graph the code currently expresses. The DSL declares the bounds; scan is evidence for those bounds.
 
 The graph is intentionally not a second AST. It is a compact projection of facts Bumper rules can use, and it is the receipt trail for every finding.
 
-The DSL compiles into typed architecture rules:
+The DSL compiles into typed architecture rules. Validation is deliberately lean math over the parsed graph: path scope, set membership, edge checks, and cycle detection.
 
 ```text
 BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner -> ArchitectureGraph -> validator
@@ -31,8 +31,6 @@ BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner
 import BumperBowlingCore
 
 let configuration = BumperConfiguration {
-    Defaults(.strict)
-
     Included {
         "Sources"
     }
@@ -47,7 +45,13 @@ let configuration = BumperConfiguration {
             Owns("Sources/BumperBowlingCore")
             Modules("BumperBowlingCore")
             MayUse(.foundation)
-            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
+            Requires(
+                .noAnyStoredProperties,
+                .noBroadExistentialStoredProperties,
+                .noRawStringStoredProperties,
+                .immutableStoredState,
+                severity: .warning
+            )
             RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
@@ -62,7 +66,7 @@ let configuration = BumperConfiguration {
     Assertions {
         DependencyBoundaries(.error)
         SingleOwner(.error)
-        AcyclicDependencies(.error)
+        AcyclicDeclaredDependencies(.error)
     }
 }
 ```
@@ -73,6 +77,7 @@ let configuration = BumperConfiguration {
 - `Owns`: paths owned by that component.
 - `Modules`: module aliases that identify that component in imports.
 - `MayDependOn`: an allowed optional dependency edge.
+- `DoesNotDependOn`: a forbidden dependency edge.
 - `MayUse`: allowed capability imports for a component.
 - `DoesNotUse`: component-scoped modules or frameworks that must not appear in imports.
 - `Requires`: positive modeling guarantees that derive syntax-first checks.
@@ -81,8 +86,9 @@ let configuration = BumperConfiguration {
 
 Current modeling requirements include:
 
-- `.explicitDomainSurfaces`: disallow `Any` and broad existentials where configured.
-- `.typedIdentity`: disallow raw `String` stored identity where configured.
+- `.noAnyStoredProperties`: disallow stored properties explicitly typed as `Any`.
+- `.noBroadExistentialStoredProperties`: disallow stored properties with explicit `any ...` types.
+- `.noRawStringStoredProperties`: disallow stored properties explicitly typed as `String`.
 - `.immutableStoredState`: disallow mutable stored properties where configured.
 - `.enumStateMachine`: require parser/workflow files to declare an enum state machine where configured.
 
@@ -106,8 +112,9 @@ bumper explain <path>
 - `forbidden_import`
 - `subsystem_boundary`
 - `duplicate_ownership`
-- `dependency_cycle`
-- `domain_models`
+- `declared_dependency_cycle`
+- `stored_properties`
+- `syntax_constructs`
 - `enum_state_machine`
 
 Severities are:
@@ -121,9 +128,9 @@ error
 
 Only `error` fails `bumper lint`.
 
-`domain_models` is syntax-first in 0.0. It checks explicit stored-property type annotations exactly enough to catch mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not claim compiler-level type inference or full signature analysis.
+`stored_properties` is syntax-first in 0.0. It checks explicit stored-property type annotations exactly enough to catch mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not claim compiler-level type inference or full signature analysis.
 
-See [MODELING_ASSERTIONS.md](MODELING_ASSERTIONS.md) for an example of using Bumper Bowling for architecture and domain modeling assertions without overlapping SwiftLint style rules.
+See [MODELING_ASSERTIONS.md](MODELING_ASSERTIONS.md) for an example of using Bumper Bowling for architecture and SwiftSyntax fact assertions without overlapping SwiftLint style rules.
 
 ## SwiftSyntax Boundary
 

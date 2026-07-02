@@ -4,11 +4,11 @@ Bumper Bowling does not overlap with SwiftLint.
 
 SwiftLint owns Swift style: formatting, naming, whitespace, line length, sorted imports, brace placement, and local code smells.
 
-Bumper Bowling owns architecture and modeling policy when that policy is visible to SwiftSyntax. It starts by declaring the shape the repository wants, then derives violations from that contract.
+Bumper Bowling owns architecture and modeling policy when that policy is visible to SwiftSyntax. It starts with raw parsed facts, projects them into a graph, then applies typed Swift assertions as lean graph operations.
 
 ## Example
 
-This configuration says the domain component owns its paths, may use Foundation, exposes explicit domain surfaces, uses typed identity, keeps stored state immutable, disallows selected imperative constructs, and models parser progress as an enum state machine.
+This configuration says the core component owns its paths, may use Foundation, disallows selected stored-property facts, disallows selected syntax constructs, and models parser progress as an enum state machine.
 
 ```swift
 import BumperBowlingCore
@@ -28,7 +28,13 @@ let configuration = BumperConfiguration {
             Owns("Sources/Core")
             Modules("Core")
             MayUse(.foundation)
-            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .error)
+            Requires(
+                .noAnyStoredProperties,
+                .noBroadExistentialStoredProperties,
+                .noRawStringStoredProperties,
+                .immutableStoredState,
+                severity: .error
+            )
             Disallows(.assignment, .loop, .mutableBinding, .inoutExpression, .mutatingDeclaration, severity: .error)
             RequiresScoped(.enumStateMachine, "Sources/Core/**/*Parser.swift", severity: .error)
         }
@@ -48,11 +54,11 @@ Owns("Sources/Core")
 
 That keeps a rule from becoming vague repo-wide pressure.
 
-Component usage and modeling assertions have a severity:
+Component usage and fact assertions have a severity:
 
 ```swift
 MayUse(.foundation, severity: .error)
-Requires(.typedIdentity, severity: .error)
+Requires(.noRawStringStoredProperties, severity: .error)
 ```
 
 That forces the team to decide whether a policy is advisory or lane-keeping.
@@ -60,7 +66,7 @@ That forces the team to decide whether a policy is advisory or lane-keeping.
 Every assertion names an expected source fact:
 
 ```swift
-Requires(.typedIdentity, severity: .error)
+Requires(.noRawStringStoredProperties, severity: .error)
 ```
 
 That keeps Bumper Bowling tied to observable SwiftSyntax facts instead of subjective review language.
@@ -75,13 +81,13 @@ That keeps strong modeling constraints intentional, local, and reviewable.
 
 ## What This Means
 
-`Requires(.immutableStoredState)` is not a formatting preference. It asserts that domain state should be immutable after construction.
+`Requires(.immutableStoredState)` is not a formatting preference. It asserts that SwiftSyntax should not observe mutable stored properties in the configured scope.
 
-`Disallows(.assignment, .loop, .mutableBinding)` is not a formatting preference. It asserts that configured paths should not contain those imperative constructs when SwiftSyntax observes them.
+`Disallows(.assignment, .loop, .mutableBinding)` is not a formatting preference. It asserts that configured paths should not contain those syntax constructs when SwiftSyntax observes them.
 
-`Requires(.typedIdentity)` is not a naming convention. It asserts that identity and validation should be modeled as types at the boundary instead of carried through the domain as raw strings.
+`Requires(.noRawStringStoredProperties)` is not a naming convention. It asserts that SwiftSyntax should not observe stored properties explicitly typed as `String` in the configured scope.
 
-`Requires(.explicitDomainSurfaces)` is not a local Swift preference. It asserts that domain surfaces should be explicit enough for architectural review.
+`Requires(.noAnyStoredProperties)` and `Requires(.noBroadExistentialStoredProperties)` are not local Swift preferences. They assert that SwiftSyntax should not observe stored properties explicitly typed as `Any` or `any ...` in the configured scope.
 
 `Requires(.enumStateMachine)` is not a parser style rule. It asserts that parser state should be modeled as enum cases carrying their data, so invalid parser states are harder to construct.
 

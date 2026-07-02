@@ -30,8 +30,9 @@ public struct RuleRegistry: Sendable {
             .forbiddenImport(configuration.forbiddenImports),
             .subsystemBoundary(configuration.subsystemBoundary),
             .duplicateOwnership(configuration.duplicateOwnership),
-            .dependencyCycle(configuration.dependencyCycle),
-            .domainModels(configuration.domainModels),
+            .declaredDependencyCycle(configuration.declaredDependencyCycle),
+            .storedProperties(configuration.storedProperties),
+            .syntaxConstructs(configuration.syntaxConstructs),
             .enumStateMachine(configuration.enumStateMachine),
         ].filter(\.isEnabled)
     }
@@ -41,8 +42,9 @@ public enum ArchitectureRule: Sendable {
     case forbiddenImport([RuleSetting])
     case subsystemBoundary(Severity)
     case duplicateOwnership(Severity)
-    case dependencyCycle(Severity)
-    case domainModels(DomainModelRuleConfiguration)
+    case declaredDependencyCycle(Severity)
+    case storedProperties(StoredPropertyRuleConfiguration)
+    case syntaxConstructs(SyntaxConstructRuleConfiguration)
     case enumStateMachine(PathRuleConfiguration)
 
     public var id: RuleID {
@@ -53,10 +55,12 @@ public enum ArchitectureRule: Sendable {
             .subsystemBoundary
         case .duplicateOwnership:
             .duplicateOwnership
-        case .dependencyCycle:
-            .dependencyCycle
-        case .domainModels:
-            .domainModels
+        case .declaredDependencyCycle:
+            .declaredDependencyCycle
+        case .storedProperties:
+            .storedProperties
+        case .syntaxConstructs:
+            .syntaxConstructs
         case .enumStateMachine:
             .enumStateMachine
         }
@@ -70,10 +74,12 @@ public enum ArchitectureRule: Sendable {
             "Requires subsystem imports to match declared dependencies."
         case .duplicateOwnership:
             "Disallows duplicate subsystem path and module ownership."
-        case .dependencyCycle:
-            "Disallows cycles in configured subsystem dependencies."
-        case .domainModels:
-            "Applies configured domain modeling assertions."
+        case .declaredDependencyCycle:
+            "Disallows cycles in declared subsystem dependencies."
+        case .storedProperties:
+            "Applies configured assertions over SwiftSyntax stored property facts."
+        case .syntaxConstructs:
+            "Applies configured assertions over SwiftSyntax construct facts."
         case .enumStateMachine:
             "Requires parser files to declare an enum state machine."
         }
@@ -93,9 +99,11 @@ public enum ArchitectureRule: Sendable {
             severity
         case .duplicateOwnership(let severity):
             severity
-        case .dependencyCycle(let severity):
+        case .declaredDependencyCycle(let severity):
             severity
-        case .domainModels(let configuration):
+        case .storedProperties(let configuration):
+            configuration.severity
+        case .syntaxConstructs(let configuration):
             configuration.severity
         case .enumStateMachine(let configuration):
             configuration.severity
@@ -110,10 +118,12 @@ public enum ArchitectureRule: Sendable {
             evaluateSubsystemBoundaries(graph: graph, rules: rules, severity: severity)
         case .duplicateOwnership(let severity):
             evaluateDuplicateOwnership(rules: rules, severity: severity)
-        case .dependencyCycle(let severity):
-            evaluateDependencyCycles(graph: graph, rules: rules, severity: severity)
-        case .domainModels(let configuration):
-            evaluateDomainModels(graph: graph, configuration: configuration)
+        case .declaredDependencyCycle(let severity):
+            evaluateDeclaredDependencyCycles(graph: graph, rules: rules, severity: severity)
+        case .storedProperties(let configuration):
+            evaluateStoredProperties(graph: graph, configuration: configuration)
+        case .syntaxConstructs(let configuration):
+            evaluateSyntaxConstructs(graph: graph, configuration: configuration)
         case .enumStateMachine(let configuration):
             evaluateEnumStateMachines(graph: graph, configuration: configuration)
         }
@@ -180,7 +190,7 @@ public enum ArchitectureRule: Sendable {
         return violations
     }
 
-    private func evaluateDependencyCycles(
+    private func evaluateDeclaredDependencyCycles(
         graph architectureGraph: ArchitectureGraph,
         rules: ArchitectureRules,
         severity: Severity
@@ -198,7 +208,7 @@ public enum ArchitectureRule: Sendable {
                     violation(
                         severity: severity,
                         path: path,
-                        message: "Dependency cycle includes subsystem \(subsystem.id.rawValue)"
+                        message: "Declared dependency cycle includes subsystem \(subsystem.id.rawValue)"
                     ),
                 ]
             }
@@ -241,9 +251,9 @@ public enum ArchitectureRule: Sendable {
         return false
     }
 
-    private func evaluateDomainModels(
+    private func evaluateStoredProperties(
         graph: ArchitectureGraph,
-        configuration: DomainModelRuleConfiguration
+        configuration: StoredPropertyRuleConfiguration
     ) -> [ArchitectureViolation] {
         let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
 
@@ -252,24 +262,29 @@ public enum ArchitectureRule: Sendable {
                 return [ArchitectureViolation]()
             }
 
-            let propertyViolations = file.storedProperties.flatMap { property in
-                domainModelViolations(
+            return file.storedProperties.flatMap { property in
+                storedPropertyViolations(
                     file: file,
                     property: property,
                     configuration: configuration
                 )
             }
+        }
+    }
 
-            guard configuration.disallowances.contains(.imperativeConstructs) else {
-                return propertyViolations
+    private func evaluateSyntaxConstructs(
+        graph: ArchitectureGraph,
+        configuration: SyntaxConstructRuleConfiguration
+    ) -> [ArchitectureViolation] {
+        let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
+
+        return graph.sourceFiles.flatMap { file in
+            guard paths.isEmpty || paths.contains(where: { $0.contains(file.path) }) else {
+                return [ArchitectureViolation]()
             }
 
-            let disallowedConstructs = configuration.imperativeConstructs.isEmpty
-                ? Set(file.imperativeConstructs)
-                : configuration.imperativeConstructs
-
-            return propertyViolations + file.imperativeConstructs.compactMap { construct in
-                guard disallowedConstructs.contains(construct) else {
+            return file.imperativeConstructs.compactMap { construct in
+                guard configuration.disallowedConstructs.contains(construct) else {
                     return nil
                 }
 
@@ -282,10 +297,10 @@ public enum ArchitectureRule: Sendable {
         }
     }
 
-    private func domainModelViolations(
+    private func storedPropertyViolations(
         file: SourceFileFacts,
         property: StoredProperty,
-        configuration: DomainModelRuleConfiguration
+        configuration: StoredPropertyRuleConfiguration
     ) -> [ArchitectureViolation] {
         var violations: [ArchitectureViolation] = []
         let typeName = property.type?.rawValue ?? ""
@@ -463,8 +478,9 @@ public enum RuleID: String, CaseIterable, Equatable, Sendable {
     case forbiddenImport = "forbidden_import"
     case subsystemBoundary = "subsystem_boundary"
     case duplicateOwnership = "duplicate_ownership"
-    case dependencyCycle = "dependency_cycle"
-    case domainModels = "domain_models"
+    case declaredDependencyCycle = "declared_dependency_cycle"
+    case storedProperties = "stored_properties"
+    case syntaxConstructs = "syntax_constructs"
     case enumStateMachine = "enum_state_machine"
 }
 

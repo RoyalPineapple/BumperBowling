@@ -2,7 +2,7 @@
 
 Bumper Bowling validates declared codebase shape against selected SwiftSyntax facts.
 
-SwiftSyntax can represent the full Swift source tree. Bumper Bowling does not copy that tree and does not expose an infinitely configurable query language. It projects the facts that are useful for architecture assertions into `ArchitectureGraph`.
+SwiftSyntax can represent the full Swift source tree. Bumper Bowling does not copy that tree and does not expose an infinitely configurable query language. It records selected raw facts, projects them into `ArchitectureGraph`, then runs lean mathematical checks over that graph.
 
 ## Current Facts
 
@@ -63,6 +63,7 @@ The DSL supplies the facts SwiftSyntax cannot know by itself:
 - component path ownership
 - component module aliases
 - allowed component dependency edges
+- forbidden component dependency edges
 - allowed capabilities
 - assertion severities
 - scoped modeling assertions
@@ -77,6 +78,8 @@ The DSL supplies the facts SwiftSyntax cannot know by itself:
 - component import edges
 
 Source files carry their observed imports, declarations, stored properties, enum names, and imperative constructs.
+
+Rules operate on that projection with deterministic operations: path scope, set membership, graph edge checks, and cycle detection.
 
 ## Not Known
 

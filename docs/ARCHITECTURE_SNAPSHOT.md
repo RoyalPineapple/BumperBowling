@@ -65,28 +65,27 @@ flowchart LR
     Findings --> Report["LintReport"]
 ```
 
-### `dependency_cycle`
+### `declared_dependency_cycle`
 
-Disallows cycles in configured subsystem dependencies.
+Disallows cycles in declared subsystem dependencies.
 
 ```mermaid
 flowchart LR
     Dependencies["SubsystemRule.allowedDependencies"] --> Graph["dependency graph"]
-    Graph --> DependencyCycle["dependency_cycle"]
-    DependencyCycle --> Findings["ArchitectureViolation[]"]
+    Graph --> DeclaredDependencyCycle["declared_dependency_cycle"]
+    DeclaredDependencyCycle --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
 ```
 
-### `domain_models`
+### `stored_properties`
 
-Applies configured domain modeling assertions.
+Applies configured assertions over SwiftSyntax stored property facts.
 
 ```mermaid
 flowchart LR
-    Properties["ArchitectureGraph.sourceFiles.storedProperties"] --> DomainModels["domain_models"]
-    Imperative["ArchitectureGraph.sourceFiles.imperativeConstructs"] --> DomainModels
-    Policy["DomainModelRuleConfiguration"] --> DomainModels
-    DomainModels --> Findings["ArchitectureViolation[]"]
+    Properties["ArchitectureGraph.sourceFiles.storedProperties"] --> StoredProperties["stored_properties"]
+    Policy["StoredPropertyRuleConfiguration"] --> StoredProperties
+    StoredProperties --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
 ```
 

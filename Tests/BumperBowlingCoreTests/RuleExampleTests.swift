@@ -11,13 +11,26 @@ struct RuleExampleTests {
     }
 
     @Test
-    func domainModelExamples() async throws {
+    func storedPropertyExamples() async throws {
         try await verifyRule(
-            .domainModels(
-                DomainModelRuleConfiguration(
+            .storedProperties(
+                StoredPropertyRuleConfiguration(
                     severity: .error,
                     paths: ["Sources/BumperBowlingCore"],
                     disallowances: [.storedVar, .rawStringIdentity]
+                )
+            )
+        )
+    }
+
+    @Test
+    func syntaxConstructExamples() async throws {
+        try await verifyRule(
+            .syntaxConstructs(
+                SyntaxConstructRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/BumperBowlingCore"],
+                    disallowedConstructs: [.assignment, .mutableBinding]
                 )
             )
         )

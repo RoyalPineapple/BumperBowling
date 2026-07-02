@@ -14,5 +14,5 @@
 - Keep parsing SwiftSyntax-first. Use SwiftSyntax/SwiftParser for Swift parsing rather than regular expressions.
 - Parse strings into domain types at boundaries; do not pass raw strings through core architecture logic.
 - Model parser progress with explicit enum state machines whose cases carry the parsed data.
-- Do not introduce `Any` or broad existential abstractions in the domain model.
+- Do not introduce stored properties explicitly typed as `Any` or broad existentials in guarded scopes.
 - Keep the tool tiny; avoid generated accessors, dynamic lookup, and nonessential framework code.

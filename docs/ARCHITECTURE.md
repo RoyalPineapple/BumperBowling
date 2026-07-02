@@ -16,21 +16,21 @@ The tool should stay tiny. Prefer a small SwiftSyntax-first core, simple Swift D
 
 ```text
 SwiftSyntax reads the code
-Bumper keeps the facts that matter
+Bumper records raw source facts
 Those facts form an ArchitectureGraph
-Your DSL defines the lanes
-Lint fails when the graph drifts
+The Swift DSL encodes typed assertions
+Lint runs math over the graph
 ```
 
 Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane.
 
 The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md).
 
-The DSL should declare the architecture the repository wants, then derive violations from that contract. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and `Requires` over free-floating negative rules.
+The DSL should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 
 `scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence for the declared bounds, not a source of generated policy.
 
-SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Add graph facts only when they support an assertion Bumper Bowling can explain. Keep receipts for every finding: report the observed graph fact, the declared lane, and why they do not match.
+SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep receipts for every finding: report the observed graph fact, the declared lane, and why they do not match.
 
 ## Subsystems
 

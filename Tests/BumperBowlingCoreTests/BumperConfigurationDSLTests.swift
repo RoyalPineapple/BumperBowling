@@ -42,13 +42,34 @@ struct BumperConfigurationDSLTests {
         #expect(rules.forbiddenImports == Set([try ModuleName("XCTest")]))
         #expect(rules.ruleConfiguration.forbiddenImports.first?.paths == ["Sources/Core"])
         #expect(
-            rules.ruleConfiguration.domainModels.disallowances ==
-                Set<DomainModelDisallowance>([.storedVar, .imperativeConstructs])
+            rules.ruleConfiguration.storedProperties.disallowances ==
+                Set<StoredPropertyDisallowance>([.storedVar])
         )
         #expect(
-            rules.ruleConfiguration.domainModels.imperativeConstructs ==
+            rules.ruleConfiguration.syntaxConstructs.disallowedConstructs ==
                 Set<ImperativeConstruct>([.assignment, .mutableBinding])
         )
-        #expect(rules.ruleConfiguration.domainModels.paths == ["Sources/Core"])
+        #expect(rules.ruleConfiguration.storedProperties.paths == ["Sources/Core"])
+        #expect(rules.ruleConfiguration.syntaxConstructs.paths == ["Sources/Core"])
+    }
+
+    @Test
+    func exposesForbiddenComponentDependencies() throws {
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    DoesNotDependOn(.ui)
+                }
+
+                Component(.ui) {
+                    Owns("Sources/UI")
+                }
+            }
+        }.architectureConfiguration
+
+        let rules = try ArchitectureRules(configuration: configuration)
+
+        #expect(rules.subsystemByID[try SubsystemID("core")]?.forbiddenDependencies == Set([try SubsystemID("ui")]))
     }
 }

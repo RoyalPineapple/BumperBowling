@@ -16,13 +16,15 @@ The current CLI is useful for proving the core model on this repository. The Swi
 
 ```text
 SwiftSyntax reads the code
-Bumper keeps the facts that matter
+Bumper records raw source facts
 Those facts form an ArchitectureGraph
-Your DSL defines the lanes
-Lint fails when the graph drifts
+The Swift DSL encodes typed assertions
+Lint runs math over the graph
 ```
 
 Bumper Bowling only asserts architecture visible to SwiftSyntax plus configured repo shape. It does not resolve symbols, infer types, expand macros semantically, or prove compiler-level dependencies. See [docs/SWIFTSYNTAX_SURFACE.md](docs/SWIFTSYNTAX_SURFACE.md) for the current fact surface.
+
+The core is intentionally lean: parse raw SwiftSyntax facts, normalize them into a graph, then run deterministic operations over that graph: set membership, path scope, edge checks, and cycle detection.
 
 Bumper keeps receipts. Every finding should trace back to an observed graph fact, and `scan`, `explain`, and `snapshot` expose the evidence Bumper used.
 
@@ -33,7 +35,13 @@ Component(.core) {
     Owns("Sources/BumperBowlingCore")
     Modules("BumperBowlingCore")
     MayUse(.foundation)
-    Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
+    Requires(
+        .noAnyStoredProperties,
+        .noBroadExistentialStoredProperties,
+        .noRawStringStoredProperties,
+        .immutableStoredState,
+        severity: .warning
+    )
 }
 ```
 
@@ -62,11 +70,12 @@ MVP rules:
 - `forbidden_import`: disallow configured imports in linted source files.
 - `subsystem_boundary`: require subsystem imports to match declared dependencies.
 - `duplicate_ownership`: detect overlapping subsystem path ownership.
-- `dependency_cycle`: reject cycles in configured subsystem dependencies.
-- `domain_models`: enforce syntax-first domain modeling rules, including concrete imperative-construct constraints.
+- `declared_dependency_cycle`: reject cycles in declared subsystem dependencies.
+- `stored_properties`: enforce typed assertions over SwiftSyntax stored property facts.
+- `syntax_constructs`: enforce typed assertions over SwiftSyntax construct facts.
 - `enum_state_machine`: require parser files to declare an enum state machine.
 
-The `domain_models` rule is deliberately syntax-first in 0.0. It checks explicit stored-property type annotations for mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not perform compiler-level type inference or full public API analysis. See [docs/MODELING_ASSERTIONS.md](docs/MODELING_ASSERTIONS.md) for an example of using these assertions without overlapping SwiftLint.
+The `stored_properties` rule is deliberately syntax-first in 0.0. It checks explicit stored-property type annotations for mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not perform compiler-level type inference or full public API analysis. See [docs/MODELING_ASSERTIONS.md](docs/MODELING_ASSERTIONS.md) for an example of using these assertions without overlapping SwiftLint.
 
 ## Quick Start
 
@@ -112,7 +121,13 @@ let configuration = BumperConfiguration {
             Owns("Sources/BumperBowlingCore")
             Modules("BumperBowlingCore")
             MayUse(.foundation)
-            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
+            Requires(
+                .noAnyStoredProperties,
+                .noBroadExistentialStoredProperties,
+                .noRawStringStoredProperties,
+                .immutableStoredState,
+                severity: .warning
+            )
             RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
@@ -127,12 +142,12 @@ let configuration = BumperConfiguration {
     Assertions {
         DependencyBoundaries(.error)
         SingleOwner(.error)
-        AcyclicDependencies(.error)
+        AcyclicDeclaredDependencies(.error)
     }
 }
 ```
 
-DSL constructors parse strings into typed values at the boundary. `Owns`, `MayDependOn`, `MayUse`, `DoesNotUse`, `Requires`, and `Disallows` compile down to typed graph assertions, not loose strings.
+DSL constructors parse strings into typed values at the boundary. `Owns`, `MayDependOn`, `DoesNotDependOn`, `MayUse`, `DoesNotUse`, `Requires`, and `Disallows` compile down to typed graph assertions over parsed SwiftSyntax facts, not loose strings.
 
 ## Architecture
 

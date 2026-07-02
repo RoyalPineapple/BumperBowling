@@ -88,13 +88,15 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
         case .duplicateOwnership:
             lines.append("    Paths[\"SubsystemRule.paths\"] --> Ownership[\"path ownership conflicts\"]")
             lines.append("    Ownership --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
-        case .dependencyCycle:
+        case .declaredDependencyCycle:
             lines.append("    Dependencies[\"SubsystemRule.allowedDependencies\"] --> Graph[\"dependency graph\"]")
             lines.append("    Graph --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
-        case .domainModels:
+        case .storedProperties:
             lines.append("    Properties[\"ArchitectureGraph.sourceFiles.storedProperties\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
-            lines.append("    Imperative[\"ArchitectureGraph.sourceFiles.imperativeConstructs\"] --> \(ruleNode)")
-            lines.append("    Policy[\"DomainModelRuleConfiguration\"] --> \(ruleNode)")
+            lines.append("    Policy[\"StoredPropertyRuleConfiguration\"] --> \(ruleNode)")
+        case .syntaxConstructs:
+            lines.append("    Constructs[\"ArchitectureGraph.sourceFiles.imperativeConstructs\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Policy[\"SyntaxConstructRuleConfiguration\"] --> \(ruleNode)")
         case .enumStateMachine:
             lines.append("    Enums[\"ArchitectureGraph.sourceFiles.enums\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Paths[\"PathRuleConfiguration.paths\"] --> \(ruleNode)")

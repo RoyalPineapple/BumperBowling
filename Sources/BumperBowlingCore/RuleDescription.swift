@@ -57,10 +57,10 @@ public extension ArchitectureRule {
                     ),
                 ]
             )
-        case .domainModels:
+        case .storedProperties:
             RuleDescription(
                 id: id,
-                name: "Domain Models",
+                name: "Stored Properties",
                 description: description,
                 nonTriggeringExamples: [
                     RuleExample(
@@ -73,6 +73,26 @@ public extension ArchitectureRule {
                     RuleExample(
                         code: "public struct Model {\n    ↓var id: Identifier\n}\n",
                         path: knownPath("Sources/BumperBowlingCore/Model.swift"),
+                        subsystem: knownSubsystem("core")
+                    ),
+                ]
+            )
+        case .syntaxConstructs:
+            RuleDescription(
+                id: id,
+                name: "Syntax Constructs",
+                description: description,
+                nonTriggeringExamples: [
+                    RuleExample(
+                        code: "public func reduce(_ value: Int) -> Int {\n    value + 1\n}\n",
+                        path: knownPath("Sources/BumperBowlingCore/Reducer.swift"),
+                        subsystem: knownSubsystem("core")
+                    ),
+                ],
+                triggeringExamples: [
+                    RuleExample(
+                        code: "public func reduce(_ value: Int) -> Int {\n    ↓var next = value\n    next += 1\n    return next\n}\n",
+                        path: knownPath("Sources/BumperBowlingCore/Reducer.swift"),
                         subsystem: knownSubsystem("core")
                     ),
                 ]
@@ -101,8 +121,8 @@ public extension ArchitectureRule {
             RuleDescription(id: id, name: "Subsystem Boundary", description: description)
         case .duplicateOwnership:
             RuleDescription(id: id, name: "Duplicate Ownership", description: description)
-        case .dependencyCycle:
-            RuleDescription(id: id, name: "Dependency Cycle", description: description)
+        case .declaredDependencyCycle:
+            RuleDescription(id: id, name: "Declared Dependency Cycle", description: description)
         }
     }
 }
