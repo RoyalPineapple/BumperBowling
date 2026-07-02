@@ -135,6 +135,8 @@ SwiftSyntax -> SourceFileFacts -> RepositoryFacts -> ArchitectureGraph -> RuleRe
 
 Swift is the only language surface in 0.0. The DSL must not promise facts SwiftSyntax cannot observe, such as symbol resolution, inferred types, or compiler-level dependency truth.
 
+See [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md) for the exact 0.0 fact surface.
+
 ## MVP Testing Pattern
 
 Bumper Bowling follows a tiny version of SwiftLint's self-test pattern:

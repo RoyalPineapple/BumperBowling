@@ -22,7 +22,7 @@ Your DSL defines the lanes
 Lint fails when the graph drifts
 ```
 
-Bumper Bowling only asserts architecture visible to SwiftSyntax plus configured repo shape. It does not resolve symbols, infer types, expand macros semantically, or prove compiler-level dependencies.
+Bumper Bowling only asserts architecture visible to SwiftSyntax plus configured repo shape. It does not resolve symbols, infer types, expand macros semantically, or prove compiler-level dependencies. See [docs/SWIFTSYNTAX_SURFACE.md](docs/SWIFTSYNTAX_SURFACE.md) for the current fact surface.
 
 Bumper keeps receipts. Every finding should trace back to an observed graph fact, and `scan`, `explain`, and `snapshot` expose the evidence Bumper used.
 
@@ -136,7 +136,7 @@ DSL constructors parse strings into typed values at the boundary. `Owns`, `MayDe
 
 ## Architecture
 
-Bumper Bowling is SwiftSyntax-driven. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the system shape and [docs/ARCHITECTURE_SNAPSHOT.md](docs/ARCHITECTURE_SNAPSHOT.md) for the generated commands, pipeline, and rule snapshots.
+Bumper Bowling is SwiftSyntax-driven. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the system shape, [docs/SWIFTSYNTAX_SURFACE.md](docs/SWIFTSYNTAX_SURFACE.md) for the observable fact surface, and [docs/ARCHITECTURE_SNAPSHOT.md](docs/ARCHITECTURE_SNAPSHOT.md) for the generated commands, pipeline, and rule snapshots.
 
 Swift is the only language surface in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftFileParser`; Bumper Bowling wraps those facts with DSL assertions.
 
