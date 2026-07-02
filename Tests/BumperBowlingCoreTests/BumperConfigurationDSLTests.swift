@@ -72,4 +72,35 @@ struct BumperConfigurationDSLTests {
 
         #expect(rules.subsystemByID[try SubsystemID("core")]?.forbiddenDependencies == Set([try SubsystemID("ui")]))
     }
+
+    @Test
+    func composesCustomSemanticRequirementsFromFactRules() throws {
+        let valueCore = ComponentRequirement(
+            .typedIdentity,
+            .immutableStoredState,
+            ComponentRequirement(.disallowSyntaxConstruct(.assignment))
+        )
+
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Requires(valueCore, severity: .error)
+                }
+            }
+        }.architectureConfiguration
+
+        let rules = try ArchitectureRules(configuration: configuration)
+
+        #expect(
+            rules.ruleConfiguration.storedProperties.disallowances ==
+                Set<StoredPropertyDisallowance>([.rawStringIdentity, .storedVar])
+        )
+        #expect(
+            rules.ruleConfiguration.syntaxConstructs.disallowedConstructs ==
+                Set<ImperativeConstruct>([.assignment])
+        )
+        #expect(rules.ruleConfiguration.storedProperties.paths == ["Sources/Core"])
+        #expect(rules.ruleConfiguration.syntaxConstructs.paths == ["Sources/Core"])
+    }
 }

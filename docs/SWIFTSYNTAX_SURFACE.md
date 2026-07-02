@@ -81,6 +81,8 @@ Source files carry their observed imports, declarations, stored properties, enum
 
 Rules operate on that projection with deterministic operations: path scope, set membership, graph edge checks, and cycle detection.
 
+Semantic DSL shorthand does not add hidden facts. It composes `SourceFactRule` atoms, then lowers into these same graph operations.
+
 ## Not Known
 
 Bumper Bowling does not know:

@@ -28,6 +28,21 @@ The core is intentionally lean: parse raw SwiftSyntax facts, normalize them into
 
 Bumper keeps receipts. Every finding should trace back to an observed graph fact, and `scan`, `explain`, and `snapshot` expose the evidence Bumper used.
 
+Facts become rules when they are scoped by the DSL. You can use Bumper's semantic shorthand or compose your own:
+
+```swift
+extension ComponentRequirement {
+    static let valueCore = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState,
+        .functionalCore
+    )
+}
+```
+
+That shorthand still lowers into raw fact assertions over stored properties, syntax constructs, and enum declarations.
+
 The DSL starts from the shape you want:
 
 ```swift
@@ -35,13 +50,7 @@ Component(.core) {
     Owns("Sources/BumperBowlingCore")
     Modules("BumperBowlingCore")
     MayUse(.foundation)
-    Requires(
-        .noAnyStoredProperties,
-        .noBroadExistentialStoredProperties,
-        .noRawStringStoredProperties,
-        .immutableStoredState,
-        severity: .warning
-    )
+    Requires(.valueCore, severity: .warning)
 }
 ```
 
@@ -122,9 +131,8 @@ let configuration = BumperConfiguration {
             Modules("BumperBowlingCore")
             MayUse(.foundation)
             Requires(
-                .noAnyStoredProperties,
-                .noBroadExistentialStoredProperties,
-                .noRawStringStoredProperties,
+                .explicitDomainSurfaces,
+                .typedIdentity,
                 .immutableStoredState,
                 severity: .warning
             )

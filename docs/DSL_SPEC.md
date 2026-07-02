@@ -12,6 +12,21 @@ The graph is intentionally not a second AST. It is a compact projection of facts
 
 The DSL compiles into typed architecture rules. Validation is deliberately lean math over the parsed graph: path scope, set membership, edge checks, and cycle detection.
 
+Facts become rules when the DSL scopes them. The atom is `SourceFactRule`; a `ComponentRequirement` is a composable set of those atoms. Bumper ships semantic shorthand, and users can define their own:
+
+```swift
+extension ComponentRequirement {
+    static let valueCore = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState,
+        .functionalCore
+    )
+}
+```
+
+`Requires(.valueCore, severity: .error)` still lowers into raw graph checks over stored-property facts, syntax-construct facts, and enum facts.
+
 ```text
 BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner -> ArchitectureGraph -> validator
 ```
@@ -46,9 +61,8 @@ let configuration = BumperConfiguration {
             Modules("BumperBowlingCore")
             MayUse(.foundation)
             Requires(
-                .noAnyStoredProperties,
-                .noBroadExistentialStoredProperties,
-                .noRawStringStoredProperties,
+                .explicitDomainSurfaces,
+                .typedIdentity,
                 .immutableStoredState,
                 severity: .warning
             )
@@ -86,6 +100,9 @@ let configuration = BumperConfiguration {
 
 Current modeling requirements include:
 
+- `.explicitDomainSurfaces`: shorthand for no `Any` or broad existential stored properties.
+- `.typedIdentity`: shorthand for no raw `String` stored properties.
+- `.functionalCore`: shorthand for no selected imperative syntax constructs.
 - `.noAnyStoredProperties`: disallow stored properties explicitly typed as `Any`.
 - `.noBroadExistentialStoredProperties`: disallow stored properties with explicit `any ...` types.
 - `.noRawStringStoredProperties`: disallow stored properties explicitly typed as `String`.

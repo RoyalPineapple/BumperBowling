@@ -249,9 +249,8 @@ public enum ConfigurationLoader {
                 Modules("BumperBowlingCore")
                 MayUse(.foundation)
                 Requires(
-                    .noAnyStoredProperties,
-                    .noBroadExistentialStoredProperties,
-                    .noRawStringStoredProperties,
+                    .explicitDomainSurfaces,
+                    .typedIdentity,
                     .immutableStoredState,
                     severity: .warning
                 )

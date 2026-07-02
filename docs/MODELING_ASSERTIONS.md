@@ -6,6 +6,14 @@ SwiftLint owns Swift style: formatting, naming, whitespace, line length, sorted 
 
 Bumper Bowling owns architecture and modeling policy when that policy is visible to SwiftSyntax. It starts with raw parsed facts, projects them into a graph, then applies typed Swift assertions as lean graph operations.
 
+The composability model is small:
+
+```text
+SourceFactRule -> ComponentRequirement -> scoped Requires(...) -> graph rule
+```
+
+`SourceFactRule` is the atom. `ComponentRequirement` is the semantic shorthand layer. Built-in shorthand and user-defined shorthand work the same way.
+
 ## Example
 
 This configuration says the core component owns its paths, may use Foundation, disallows selected stored-property facts, disallows selected syntax constructs, and models parser progress as an enum state machine.
@@ -29,9 +37,8 @@ let configuration = BumperConfiguration {
             Modules("Core")
             MayUse(.foundation)
             Requires(
-                .noAnyStoredProperties,
-                .noBroadExistentialStoredProperties,
-                .noRawStringStoredProperties,
+                .explicitDomainSurfaces,
+                .typedIdentity,
                 .immutableStoredState,
                 severity: .error
             )
@@ -46,6 +53,26 @@ let configuration = BumperConfiguration {
 
 The DSL makes architectural policy concrete before enforcement starts. The center is the architecture you want, not a pile of disconnected prohibitions.
 
+You can compose your own semantic vocabulary:
+
+```swift
+extension ComponentRequirement {
+    static let validatedFunctionalDomain = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState,
+        .functionalCore
+    )
+}
+
+Component(.core) {
+    Owns("Sources/Core")
+    Requires(.validatedFunctionalDomain, severity: .error)
+}
+```
+
+The receipt still reports raw observed facts such as `Stored property id uses raw String` or `Uses imperative construct assignment`.
+
 Every assertion has a named scope:
 
 ```swift
@@ -58,7 +85,7 @@ Component usage and fact assertions have a severity:
 
 ```swift
 MayUse(.foundation, severity: .error)
-Requires(.noRawStringStoredProperties, severity: .error)
+Requires(.typedIdentity, severity: .error)
 ```
 
 That forces the team to decide whether a policy is advisory or lane-keeping.
@@ -66,7 +93,7 @@ That forces the team to decide whether a policy is advisory or lane-keeping.
 Every assertion names an expected source fact:
 
 ```swift
-Requires(.noRawStringStoredProperties, severity: .error)
+Requires(.typedIdentity, severity: .error)
 ```
 
 That keeps Bumper Bowling tied to observable SwiftSyntax facts instead of subjective review language.
@@ -85,9 +112,9 @@ That keeps strong modeling constraints intentional, local, and reviewable.
 
 `Disallows(.assignment, .loop, .mutableBinding)` is not a formatting preference. It asserts that configured paths should not contain those syntax constructs when SwiftSyntax observes them.
 
-`Requires(.noRawStringStoredProperties)` is not a naming convention. It asserts that SwiftSyntax should not observe stored properties explicitly typed as `String` in the configured scope.
+`Requires(.typedIdentity)` is semantic shorthand. It lowers to the raw fact-rule that SwiftSyntax should not observe stored properties explicitly typed as `String` in the configured scope.
 
-`Requires(.noAnyStoredProperties)` and `Requires(.noBroadExistentialStoredProperties)` are not local Swift preferences. They assert that SwiftSyntax should not observe stored properties explicitly typed as `Any` or `any ...` in the configured scope.
+`Requires(.explicitDomainSurfaces)` is semantic shorthand. It lowers to raw fact-rules that SwiftSyntax should not observe stored properties explicitly typed as `Any` or `any ...` in the configured scope.
 
 `Requires(.enumStateMachine)` is not a parser style rule. It asserts that parser state should be modeled as enum cases carrying their data, so invalid parser states are harder to construct.
 

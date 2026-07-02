@@ -202,12 +202,64 @@ public enum Capability: CaseIterable, Equatable, Hashable, Sendable {
     }
 }
 
-public enum ComponentRequirement: Equatable, Sendable {
-    case noAnyStoredProperties
-    case noBroadExistentialStoredProperties
-    case noRawStringStoredProperties
-    case immutableStoredState
-    case enumStateMachine
+public enum SourceFactRule: Hashable, Sendable {
+    case disallowStoredProperty(StoredPropertyDisallowance)
+    case disallowSyntaxConstruct(ImperativeConstruct)
+    case requireEnumStateMachine
+}
+
+public struct ComponentRequirement: Equatable, Sendable {
+    public let factRules: Set<SourceFactRule>
+
+    public init(_ factRules: SourceFactRule...) {
+        self.factRules = Set(factRules)
+    }
+
+    public init(factRules: Set<SourceFactRule>) {
+        self.factRules = factRules
+    }
+
+    public init(_ requirements: ComponentRequirement...) {
+        self.init(requirements)
+    }
+
+    public init(_ requirements: [ComponentRequirement]) {
+        self.factRules = requirements.reduce(into: Set<SourceFactRule>()) { partialResult, requirement in
+            partialResult.formUnion(requirement.factRules)
+        }
+    }
+
+    public func combined(with other: ComponentRequirement) -> ComponentRequirement {
+        ComponentRequirement(factRules: factRules.union(other.factRules))
+    }
+
+    public static func all(_ requirements: ComponentRequirement...) -> ComponentRequirement {
+        ComponentRequirement(requirements)
+    }
+
+    public static let noAnyStoredProperties = ComponentRequirement(.disallowStoredProperty(.any))
+    public static let noBroadExistentialStoredProperties =
+        ComponentRequirement(.disallowStoredProperty(.broadExistential))
+    public static let noRawStringStoredProperties = ComponentRequirement(.disallowStoredProperty(.rawStringIdentity))
+    public static let immutableStoredState = ComponentRequirement(.disallowStoredProperty(.storedVar))
+    public static let enumStateMachine = ComponentRequirement(.requireEnumStateMachine)
+
+    public static let explicitDomainSurfaces = ComponentRequirement(
+        .noAnyStoredProperties,
+        .noBroadExistentialStoredProperties
+    )
+    public static let typedIdentity = ComponentRequirement(.noRawStringStoredProperties)
+    public static let functionalCore = ComponentRequirement(
+        .disallowSyntaxConstruct(.assignment),
+        .disallowSyntaxConstruct(.loop),
+        .disallowSyntaxConstruct(.mutableBinding),
+        .disallowSyntaxConstruct(.inoutExpression),
+        .disallowSyntaxConstruct(.mutatingDeclaration)
+    )
+}
+
+public func + (left: ComponentRequirement, right: ComponentRequirement) -> ComponentRequirement {
+    left.combined(with: right)
 }
 
 public struct ComponentRequirementSetting: Equatable, Sendable {
@@ -322,29 +374,29 @@ private extension Array where Element == ComponentRequirementSetting {
         var storedPropertySeverity = Severity.off
         var storedPropertyDisallowances = Set<StoredPropertyDisallowance>()
         var storedPropertyPaths: [String] = []
+        var syntaxConstructSeverity = Severity.off
+        var disallowedSyntaxConstructs = Set<ImperativeConstruct>()
+        var syntaxConstructPaths: [String] = []
         var enumStateMachine = PathRuleConfiguration()
 
         for setting in self {
             let scopedPaths = setting.paths.isEmpty ? defaultPaths : setting.paths
 
-            switch setting.requirement {
-            case .noAnyStoredProperties:
+            let storedPropertyRules = setting.requirement.storedPropertyDisallowances
+            if !storedPropertyRules.isEmpty {
                 storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
                 storedPropertyPaths.append(contentsOf: scopedPaths)
-                storedPropertyDisallowances.insert(.any)
-            case .noBroadExistentialStoredProperties:
-                storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
-                storedPropertyPaths.append(contentsOf: scopedPaths)
-                storedPropertyDisallowances.insert(.broadExistential)
-            case .noRawStringStoredProperties:
-                storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
-                storedPropertyPaths.append(contentsOf: scopedPaths)
-                storedPropertyDisallowances.insert(.rawStringIdentity)
-            case .immutableStoredState:
-                storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
-                storedPropertyPaths.append(contentsOf: scopedPaths)
-                storedPropertyDisallowances.insert(.storedVar)
-            case .enumStateMachine:
+                storedPropertyDisallowances.formUnion(storedPropertyRules)
+            }
+
+            let syntaxConstructRules = setting.requirement.disallowedSyntaxConstructs
+            if !syntaxConstructRules.isEmpty {
+                syntaxConstructSeverity = syntaxConstructSeverity.merging(setting.severity)
+                syntaxConstructPaths.append(contentsOf: scopedPaths)
+                disallowedSyntaxConstructs.formUnion(syntaxConstructRules)
+            }
+
+            if setting.requirement.requiresEnumStateMachine {
                 enumStateMachine = PathRuleConfiguration(
                     severity: enumStateMachine.severity.merging(setting.severity),
                     paths: enumStateMachine.paths + scopedPaths
@@ -358,8 +410,41 @@ private extension Array where Element == ComponentRequirementSetting {
                 paths: Swift.Array(Set(storedPropertyPaths)).sorted(),
                 disallowances: storedPropertyDisallowances
             ),
+            syntaxConstructs: SyntaxConstructRuleConfiguration(
+                severity: syntaxConstructSeverity,
+                paths: Swift.Array(Set(syntaxConstructPaths)).sorted(),
+                disallowedConstructs: disallowedSyntaxConstructs
+            ),
             enumStateMachine: enumStateMachine
         )
+    }
+}
+
+private extension ComponentRequirement {
+    var storedPropertyDisallowances: Set<StoredPropertyDisallowance> {
+        Set(factRules.compactMap { rule in
+            switch rule {
+            case .disallowStoredProperty(let disallowance):
+                disallowance
+            case .disallowSyntaxConstruct, .requireEnumStateMachine:
+                nil
+            }
+        })
+    }
+
+    var disallowedSyntaxConstructs: Set<ImperativeConstruct> {
+        Set(factRules.compactMap { rule in
+            switch rule {
+            case .disallowSyntaxConstruct(let construct):
+                construct
+            case .disallowStoredProperty, .requireEnumStateMachine:
+                nil
+            }
+        })
+    }
+
+    var requiresEnumStateMachine: Bool {
+        factRules.contains(.requireEnumStateMachine)
     }
 }
 
@@ -427,7 +512,9 @@ private extension RuleConfiguration {
             forbiddenImports: forbiddenImports + other.forbiddenImports,
             subsystemBoundary: other.subsystemBoundary.isConfigured ? other.subsystemBoundary : subsystemBoundary,
             duplicateOwnership: other.duplicateOwnership.isConfigured ? other.duplicateOwnership : duplicateOwnership,
-            declaredDependencyCycle: other.declaredDependencyCycle.isConfigured ? other.declaredDependencyCycle : declaredDependencyCycle,
+            declaredDependencyCycle: other.declaredDependencyCycle.isConfigured
+                ? other.declaredDependencyCycle
+                : declaredDependencyCycle,
             storedProperties: storedProperties.merging(other.storedProperties),
             syntaxConstructs: syntaxConstructs.merging(other.syntaxConstructs),
             enumStateMachine: enumStateMachine.merging(other.enumStateMachine)

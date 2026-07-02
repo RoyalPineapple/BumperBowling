@@ -32,6 +32,8 @@ The DSL should declare the architecture the repository wants, then lower into as
 
 SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep receipts for every finding: report the observed graph fact, the declared lane, and why they do not match.
 
+Semantic DSL names are not special engine concepts. `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)` applies scope and severity. Built-in shorthand and user-defined shorthand lower into the same raw graph assertions.
+
 ## Subsystems
 
 - `BumperBowlingCore` owns parsing, rule construction, repository scanning, architecture modeling, and linting.
