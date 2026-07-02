@@ -12,7 +12,10 @@ struct BumperCommandsTests {
         public struct Thing {}
         """)
 
-        let output = try await BumperCommands.scan(root: root)
+        let output = try await BumperCommands.scan(
+            root: root,
+            configuration: BumperProjectConfiguration.configuration
+        )
 
         #expect(output.contains("Files: 1"))
         #expect(output.contains("Subsystems: core"))
@@ -27,10 +30,39 @@ struct BumperCommandsTests {
         public struct Thing {}
         """)
 
-        let report = try await BumperCommands.lint(root: root)
+        let report = try await BumperCommands.lint(
+            root: root,
+            configuration: BumperProjectConfiguration.configuration
+        )
 
         #expect(report.hasErrors)
         #expect(report.violations.map(\.ruleID).contains(.forbiddenImport))
+    }
+
+    @Test
+    func lintLoadsBumperBowlingSwiftConfiguration() async throws {
+        let root = try makeRepository(source: """
+        import Foundation
+
+        public struct Thing {}
+        """)
+        try writeConfiguration(to: root)
+
+        let report = try await BumperCommands.lint(root: root)
+
+        #expect(!report.hasErrors)
+    }
+
+    @Test
+    func initWritesRunnableConfiguration() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+
+        try BumperCommands.initialize(at: root)
+
+        let report = try await BumperCommands.lint(root: root)
+
+        #expect(!report.hasErrors)
     }
 
     @Test
@@ -41,7 +73,11 @@ struct BumperCommandsTests {
             encoding: .utf8
         )
 
-        #expect(checkedInSnapshot == (try BumperCommands.snapshot(root: root)))
+        #expect(
+            checkedInSnapshot == (try BumperCommands.snapshot(
+                configuration: BumperProjectConfiguration.configuration
+            ))
+        )
     }
 
     private func makeRepository(source: String) throws -> URL {
@@ -54,6 +90,42 @@ struct BumperCommandsTests {
         )
         try source.write(to: sourceFile, atomically: true, encoding: .utf8)
         return root
+    }
+
+    private func writeConfiguration(to root: URL) throws {
+        let configuration = """
+        import BumperBowlingCore
+
+        let configuration = BumperConfiguration {
+            Included {
+                "Sources"
+            }
+
+            Excluded {
+                ".build"
+                "DerivedData"
+            }
+
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/BumperBowlingCore")
+                    Modules("BumperBowlingCore")
+                    MayUse(.foundation)
+                    DoesNotUse("XCTest", severity: .error)
+                }
+            }
+
+            Assertions {
+                SingleOwner(.error)
+            }
+        }
+        """
+
+        try configuration.write(
+            to: root.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
     }
 
     private func repositoryRoot() -> URL {

@@ -109,6 +109,7 @@ public func Component(
     var usePolicies: [ComponentUsePolicy] = []
     var requirements: [ComponentRequirementSetting] = []
     var disallowances: [ImperativeDisallowanceSetting] = []
+    var graphAssertions: [ComponentGraphAssertion] = []
 
     for element in content() {
         switch element {
@@ -126,6 +127,8 @@ public func Component(
             requirements.append(contentsOf: values)
         case .disallows(let values):
             disallowances.append(contentsOf: values)
+        case .graphAssertion(let values):
+            graphAssertions.append(contentsOf: values)
         }
     }
 
@@ -140,6 +143,7 @@ public func Component(
         derivedRules: requirements.derivedRules(defaultPaths: paths)
             .merging(usePolicies.derivedRules(defaultPaths: paths))
             .merging(disallowances.derivedRules(defaultPaths: paths))
+            .merging(graphAssertions.derivedRules(defaultPaths: paths))
     )
 }
 
@@ -170,6 +174,7 @@ public enum ComponentElement: Equatable, Sendable {
     case usePolicy([ComponentUsePolicy])
     case requires([ComponentRequirementSetting])
     case disallows([ImperativeDisallowanceSetting])
+    case graphAssertion([ComponentGraphAssertion])
 }
 
 public enum ComponentUsePolicy: Equatable, Sendable {
@@ -217,6 +222,23 @@ public func RequireSyntax(_ kind: SyntaxKind) -> ComponentRequirement {
 
 public func DisallowSyntax(_ kind: SyntaxKind) -> ComponentRequirement {
     ComponentRequirement(.disallowSyntaxKind(kind))
+}
+
+public enum DeclarationFact: Sendable {}
+
+public enum SyntaxKindFact: Sendable {}
+
+public struct GraphPredicate<Fact>: Equatable, Sendable {
+    public let erased: AnyGraphPredicate
+
+    fileprivate init(_ erased: AnyGraphPredicate) {
+        self.erased = erased
+    }
+}
+
+public enum AnyGraphPredicate: Equatable, Sendable {
+    case declare(Set<StringMatcher>)
+    case containSyntax(Set<SyntaxKind>)
 }
 
 public struct ComponentRequirement: Equatable, Sendable {
@@ -295,6 +317,31 @@ public struct ImperativeDisallowanceSetting: Equatable, Sendable {
     public let constructs: Set<ImperativeConstruct>
     public let severity: Severity
     public let paths: [String]
+    public let excludedPaths: [String]
+
+    public init(
+        constructs: Set<ImperativeConstruct>,
+        severity: Severity,
+        paths: [String],
+        excludedPaths: [String] = []
+    ) {
+        self.constructs = constructs
+        self.severity = severity
+        self.paths = paths
+        self.excludedPaths = excludedPaths
+    }
+}
+
+public enum GraphPredicateExpectation: Equatable, Sendable {
+    case does
+    case doesNot
+}
+
+public struct ComponentGraphAssertion: Equatable, Sendable {
+    public let expectation: GraphPredicateExpectation
+    public let predicate: AnyGraphPredicate
+    public let severity: Severity
+    public let paths: [String]
 }
 
 public func Owns(_ paths: String...) -> DSLPathList {
@@ -319,6 +366,48 @@ public func DoesNotUse(_ modules: String..., severity: Severity = .error) -> Com
 
 public func DoesNotUse(_ capabilities: Capability..., severity: Severity = .error) -> ComponentElement {
     .usePolicy([.doesNotUse(modules: capabilities.flatMap(\.modules), severity: severity)])
+}
+
+public func Declare(_ matchers: StringMatcher...) -> GraphPredicate<DeclarationFact> {
+    GraphPredicate(.declare(Set(matchers)))
+}
+
+public func Declare(_ names: String...) -> GraphPredicate<DeclarationFact> {
+    GraphPredicate(.declare(knownDeclarationMatchers(names)))
+}
+
+public func ContainSyntax(_ kinds: SyntaxKind...) -> GraphPredicate<SyntaxKindFact> {
+    GraphPredicate(.containSyntax(Set(kinds)))
+}
+
+public func Does<Fact>(_ predicate: GraphPredicate<Fact>, severity: Severity = .error) -> ComponentElement {
+    .graphAssertion(
+        [
+            ComponentGraphAssertion(
+                expectation: .does,
+                predicate: predicate.erased,
+                severity: severity,
+                paths: []
+            ),
+        ]
+    )
+}
+
+public func DoesNot<Fact>(_ predicate: GraphPredicate<Fact>, severity: Severity = .error) -> ComponentElement {
+    .graphAssertion(
+        [
+            ComponentGraphAssertion(
+                expectation: .doesNot,
+                predicate: predicate.erased,
+                severity: severity,
+                paths: []
+            ),
+        ]
+    )
+}
+
+public func Declares(_ names: String..., severity: Severity = .error) -> ComponentElement {
+    Does(GraphPredicate<DeclarationFact>(.declare(knownDeclarationMatchers(names))), severity: severity)
 }
 
 public func Requires(_ requirements: ComponentRequirement..., severity: Severity = .error) -> ComponentElement {
@@ -347,6 +436,21 @@ public func Disallows(
     in paths: String...
 ) -> ComponentElement {
     .disallows([ImperativeDisallowanceSetting(constructs: [construct], severity: severity, paths: paths)])
+}
+
+public func NoDirectStringMatching(
+    _ severity: Severity,
+    paths: [String],
+    except excludedPaths: [String] = []
+) -> RuleConfiguration {
+    RuleConfiguration(
+        syntaxConstructs: SyntaxConstructRuleConfiguration(
+            severity: severity,
+            paths: paths,
+            excludedPaths: excludedPaths,
+            disallowedConstructs: [.directStringMatch]
+        )
+    )
 }
 
 @resultBuilder
@@ -548,11 +652,13 @@ private extension Array where Element == ImperativeDisallowanceSetting {
     func derivedRules(defaultPaths: [String]) -> RuleConfiguration {
         var severity = Severity.off
         var paths: [String] = []
+        var excludedPaths: [String] = []
         var constructs = Set<ImperativeConstruct>()
 
         for setting in self {
             severity = severity.merging(setting.severity)
             paths.append(contentsOf: setting.paths.isEmpty ? defaultPaths : setting.paths)
+            excludedPaths.append(contentsOf: setting.excludedPaths)
             constructs.formUnion(setting.constructs)
         }
 
@@ -564,7 +670,64 @@ private extension Array where Element == ImperativeDisallowanceSetting {
             syntaxConstructs: SyntaxConstructRuleConfiguration(
                 severity: severity,
                 paths: Swift.Array(Set(paths)).sorted(),
+                excludedPaths: Swift.Array(Set(excludedPaths)).sorted(),
                 disallowedConstructs: constructs
+            )
+        )
+    }
+}
+
+private extension Array where Element == ComponentGraphAssertion {
+    func derivedRules(defaultPaths: [String]) -> RuleConfiguration {
+        var declarationSeverity = Severity.off
+        var declarationPaths: [String] = []
+        var requiredNames = Set<StringMatcher>()
+        var disallowedNames = Set<StringMatcher>()
+
+        var syntaxKindSeverity = Severity.off
+        var syntaxKindPaths: [String] = []
+        var requiredKinds = Set<SyntaxKind>()
+        var disallowedKinds = Set<SyntaxKind>()
+
+        for assertion in self {
+            let scopedPaths = assertion.paths.isEmpty ? defaultPaths : assertion.paths
+
+            switch (assertion.expectation, assertion.predicate) {
+            case (.does, .declare(let names)):
+                guard !names.isEmpty else { continue }
+                declarationSeverity = declarationSeverity.merging(assertion.severity)
+                declarationPaths.append(contentsOf: scopedPaths)
+                requiredNames.formUnion(names)
+            case (.doesNot, .declare(let names)):
+                guard !names.isEmpty else { continue }
+                declarationSeverity = declarationSeverity.merging(assertion.severity)
+                declarationPaths.append(contentsOf: scopedPaths)
+                disallowedNames.formUnion(names)
+            case (.does, .containSyntax(let kinds)):
+                guard !kinds.isEmpty else { continue }
+                syntaxKindSeverity = syntaxKindSeverity.merging(assertion.severity)
+                syntaxKindPaths.append(contentsOf: scopedPaths)
+                requiredKinds.formUnion(kinds)
+            case (.doesNot, .containSyntax(let kinds)):
+                guard !kinds.isEmpty else { continue }
+                syntaxKindSeverity = syntaxKindSeverity.merging(assertion.severity)
+                syntaxKindPaths.append(contentsOf: scopedPaths)
+                disallowedKinds.formUnion(kinds)
+            }
+        }
+
+        return RuleConfiguration(
+            syntaxKinds: SyntaxKindRuleConfiguration(
+                severity: syntaxKindSeverity,
+                paths: Swift.Array(Set(syntaxKindPaths)).sorted(),
+                requiredKinds: requiredKinds,
+                disallowedKinds: disallowedKinds
+            ),
+            publicDeclarations: PublicDeclarationRuleConfiguration(
+                severity: declarationSeverity,
+                paths: Swift.Array(Set(declarationPaths)).sorted(),
+                requiredNames: requiredNames,
+                disallowedNames: disallowedNames
             )
         )
     }
@@ -582,6 +745,7 @@ private extension RuleConfiguration {
             storedProperties: storedProperties.merging(other.storedProperties),
             syntaxConstructs: syntaxConstructs.merging(other.syntaxConstructs),
             syntaxKinds: syntaxKinds.merging(other.syntaxKinds),
+            publicDeclarations: publicDeclarations.merging(other.publicDeclarations),
             enumStateMachine: enumStateMachine.merging(other.enumStateMachine)
         )
     }
@@ -602,6 +766,7 @@ private extension SyntaxConstructRuleConfiguration {
         SyntaxConstructRuleConfiguration(
             severity: severity.merging(other.severity),
             paths: Array(Set(paths + other.paths)).sorted(),
+            excludedPaths: Array(Set(excludedPaths + other.excludedPaths)).sorted(),
             disallowedConstructs: disallowedConstructs.union(other.disallowedConstructs)
         )
     }
@@ -614,6 +779,17 @@ private extension SyntaxKindRuleConfiguration {
             paths: Array(Set(paths + other.paths)).sorted(),
             requiredKinds: requiredKinds.union(other.requiredKinds),
             disallowedKinds: disallowedKinds.union(other.disallowedKinds)
+        )
+    }
+}
+
+private extension PublicDeclarationRuleConfiguration {
+    func merging(_ other: PublicDeclarationRuleConfiguration) -> PublicDeclarationRuleConfiguration {
+        PublicDeclarationRuleConfiguration(
+            severity: severity.merging(other.severity),
+            paths: Array(Set(paths + other.paths)).sorted(),
+            requiredNames: requiredNames.union(other.requiredNames),
+            disallowedNames: disallowedNames.union(other.disallowedNames)
         )
     }
 }
@@ -641,13 +817,19 @@ private extension StoredPropertyRuleConfiguration {
 
 private extension SyntaxConstructRuleConfiguration {
     var isConfigured: Bool {
-        severity != .off || !paths.isEmpty || !disallowedConstructs.isEmpty
+        severity != .off || !paths.isEmpty || !excludedPaths.isEmpty || !disallowedConstructs.isEmpty
     }
 }
 
 private extension SyntaxKindRuleConfiguration {
     var isConfigured: Bool {
         severity != .off || !paths.isEmpty || !requiredKinds.isEmpty || !disallowedKinds.isEmpty
+    }
+}
+
+private extension PublicDeclarationRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !requiredNames.isEmpty || !disallowedNames.isEmpty
     }
 }
 
@@ -663,4 +845,16 @@ public extension SubsystemID {
     static let app = try! SubsystemID("app")
     static let ui = try! SubsystemID("ui")
     static let tests = try! SubsystemID("tests")
+}
+
+private func knownDeclarationMatchers(_ rawNames: [String]) -> Set<StringMatcher> {
+    Set(
+        rawNames.map { rawName in
+            guard let name = try? DeclarationName(rawName) else {
+                preconditionFailure("Invalid declaration name in Bumper DSL: \(rawName)")
+            }
+
+            return StringMatcher.exact(name.rawValue)
+        }
+    )
 }

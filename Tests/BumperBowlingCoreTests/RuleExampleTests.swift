@@ -37,6 +37,19 @@ struct RuleExampleTests {
     }
 
     @Test
+    func publicDeclarationExamples() async throws {
+        try await verifyRule(
+            .publicDeclarations(
+                PublicDeclarationRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/BumperBowlingCore"],
+                    disallowedNames: [.exact("bumperBowling")]
+                )
+            )
+        )
+    }
+
+    @Test
     func enumStateMachineExamples() async throws {
         try await verifyRule(
             .enumStateMachine(

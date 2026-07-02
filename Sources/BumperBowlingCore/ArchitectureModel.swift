@@ -193,6 +193,7 @@ public enum DeclarationKind: String, Equatable, Sendable {
 
 public enum ImperativeConstruct: String, Equatable, Hashable, Sendable {
     case assignment
+    case directStringMatch
     case loop
     case mutableBinding
     case inoutExpression

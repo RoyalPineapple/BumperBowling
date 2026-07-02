@@ -103,6 +103,26 @@ public extension ArchitectureRule {
                 name: "Syntax Kinds",
                 description: description
             )
+        case .publicDeclarations:
+            RuleDescription(
+                id: id,
+                name: "Public Declarations",
+                description: description,
+                nonTriggeringExamples: [
+                    RuleExample(
+                        code: "public struct ArchitectureConfiguration {}\n",
+                        path: knownPath("Sources/BumperBowlingCore/ArchitectureConfiguration.swift"),
+                        subsystem: knownSubsystem("core")
+                    ),
+                ],
+                triggeringExamples: [
+                    RuleExample(
+                        code: "↓public let bumperBowling = ArchitectureConfiguration(subsystems: [])\n",
+                        path: knownPath("Sources/BumperBowlingCore/ArchitectureConfiguration.swift"),
+                        subsystem: knownSubsystem("core")
+                    ),
+                ]
+            )
         case .enumStateMachine:
             RuleDescription(
                 id: id,

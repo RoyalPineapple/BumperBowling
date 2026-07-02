@@ -42,7 +42,7 @@ No type inference is performed. A stored property without an explicit type annot
 
 ### Imperative Constructs
 
-Bumper currently records selected syntax facts:
+Bumper Bowling currently records selected syntax facts:
 
 - assignment
 - loop
@@ -58,7 +58,7 @@ Disallows(.assignment, .loop, .mutableBinding)
 
 ### Syntax Kind Catalog
 
-Bumper records the `SyntaxKind` values observed while walking each Swift source file.
+Bumper Bowling records the `SyntaxKind` values observed while walking each Swift source file.
 
 Examples:
 
@@ -70,7 +70,7 @@ Examples:
 - `.stringLiteralExpr`
 - `.forceUnwrapExpr`
 
-These remain SwiftSyntax values, not Bumper copies. A raw syntax-kind assertion looks like:
+These remain SwiftSyntax values, not Bumper Bowling copies. A raw syntax-kind assertion looks like:
 
 ```swift
 RequireSyntax(.enumDecl)
@@ -81,7 +81,7 @@ This is set math over `SourceFileFacts.syntaxFacts.nodeKinds`.
 
 ### Computed SwiftSyntax Views
 
-When a rule needs more than kind membership, Bumper composes over real SwiftSyntax node types with computed views:
+When a rule needs more than kind membership, Bumper Bowling composes over real SwiftSyntax node types with computed views:
 
 ```swift
 variableDecl.bumper.kind
@@ -110,7 +110,7 @@ The DSL supplies the facts SwiftSyntax cannot know by itself:
 
 ## Graph Projection
 
-`ArchitectureGraph` is the receipt surface rules operate on. In 0.0 it contains:
+`ArchitectureGraph` is the evidence surface rules operate on. In 0.1 it contains:
 
 - source files
 - component nodes
@@ -138,14 +138,16 @@ Bumper Bowling does not know:
 - data flow or effect flow
 - business invariants
 
-If a rule needs those facts, it does not belong in the SwiftSyntax-only 0.0 lane.
+If a rule needs those facts, it does not belong in the SwiftSyntax-only 0.1 lane.
+
+Facts that could become useful with type-checked compiler help are tracked in [COMPILER_REQUESTS.md](COMPILER_REQUESTS.md).
 
 ## Rule
 
-Every finding should have a receipt:
+Every finding should have evidence:
 
 ```text
 observed graph fact + declared lane = mismatch
 ```
 
-If Bumper cannot show the observed fact, it should not report the violation.
+If Bumper Bowling cannot show the observed fact, it should not report the violation.

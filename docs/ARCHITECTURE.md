@@ -1,10 +1,10 @@
 # Bumper Bowling Architecture
 
-Bumper Bowling is a Swift 6 command line tool and core library for asserting architecture over SwiftSyntax-observed source facts.
+Bumper Bowling is architecture snapshot testing for Swift codebases: a Swift 6 assertion engine over SwiftSyntax-observed source facts.
 
-The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). The DSL is the typed assertion API for now. In 0.0, CLI commands use the built-in repository configuration; loading `BumperBowling.swift` from disk is intentionally post-MVP.
+The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). Bumper Bowling ships one engine and two dumb interfaces over that engine: the `bumper` CLI for shell workflows and `BumperBowlingTesting` for Swift test suites.
 
-Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, baselines, reporters, and a primary `bumper lint` command.
+Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, reports, and a primary `bumper lint` command.
 
 It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns the formal codebase shape: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
 
@@ -12,36 +12,49 @@ SwiftLint configuration lives in `.swiftlint.yml`.
 
 The tool should stay tiny. Prefer a small SwiftSyntax-first core, simple Swift DSL constructors, and boring CLI behavior over generated accessors, dynamic lookup, plugins, or clever configuration machinery.
 
+The interesting part is the assertion model, not the wrapper. Bumper Bowling turns SwiftSyntax-visible source facts into a graph, then evaluates typed Swift declarations against that graph. The CLI and testing target are intentionally thin delivery surfaces for hooks, CI, and product tests.
+
 ## Core Model
 
 ```text
 SwiftSyntax reads the code
-Bumper records raw source facts
+Bumper Bowling records raw source facts
 Those facts form an ArchitectureGraph
 The Swift DSL encodes typed assertions
 Lint runs math over the graph
 ```
 
-Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane.
+Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane; candidate requests are tracked in [COMPILER_REQUESTS.md](COMPILER_REQUESTS.md).
 
 The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md).
 
 The DSL should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 
-`scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence for the declared bounds, not a source of generated policy.
+`scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper Bowling fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence for the declared bounds, not a source of generated policy.
 
 SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Bumper Bowling should not duplicate SwiftSyntax node types or maintain a second syntax enum. Raw syntax checks use SwiftSyntax's `SyntaxKind`; richer local checks use computed extensions on real SwiftSyntax nodes through `node.bumper`.
 
-Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep receipts for every finding: report the observed graph fact, the declared lane, and why they do not match.
+Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep scorecards explainable: report the observed graph fact, the declared lane, and why they do not match.
 
 Semantic DSL names are not special engine concepts. `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)` applies scope and severity. Built-in shorthand and user-defined shorthand lower into the same raw graph assertions.
+
+## Product Lane
+
+Bumper Bowling lives between linting and compilation.
+
+- SwiftLint owns local style, convention, and code smells.
+- The compiler owns type checking, symbol resolution, macro expansion, and build truth.
+- Bumper Bowling owns declared codebase shape when that shape can be checked from SwiftSyntax facts and repo metadata.
+
+That lane is especially useful for agentic work because it gives an automated editor a formal contract before it touches the repository, then leaves a scorecard after it does.
 
 ## Subsystems
 
 - `BumperBowlingCore` owns parsing, rule construction, repository scanning, architecture modeling, and linting.
-- `BumperBowling` is the CLI adapter. It may depend on `BumperBowlingCore`; core must not depend on the CLI.
+- `BumperBowling` is the CLI adapter for hooks and CI jobs. It may depend on `BumperBowlingCore`; core must not depend on the CLI.
+- `BumperBowlingTesting` is the test-suite adapter for Swift Testing/XCTest. It may depend on `BumperBowlingCore`; core must not depend on testing harnesses.
 - Tests may import product modules and testing frameworks, but production targets must not import test frameworks.
-- Language parsing is SwiftSyntax-driven. Swift is the only language surface in 0.0.
+- Language parsing is SwiftSyntax-driven. Swift is the only language surface in 0.1.
 
 ## Architectural Rules
 

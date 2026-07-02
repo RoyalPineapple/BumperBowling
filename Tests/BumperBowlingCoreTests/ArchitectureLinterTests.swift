@@ -194,6 +194,39 @@ struct ArchitectureLinterTests {
     }
 
     @Test
+    func skipsExcludedSyntaxConstructPaths() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/BumperBowlingCore/StringMatcher.swift"),
+            subsystem: try SubsystemID("core"),
+            imports: [],
+            publicDeclarations: [],
+            imperativeConstructs: [.directStringMatch]
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(
+                    name: "core",
+                    modules: ["BumperBowlingCore"],
+                    paths: ["Sources/BumperBowlingCore"]
+                ),
+            ],
+            rules: RuleConfiguration(
+                syntaxConstructs: SyntaxConstructRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/BumperBowlingCore"],
+                    excludedPaths: ["Sources/BumperBowlingCore/StringMatcher.swift"],
+                    disallowedConstructs: [.directStringMatch]
+                )
+            )
+        )
+
+        let report = try ArchitectureLinter(configuration: configuration)
+            .lint(RepositoryFacts(files: [file]))
+
+        #expect(report.violations.isEmpty)
+    }
+
+    @Test
     func flagsParserWithoutEnumStateMachine() throws {
         let file = SourceFileFacts(
             path: try RelativeFilePath("Sources/Core/FooParser.swift"),
@@ -252,6 +285,74 @@ struct ArchitectureLinterTests {
         #expect(report.violations.allSatisfy { $0.ruleID == .syntaxKinds })
         #expect(messages.contains("Missing required SwiftSyntax node kind enumDecl"))
         #expect(messages.contains("Uses disallowed SwiftSyntax node kind forceUnwrapExpr"))
+    }
+
+    @Test
+    func flagsDisallowedPublicDeclarations() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/BumperBowlingCore/ArchitectureConfiguration.swift"),
+            subsystem: try SubsystemID("core"),
+            imports: [],
+            publicDeclarations: [
+                PublicDeclaration(kind: .variable, name: try DeclarationName("bumperBowling")),
+            ]
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(
+                    name: "core",
+                    modules: ["BumperBowlingCore"],
+                    paths: ["Sources/BumperBowlingCore"]
+                ),
+            ],
+            rules: RuleConfiguration(
+                publicDeclarations: PublicDeclarationRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/BumperBowlingCore"],
+                    disallowedNames: [.exact("bumperBowling")]
+                )
+            )
+        )
+
+        let report = try ArchitectureLinter(configuration: configuration)
+            .lint(RepositoryFacts(files: [file]))
+
+        #expect(report.violations.map(\.ruleID) == [.publicDeclarations])
+        #expect(report.violations.map(\.message) == ["Public declaration bumperBowling is disallowed"])
+    }
+
+    @Test
+    func flagsMissingRequiredPublicDeclarations() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/BumperBowlingCore/Reducer.swift"),
+            subsystem: try SubsystemID("core"),
+            imports: [],
+            publicDeclarations: [
+                PublicDeclaration(kind: .struct, name: try DeclarationName("Reducer")),
+            ]
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(
+                    name: "core",
+                    modules: ["BumperBowlingCore"],
+                    paths: ["Sources/BumperBowlingCore"]
+                ),
+            ],
+            rules: RuleConfiguration(
+                publicDeclarations: PublicDeclarationRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/BumperBowlingCore"],
+                    requiredNames: [.exact("Reducer"), .exact("ReducerTests")]
+                )
+            )
+        )
+
+        let report = try ArchitectureLinter(configuration: configuration)
+            .lint(RepositoryFacts(files: [file]))
+
+        #expect(report.violations.map(\.ruleID) == [.publicDeclarations])
+        #expect(report.violations.map(\.message) == ["Missing required public declaration ReducerTests"])
     }
 
     @Test

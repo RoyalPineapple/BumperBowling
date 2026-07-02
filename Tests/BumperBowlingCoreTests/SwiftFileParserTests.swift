@@ -57,6 +57,27 @@ struct SwiftFileParserTests {
     }
 
     @Test
+    func parsesDirectStringMatchingConstructs() {
+        let source = """
+        struct Status {
+            let rawValue: String
+
+            func isReady(_ name: String) -> Bool {
+                rawValue == "ready" || name.hasSuffix("State") || name.contains("Reducer")
+            }
+
+            func hasID(_ ids: [Int]) -> Bool {
+                ids.contains(42)
+            }
+        }
+        """
+
+        let summary = SwiftFileParser().parse(source)
+
+        #expect(summary.imperativeConstructs.contains(.directStringMatch))
+    }
+
+    @Test
     func recordsFullSwiftSyntaxFactCatalog() {
         let source = """
         import Foundation

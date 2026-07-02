@@ -1,9 +1,11 @@
 # Default Rule Sets
 
-Bumper Bowling ships a small set of semantic `ComponentRequirement` values. They are not magic presets. Each one is a named composition of `SourceFactRule` atoms, then `Requires(...)` gives that composition a scope and severity.
+Bumper Bowling ships a small set of default rule sets. In the product language, these are league rules: semantic `ComponentRequirement` values for common Swift architecture priorities.
+
+They are not magic presets, and they are not a separate mechanism from custom rules. Each one is a named composition of `SourceFactRule` atoms, then `Requires(...)` gives that composition a scope and severity. A repository's house rules can use these defaults directly, combine them, or define new rule sets from the same primitives.
 
 ```text
-SourceFactRule -> ComponentRequirement -> scoped Requires(...) -> graph rule -> receipt
+SourceFactRule -> ComponentRequirement -> scoped Requires(...) -> graph rule -> finding/report
 ```
 
 ## Shipped Component Requirements
@@ -55,7 +57,7 @@ struct User {
 }
 ```
 
-Possible receipts:
+Possible reports:
 
 - `Stored property id is mutable`
 - `Stored property id uses raw String`
@@ -116,7 +118,7 @@ func normalized(_ values: [Int]) -> [Int] {
 }
 ```
 
-Possible receipts:
+Possible reports:
 
 - `Uses imperative construct mutableBinding`
 - `Uses imperative construct loop`
@@ -161,7 +163,7 @@ struct Parser {
 }
 ```
 
-Possible receipt:
+Possible report:
 
 - `Parser file does not declare an enum state machine`
 
@@ -211,7 +213,7 @@ struct PriceRule {
 }
 ```
 
-Possible receipts:
+Possible reports:
 
 - `Stored property id is mutable`
 - `Stored property id uses raw String`
@@ -258,7 +260,7 @@ struct UserSummary {
 }
 ```
 
-Possible receipt:
+Possible report:
 
 - `Stored property displayName is stored`
 
@@ -381,7 +383,7 @@ Use it for every repository with more than one component.
 
 Checks configured component path ownership for overlap.
 
-Use it by default. Ambiguous ownership makes receipts less useful.
+Use it by default. Ambiguous ownership makes reports less useful.
 
 ### `AcyclicDeclaredDependencies`
 
@@ -391,7 +393,7 @@ Use it by default. Cycles in the declared graph make component lanes harder to r
 
 ## Capability Defaults
 
-Capabilities lower to import facts. In 0.0, only module-backed capabilities are shipped.
+Capabilities lower to import facts. In 0.1, only module-backed capabilities are shipped.
 
 Recommended component posture:
 

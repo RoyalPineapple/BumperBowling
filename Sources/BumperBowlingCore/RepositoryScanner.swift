@@ -104,25 +104,25 @@ public struct RepositoryScanner: Sendable {
     }
 
     private func isSwiftFile(_ path: RelativeFilePath) -> Bool {
-        path.rawValue.hasSuffix(".swift")
+        StringMatcher.suffix(".swift").matches(path)
     }
 
     private func shouldSkip(_ relativePath: String) -> Bool {
-        relativePath.hasPrefix(".build/")
-            || relativePath.hasPrefix(".git/")
-            || relativePath.hasPrefix("DerivedData/")
+        StringMatcher.prefix(".build/").matches(relativePath)
+            || StringMatcher.prefix(".git/").matches(relativePath)
+            || StringMatcher.prefix("DerivedData/").matches(relativePath)
     }
 
     private static func relativePath(for url: URL, root: URL) -> String {
         let rootPath = root.standardizedFileURL.path
         let filePath = url.standardizedFileURL.path
 
-        if filePath == rootPath {
+        if StringMatcher.exact(rootPath).matches(filePath) {
             return ""
         }
 
-        let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
-        if filePath.hasPrefix(prefix) {
+        let prefix = StringMatcher.suffix("/").matches(rootPath) ? rootPath : rootPath + "/"
+        if StringMatcher.prefix(prefix).matches(filePath) {
             return String(filePath.dropFirst(prefix.count))
         }
 

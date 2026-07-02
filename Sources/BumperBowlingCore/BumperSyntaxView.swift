@@ -96,8 +96,78 @@ public extension BumperSyntaxView where Node == AttributeSyntax {
 public extension BumperSyntaxView where Node == FunctionDeclSyntax {
     var isMutatingDeclaration: Bool {
         node.modifiers.contains { modifier in
-            modifier.name.text == "mutating"
+            StringMatcher.exact("mutating").matches(modifier.name.text)
         }
+    }
+}
+
+public extension BumperSyntaxView where Node == ExprSyntax {
+    var isStringLikeExpression: Bool {
+        if node.is(StringLiteralExprSyntax.self) {
+            return true
+        }
+
+        guard let memberAccess = node.as(MemberAccessExprSyntax.self) else {
+            return false
+        }
+
+        let memberName = memberAccess.declName.baseName.text
+        return [
+            StringMatcher.exact("rawValue"),
+            .exact("text"),
+            .exact("trimmedDescription"),
+        ].contains { matcher in
+            matcher.matches(memberName)
+        }
+    }
+}
+
+public extension BumperSyntaxView where Node == FunctionCallExprSyntax {
+    var isDirectStringMatchingCall: Bool {
+        guard let memberAccess = node.calledExpression.as(MemberAccessExprSyntax.self) else {
+            return false
+        }
+
+        if memberAccess.base.map({ StringMatcher.exact("StringMatcher").matches($0.trimmedDescription) }) == true {
+            return false
+        }
+
+        let memberName = memberAccess.declName.baseName.text
+        if StringMatcher.exact("hasPrefix").matches(memberName)
+            || StringMatcher.exact("hasSuffix").matches(memberName) {
+            return true
+        }
+
+        guard StringMatcher.exact("contains").matches(memberName) else {
+            return false
+        }
+
+        return node.arguments.contains { argument in
+            argument.expression.bumper.isStringLikeExpression
+        }
+    }
+}
+
+public extension BumperSyntaxView where Node == SequenceExprSyntax {
+    var isDirectStringComparison: Bool {
+        let elements = Array(node.elements)
+
+        for index in elements.indices {
+            guard let binaryOperator = elements[index].as(BinaryOperatorExprSyntax.self),
+                  StringMatcher.exact("==").matches(binaryOperator.operator.text)
+                    || StringMatcher.exact("!=").matches(binaryOperator.operator.text) else {
+                continue
+            }
+
+            let left = index > elements.startIndex ? elements[elements.index(before: index)] : nil
+            let right = index < elements.index(before: elements.endIndex) ? elements[elements.index(after: index)] : nil
+
+            if left?.bumper.isStringLikeExpression == true || right?.bumper.isStringLikeExpression == true {
+                return true
+            }
+        }
+
+        return false
     }
 }
 

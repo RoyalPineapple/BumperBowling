@@ -298,6 +298,22 @@ private final class SourceVisitor: SyntaxAnyVisitor {
         return .visitChildren
     }
 
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        recordSyntax(Syntax(node))
+        if node.bumper.isDirectStringMatchingCall {
+            state = state.seeingImperativeConstruct(.directStringMatch)
+        }
+        return .visitChildren
+    }
+
+    override func visit(_ node: SequenceExprSyntax) -> SyntaxVisitorContinueKind {
+        recordSyntax(Syntax(node))
+        if node.bumper.isDirectStringComparison {
+            state = state.seeingImperativeConstruct(.directStringMatch)
+        }
+        return .visitChildren
+    }
+
     private func record(
         kind: DeclarationKind,
         name: String,
@@ -315,7 +331,8 @@ private final class SourceVisitor: SyntaxAnyVisitor {
 
     private func isPublic(_ modifiers: DeclModifierListSyntax) -> Bool {
         modifiers.contains { modifier in
-            modifier.name.text == "public" || modifier.name.text == "open"
+            StringMatcher.exact("public").matches(modifier.name.text)
+                || StringMatcher.exact("open").matches(modifier.name.text)
         }
     }
 
@@ -359,54 +376,54 @@ private final class SourceVisitor: SyntaxAnyVisitor {
             return .token
         }
 
-        if lowercasedName.contains("import") {
+        if StringMatcher.contains("import").matches(lowercasedName) {
             return .importSyntax
         }
 
-        if lowercasedName.contains("attribute") {
+        if StringMatcher.contains("attribute").matches(lowercasedName) {
             return .attribute
         }
 
-        if lowercasedName.contains("modifier") {
+        if StringMatcher.contains("modifier").matches(lowercasedName) {
             return .modifier
         }
 
-        if lowercasedName.contains("macro") {
+        if StringMatcher.contains("macro").matches(lowercasedName) {
             return .macro
         }
 
-        if lowercasedName.contains("closure") {
+        if StringMatcher.contains("closure").matches(lowercasedName) {
             return .closure
         }
 
-        if lowercasedName.contains("literal") {
+        if StringMatcher.contains("literal").matches(lowercasedName) {
             return .literal
         }
 
-        if lowercasedName.contains("await")
-            || lowercasedName.contains("async")
-            || lowercasedName.contains("actor")
-            || lowercasedName.contains("isolated") {
+        if StringMatcher.contains("await").matches(lowercasedName)
+            || StringMatcher.contains("async").matches(lowercasedName)
+            || StringMatcher.contains("actor").matches(lowercasedName)
+            || StringMatcher.contains("isolated").matches(lowercasedName) {
             return .concurrency
         }
 
-        if name.hasSuffix("Decl") {
+        if StringMatcher.suffix("Decl").matches(name) {
             return .declaration
         }
 
-        if name.hasSuffix("Type") {
+        if StringMatcher.suffix("Type").matches(name) {
             return .typeSyntax
         }
 
-        if name.hasSuffix("Pattern") {
+        if StringMatcher.suffix("Pattern").matches(name) {
             return .pattern
         }
 
-        if name.hasSuffix("Stmt") {
+        if StringMatcher.suffix("Stmt").matches(name) {
             return .statement
         }
 
-        if name.hasSuffix("Expr") {
+        if StringMatcher.suffix("Expr").matches(name) {
             return .expression
         }
 

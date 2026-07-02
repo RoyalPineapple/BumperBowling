@@ -56,6 +56,83 @@ struct BumperConfigurationDSLTests {
     }
 
     @Test
+    func exposesDisallowedPublicDeclarations() throws {
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    DoesNot(Declare("bumperBowling"), severity: .error)
+                }
+            }
+        }.architectureConfiguration
+
+        let rules = try ArchitectureRules(configuration: configuration)
+
+        #expect(rules.ruleConfiguration.publicDeclarations.severity == .error)
+        #expect(rules.ruleConfiguration.publicDeclarations.paths == ["Sources/Core"])
+        #expect(rules.ruleConfiguration.publicDeclarations.requiredNames.isEmpty)
+        #expect(rules.ruleConfiguration.publicDeclarations.disallowedNames == [.exact("bumperBowling")])
+    }
+
+    @Test
+    func exposesRequiredPublicDeclarations() throws {
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Declares("Reducer", severity: .warning)
+                }
+            }
+        }.architectureConfiguration
+
+        let rules = try ArchitectureRules(configuration: configuration)
+
+        #expect(rules.ruleConfiguration.publicDeclarations.severity == .warning)
+        #expect(rules.ruleConfiguration.publicDeclarations.paths == ["Sources/Core"])
+        #expect(rules.ruleConfiguration.publicDeclarations.requiredNames == [.exact("Reducer")])
+        #expect(rules.ruleConfiguration.publicDeclarations.disallowedNames.isEmpty)
+    }
+
+    @Test
+    func invertsSyntaxPredicates() throws {
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    DoesNot(ContainSyntax(.forceUnwrapExpr), severity: .error)
+                }
+            }
+        }.architectureConfiguration
+
+        let rules = try ArchitectureRules(configuration: configuration)
+
+        #expect(rules.ruleConfiguration.syntaxKinds.severity == .error)
+        #expect(rules.ruleConfiguration.syntaxKinds.paths == ["Sources/Core"])
+        #expect(rules.ruleConfiguration.syntaxKinds.requiredKinds.isEmpty)
+        #expect(rules.ruleConfiguration.syntaxKinds.disallowedKinds == [.forceUnwrapExpr])
+    }
+
+    @Test
+    func configuresDirectStringMatchingBoundary() throws {
+        let configuration = BumperConfiguration {
+            Assertions {
+                NoDirectStringMatching(
+                    .error,
+                    paths: ["Sources/BumperBowlingCore"],
+                    except: ["Sources/BumperBowlingCore/StringMatcher.swift"]
+                )
+            }
+        }.architectureConfiguration
+
+        let rule = try ArchitectureRules(configuration: configuration).ruleConfiguration.syntaxConstructs
+
+        #expect(rule.severity == .error)
+        #expect(rule.paths == ["Sources/BumperBowlingCore"])
+        #expect(rule.excludedPaths == ["Sources/BumperBowlingCore/StringMatcher.swift"])
+        #expect(rule.disallowedConstructs == [.directStringMatch])
+    }
+
+    @Test
     func exposesForbiddenComponentDependencies() throws {
         let configuration = BumperConfiguration {
             Architecture {

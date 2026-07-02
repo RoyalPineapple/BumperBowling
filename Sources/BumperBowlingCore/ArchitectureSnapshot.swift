@@ -100,6 +100,9 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
         case .syntaxKinds:
             lines.append("    Kinds[\"ArchitectureGraph.sourceFiles.syntaxFacts.nodeKinds\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Policy[\"SyntaxKindRuleConfiguration\"] --> \(ruleNode)")
+        case .publicDeclarations:
+            lines.append("    Declarations[\"ArchitectureGraph.sourceFiles.publicDeclarations\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Policy[\"PublicDeclarationRuleConfiguration\"] --> \(ruleNode)")
         case .enumStateMachine:
             lines.append("    Enums[\"ArchitectureGraph.sourceFiles.enums\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Paths[\"PathRuleConfiguration.paths\"] --> \(ruleNode)")

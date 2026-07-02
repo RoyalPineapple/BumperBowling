@@ -34,6 +34,7 @@ public struct RuleRegistry: Sendable {
             .storedProperties(configuration.storedProperties),
             .syntaxConstructs(configuration.syntaxConstructs),
             .syntaxKinds(configuration.syntaxKinds),
+            .publicDeclarations(configuration.publicDeclarations),
             .enumStateMachine(configuration.enumStateMachine),
         ].filter(\.isEnabled)
     }
@@ -47,6 +48,7 @@ public enum ArchitectureRule: Sendable {
     case storedProperties(StoredPropertyRuleConfiguration)
     case syntaxConstructs(SyntaxConstructRuleConfiguration)
     case syntaxKinds(SyntaxKindRuleConfiguration)
+    case publicDeclarations(PublicDeclarationRuleConfiguration)
     case enumStateMachine(PathRuleConfiguration)
 
     public var id: RuleID {
@@ -65,6 +67,8 @@ public enum ArchitectureRule: Sendable {
             .syntaxConstructs
         case .syntaxKinds:
             .syntaxKinds
+        case .publicDeclarations:
+            .publicDeclarations
         case .enumStateMachine:
             .enumStateMachine
         }
@@ -86,6 +90,8 @@ public enum ArchitectureRule: Sendable {
             "Applies configured assertions over SwiftSyntax construct facts."
         case .syntaxKinds:
             "Applies configured assertions over observed SwiftSyntax node kinds."
+        case .publicDeclarations:
+            "Applies configured assertions over public declaration facts."
         case .enumStateMachine:
             "Requires parser files to declare an enum state machine."
         }
@@ -113,6 +119,8 @@ public enum ArchitectureRule: Sendable {
             configuration.severity
         case .syntaxKinds(let configuration):
             configuration.severity
+        case .publicDeclarations(let configuration):
+            configuration.severity
         case .enumStateMachine(let configuration):
             configuration.severity
         }
@@ -134,6 +142,8 @@ public enum ArchitectureRule: Sendable {
             evaluateSyntaxConstructs(graph: graph, configuration: configuration)
         case .syntaxKinds(let configuration):
             evaluateSyntaxKinds(graph: graph, configuration: configuration)
+        case .publicDeclarations(let configuration):
+            evaluatePublicDeclarations(graph: graph, configuration: configuration)
         case .enumStateMachine(let configuration):
             evaluateEnumStateMachines(graph: graph, configuration: configuration)
         }
@@ -287,9 +297,14 @@ public enum ArchitectureRule: Sendable {
         configuration: SyntaxConstructRuleConfiguration
     ) -> [ArchitectureViolation] {
         let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
+        let excludedPaths = (try? configuration.excludedPaths.map(RelativePathPrefix.init)) ?? []
 
         return graph.sourceFiles.flatMap { file in
             guard paths.isEmpty || paths.contains(where: { $0.contains(file.path) }) else {
+                return [ArchitectureViolation]()
+            }
+
+            guard !excludedPaths.contains(where: { $0.contains(file.path) }) else {
                 return [ArchitectureViolation]()
             }
 
@@ -342,6 +357,47 @@ public enum ArchitectureRule: Sendable {
         }
     }
 
+    private func evaluatePublicDeclarations(
+        graph: ArchitectureGraph,
+        configuration: PublicDeclarationRuleConfiguration
+    ) -> [ArchitectureViolation] {
+        let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
+        let scopedFiles = graph.sourceFiles.filter { file in
+            paths.isEmpty || paths.contains(where: { $0.contains(file.path) })
+        }
+        let declaredNames = scopedFiles.flatMap { file in
+            file.publicDeclarations.map(\.name)
+        }
+        let missingRequiredNames = configuration.requiredNames
+            .filter { matcher in
+                !declaredNames.contains { matcher.matches($0) }
+            }
+            .sorted { $0.description < $1.description }
+            .map { matcher in
+                violation(
+                    severity: configuration.severity,
+                    path: scopedFiles.first?.path ?? paths.first?.asFilePath ?? fallbackPath,
+                    message: "Missing required public declaration \(matcher)"
+                )
+            }
+
+        let disallowedNames: [ArchitectureViolation] = scopedFiles.flatMap { file -> [ArchitectureViolation] in
+            file.publicDeclarations.compactMap { declaration -> ArchitectureViolation? in
+                guard configuration.disallowedNames.contains(where: { $0.matches(declaration.name) }) else {
+                    return nil
+                }
+
+                return violation(
+                    severity: configuration.severity,
+                    path: file.path,
+                    message: "Public declaration \(declaration.name.rawValue) is disallowed"
+                )
+            }
+        }
+
+        return missingRequiredNames + disallowedNames
+    }
+
     private func storedPropertyViolations(
         file: SourceFileFacts,
         property: StoredProperty,
@@ -370,7 +426,7 @@ public enum ArchitectureRule: Sendable {
             )
         }
 
-        if configuration.disallowances.contains(.any), typeName == "Any" {
+        if configuration.disallowances.contains(.any), StringMatcher.exact("Any").matches(typeName) {
             violations.append(
                 violation(
                     severity: configuration.severity,
@@ -380,7 +436,7 @@ public enum ArchitectureRule: Sendable {
             )
         }
 
-        if configuration.disallowances.contains(.broadExistential), typeName.hasPrefix("any ") {
+        if configuration.disallowances.contains(.broadExistential), StringMatcher.prefix("any ").matches(typeName) {
             violations.append(
                 violation(
                     severity: configuration.severity,
@@ -390,7 +446,7 @@ public enum ArchitectureRule: Sendable {
             )
         }
 
-        if configuration.disallowances.contains(.rawStringIdentity), typeName == "String" {
+        if configuration.disallowances.contains(.rawStringIdentity), StringMatcher.exact("String").matches(typeName) {
             violations.append(
                 violation(
                     severity: configuration.severity,
@@ -412,7 +468,7 @@ public enum ArchitectureRule: Sendable {
                 return nil
             }
 
-            guard !file.enums.contains(where: { $0.rawValue.hasSuffix("State") }) else {
+            guard !file.enums.contains(where: { StringMatcher.suffix("State").matches($0) }) else {
                 return nil
             }
 
@@ -431,18 +487,21 @@ public enum ArchitectureRule: Sendable {
     }
 
     private func matches(pattern: String, path: String) -> Bool {
-        if pattern.contains("**/*") {
+        if StringMatcher.contains("**/*").matches(pattern) {
             let parts = pattern.components(separatedBy: "**/*")
             let prefix = parts.first ?? ""
             let suffix = parts.dropFirst().joined(separator: "**/*")
-            return path.hasPrefix(prefix) && path.hasSuffix(suffix)
+            let prefixMatches = prefix.isEmpty || StringMatcher.prefix(prefix).matches(path)
+            let suffixMatches = suffix.isEmpty || StringMatcher.suffix(suffix).matches(path)
+            return prefixMatches && suffixMatches
         }
 
-        if pattern.hasSuffix("*") {
-            return path.hasPrefix(String(pattern.dropLast()))
+        if StringMatcher.suffix("*").matches(pattern) {
+            let prefix = String(pattern.dropLast())
+            return prefix.isEmpty || StringMatcher.prefix(prefix).matches(path)
         }
 
-        return path == pattern || path.hasPrefix(pattern + "/")
+        return StringMatcher.exact(pattern).matches(path) || StringMatcher.prefix(pattern + "/").matches(path)
     }
 
     private func firstPath(
@@ -489,7 +548,7 @@ private extension RelativePathPrefix {
     }
 }
 
-public struct LintReport: Equatable, Sendable {
+public struct LintReport: Equatable, Sendable, Codable {
     public let violations: [ArchitectureViolation]
 
     public init(violations: [ArchitectureViolation]) {
@@ -515,7 +574,7 @@ public struct LintReport: Equatable, Sendable {
     }
 }
 
-public struct ArchitectureViolation: Equatable, Sendable {
+public struct ArchitectureViolation: Equatable, Sendable, Codable {
     public let ruleID: RuleID
     public let severity: Severity
     public let path: RelativeFilePath
@@ -529,7 +588,7 @@ public struct ArchitectureViolation: Equatable, Sendable {
     }
 }
 
-public enum RuleID: String, CaseIterable, Equatable, Sendable {
+public enum RuleID: String, CaseIterable, Equatable, Sendable, Codable {
     case forbiddenImport = "forbidden_import"
     case subsystemBoundary = "subsystem_boundary"
     case duplicateOwnership = "duplicate_ownership"
@@ -537,10 +596,11 @@ public enum RuleID: String, CaseIterable, Equatable, Sendable {
     case storedProperties = "stored_properties"
     case syntaxConstructs = "syntax_constructs"
     case syntaxKinds = "syntax_kinds"
+    case publicDeclarations = "public_declarations"
     case enumStateMachine = "enum_state_machine"
 }
 
-public enum Severity: String, Equatable, Sendable {
+public enum Severity: String, Equatable, Sendable, Codable {
     case off
     case note
     case warning

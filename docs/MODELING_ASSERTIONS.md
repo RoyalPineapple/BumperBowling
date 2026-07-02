@@ -6,6 +6,8 @@ SwiftLint owns Swift style: formatting, naming, whitespace, line length, sorted 
 
 Bumper Bowling owns architecture and modeling policy when that policy is visible to SwiftSyntax. It starts with raw parsed facts, projects them into a graph, then applies typed Swift assertions as lean graph operations.
 
+That is the useful lane: Bumper Bowling does not ask whether code is pretty, and it does not pretend to be the compiler. It asks whether the source still matches the architecture the repository declared.
+
 The composability model is small:
 
 ```text
@@ -13,6 +15,8 @@ SourceFactRule -> ComponentRequirement -> scoped Requires(...) -> graph rule
 ```
 
 `SourceFactRule` is the atom. `ComponentRequirement` is the semantic shorthand layer. Built-in shorthand and user-defined shorthand work the same way.
+
+The point of the shorthand layer is positive vocabulary. Teams should be able to say `Requires(.typedIdentity)` or define `Requires(.validatedFunctionalDomain)` instead of maintaining a long list of scattered prohibitions. The report can still explain the exact raw fact that failed.
 
 ## Example
 
@@ -72,7 +76,7 @@ Component(.core) {
 }
 ```
 
-The receipt still reports raw observed facts such as `Stored property id uses raw String` or `Uses imperative construct assignment`.
+The report still includes raw observed facts such as `Stored property id uses raw String` or `Uses imperative construct assignment`.
 
 Every assertion has a named scope:
 

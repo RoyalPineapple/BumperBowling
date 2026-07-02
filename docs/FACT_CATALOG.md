@@ -5,17 +5,17 @@ Bumper Bowling wants the full SwiftSyntax-observable fact vocabulary, but it sho
 The model is:
 
 ```text
-SwiftSyntax node/token/trivia -> raw fact -> scoped rule -> semantic shorthand -> receipt
+SwiftSyntax node/token/trivia -> raw fact -> scoped rule -> semantic shorthand -> finding/report
 ```
 
 Every fact in this catalog must satisfy two constraints:
 
 - SwiftSyntax can observe it without type checking.
-- Bumper can report it as a receipt.
+- Bumper Bowling can report it as evidence for a finding.
 
 Bumper Bowling does not mirror SwiftSyntax's node types. It stores SwiftSyntax's own `SyntaxKind` values for compact graph checks and adds computed `bumper` views to concrete SwiftSyntax nodes for local facts.
 
-## Current 0.0 Facts
+## Current 0.1 Facts
 
 ### File Facts
 
@@ -87,7 +87,7 @@ Current enum fact-rule:
 ### Syntax Kind Facts
 
 - SwiftSyntax `SyntaxKind` values observed while traversing parsed source
-- selected spelling for receipt-worthy kinds such as declarations, imports, attributes, modifiers, types, patterns, and literals
+- selected spelling for report-worthy kinds such as declarations, imports, attributes, modifiers, types, patterns, and literals
 - broad fact family for grouping observed syntax into declarations, expressions, statements, type syntax, patterns, macros, concurrency syntax, literals, and tokens
 
 Current syntax-kind fact-rule:
@@ -106,7 +106,7 @@ These use SwiftSyntax's `SyntaxKind` directly.
 
 ### Computed Node Views
 
-Some facts are better inferred from real SwiftSyntax node types than from raw kind membership. Bumper exposes those as computed views:
+Some facts are better inferred from real SwiftSyntax node types than from raw kind membership. Bumper Bowling exposes those as computed views:
 
 - `SyntaxProtocol.bumper.kind`
 - `SyntaxProtocol.bumper.spelling`
@@ -130,7 +130,7 @@ These views do not add stored state to SwiftSyntax nodes. They are pure computat
 
 ## Full SwiftSyntax Fact Vocabulary
 
-These are the fact families Bumper Bowling should be able to grow into. The observed `SyntaxKind` set is recorded in 0.0, but only selected facts are normalized into first-class architecture graph fields.
+These are the fact families Bumper Bowling should be able to grow into. The observed `SyntaxKind` set is recorded in 0.1, but only selected facts are normalized into first-class architecture graph fields.
 
 ### Source File And Trivia
 
@@ -142,7 +142,7 @@ These are the fact families Bumper Bowling should be able to grow into. The obse
 - source locations
 - disabled/active conditional compilation regions
 
-Most trivia facts should stay out of architecture rules unless they directly support a receipt that SwiftLint does not already own.
+Most trivia facts should stay out of architecture rules unless they directly support a finding that SwiftLint does not already own.
 
 ### Imports
 
@@ -282,7 +282,7 @@ Syntax can say what type annotation was written. It cannot prove inferred type o
 - global actor attributes such as `@MainActor`
 - `nonisolated`
 - `isolated` parameters
-- `Task` construction if expressed as syntax Bumper chooses to recognize
+- `Task` construction if expressed as syntax Bumper Bowling chooses to recognize
 
 Syntax can observe concurrency spelling. It cannot prove isolation correctness.
 
@@ -293,7 +293,7 @@ Syntax can observe concurrency spelling. It cannot prove isolation correctness.
 - macro name
 - macro arguments
 
-Syntax can observe macro use. It cannot know the expanded code in the 0.0 lane.
+Syntax can observe macro use. It cannot know the expanded code in the 0.1 lane.
 
 ### Literal Facts
 
@@ -349,7 +349,7 @@ These require compiler or build-system knowledge:
 - runtime behavior
 - business invariants
 
-Those can belong to a future compiler-backed analysis lane, not the SwiftSyntax fact catalog.
+Those can belong to a future compiler-backed analysis lane, not the SwiftSyntax fact catalog. The current request list lives in [COMPILER_REQUESTS.md](COMPILER_REQUESTS.md).
 
 ## Extraction Rule
 
@@ -358,6 +358,6 @@ Do not add a fact just because SwiftSyntax can expose it. Add it when all are tr
 - a rule or semantic shorthand can use it
 - it can be represented as a stable typed value
 - it can be scoped by path/component
-- it can produce a deterministic receipt
+- it can produce deterministic evidence for a finding
 
 The catalog can be broad. The architecture graph should stay lean.

@@ -1,15 +1,18 @@
-# Agent Guardrails
+# Agent Lanes
 
 - Bumper Bowling keeps agents in their lane by validating changes against the declared codebase shape.
-- Treat every violation as a receipt: observed graph fact, declared lane, mismatch.
+- Treat every violation as a scorecard entry: observed graph fact, declared lane, mismatch.
 - Fix the code first; update the lane only when the intended architecture actually changed.
 - Keep changes scoped to the subsystem named by the task.
 - Update `BumperBowling.swift` only when the architectural contract intentionally changes.
-- Regenerate `docs/ARCHITECTURE_SNAPSHOT.md` with `swift run -q bumper snapshot . > docs/ARCHITECTURE_SNAPSHOT.md` when command flow, core pipeline types, or rule IDs change.
+- Update `docs/ARCHITECTURE_SNAPSHOT.md` when command flow, core pipeline types, or rule IDs change.
 - Run `swift test` before reporting implementation work complete.
+- Run `swift run bumper lint .` before shipping changes that affect config loading, scanning, or linting.
 - Run `swiftlint lint` when SwiftLint is available.
-- Run `swift run bumper lint .` after architectural model or rule changes.
+- Make sure Bumper Bowling's self-lint product test still passes after architectural model or rule changes.
 - Do not make `BumperBowlingCore` depend on the CLI target.
+- Do not make `BumperBowlingCore` depend on `BumperBowlingTesting`.
+- Keep `BumperBowling` and `BumperBowlingTesting` dumb. They are shipped interfaces over the core engine, not separate engines.
 - Preserve strict concurrency settings.
 - Keep parsing SwiftSyntax-first. Use SwiftSyntax/SwiftParser for Swift parsing rather than regular expressions.
 - Parse strings into domain types at boundaries; do not pass raw strings through core architecture logic.

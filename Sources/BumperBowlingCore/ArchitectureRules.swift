@@ -148,7 +148,7 @@ public struct ModuleName: Hashable, Sendable, CustomStringConvertible {
     }
 }
 
-public struct RelativeFilePath: Hashable, Sendable, CustomStringConvertible {
+public struct RelativeFilePath: Hashable, Sendable, CustomStringConvertible, Codable {
     public let rawValue: String
 
     public init(_ rawValue: String) throws {
@@ -161,6 +161,15 @@ public struct RelativeFilePath: Hashable, Sendable, CustomStringConvertible {
 
     public var description: String {
         rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        try self.init(decoder.singleValueContainer().decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -176,13 +185,13 @@ public struct RelativePathPrefix: Hashable, Sendable, CustomStringConvertible {
     }
 
     public func contains(_ relativePath: RelativeFilePath) -> Bool {
-        relativePath.rawValue == rawValue || relativePath.rawValue.hasPrefix(rawValue + "/")
+        StringMatcher.exact(rawValue).matches(relativePath) || StringMatcher.prefix(rawValue + "/").matches(relativePath)
     }
 
     public func overlaps(_ other: RelativePathPrefix) -> Bool {
-        rawValue == other.rawValue
-            || rawValue.hasPrefix(other.rawValue + "/")
-            || other.rawValue.hasPrefix(rawValue + "/")
+        StringMatcher.exact(rawValue).matches(other)
+            || StringMatcher.prefix(other.rawValue + "/").matches(rawValue)
+            || StringMatcher.prefix(rawValue + "/").matches(other)
     }
 
     public var description: String {

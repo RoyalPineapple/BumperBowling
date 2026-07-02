@@ -89,6 +89,30 @@ flowchart LR
     Findings --> Report["LintReport"]
 ```
 
+### `syntax_constructs`
+
+Applies configured assertions over SwiftSyntax construct facts.
+
+```mermaid
+flowchart LR
+    Constructs["ArchitectureGraph.sourceFiles.imperativeConstructs"] --> SyntaxConstructs["syntax_constructs"]
+    Policy["SyntaxConstructRuleConfiguration"] --> SyntaxConstructs
+    SyntaxConstructs --> Findings["ArchitectureViolation[]"]
+    Findings --> Report["LintReport"]
+```
+
+### `public_declarations`
+
+Applies configured assertions over public declaration facts.
+
+```mermaid
+flowchart LR
+    Declarations["ArchitectureGraph.sourceFiles.publicDeclarations"] --> PublicDeclarations["public_declarations"]
+    Policy["PublicDeclarationRuleConfiguration"] --> PublicDeclarations
+    PublicDeclarations --> Findings["ArchitectureViolation[]"]
+    Findings --> Report["LintReport"]
+```
+
 ### `enum_state_machine`
 
 Requires parser files to declare an enum state machine.

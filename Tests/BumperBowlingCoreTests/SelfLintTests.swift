@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import BumperBowlingTesting
 @testable import BumperBowlingCore
 
 @Suite("Self Lint")
@@ -11,12 +12,10 @@ struct SelfLintTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
 
-        let report = try await BumperCommands.lint(root: root)
+        let harness = BumperTestHarness(configuration: BumperProjectConfiguration.configuration)
 
-        for violation in report.violations where violation.severity == .error {
-            Issue.record(
-                "\(violation.path.rawValue): \(violation.message) (\(violation.ruleID.rawValue))"
-            )
+        for message in try await harness.errorMessages(root: root) {
+            Issue.record(Comment(rawValue: message))
         }
     }
 }

@@ -6,7 +6,7 @@ private let violationMarker: Character = "↓"
 
 func verifyRule(
     _ rule: ArchitectureRule,
-    configuration: ArchitectureConfiguration = .bumperBowling,
+    configuration: ArchitectureConfiguration = BumperProjectConfiguration.configuration,
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
     let description = rule.ruleDescription

@@ -19,50 +19,6 @@ public struct ArchitectureConfiguration: Equatable, Sendable {
         self.rules = rules
     }
 
-    public static let bumperBowling = ArchitectureConfiguration(
-        includedPaths: ["Sources"],
-        excludedPaths: [".build", "DerivedData"],
-        subsystems: [
-            SubsystemConfiguration(
-                name: "core",
-                modules: ["BumperBowlingCore"],
-                paths: ["Sources/BumperBowlingCore"],
-                mayDependOn: []
-            ),
-            SubsystemConfiguration(
-                name: "cli",
-                modules: ["BumperBowling"],
-                paths: ["Sources/BumperBowling"],
-                mayDependOn: ["core"]
-            ),
-        ],
-        rules: RuleConfiguration(
-            forbiddenImports: [
-                RuleSetting(
-                    severity: .error,
-                    values: ["XCTest", "Testing"],
-                    paths: ["Sources/BumperBowlingCore"]
-                ),
-                RuleSetting(
-                    severity: .error,
-                    values: ["XCTest", "Testing"],
-                    paths: ["Sources/BumperBowling"]
-                ),
-            ],
-            subsystemBoundary: .error,
-            duplicateOwnership: .error,
-            declaredDependencyCycle: .error,
-            storedProperties: StoredPropertyRuleConfiguration(
-                severity: .warning,
-                paths: ["Sources/BumperBowlingCore"],
-                disallowances: [.any, .broadExistential, .storedVar, .rawStringIdentity]
-            ),
-            enumStateMachine: PathRuleConfiguration(
-                severity: .error,
-                paths: ["Sources/BumperBowlingCore/SwiftFileParser.swift"]
-            )
-        )
-    )
 }
 
 public struct SubsystemConfiguration: Equatable, Sendable {
@@ -95,6 +51,7 @@ public struct RuleConfiguration: Equatable, Sendable {
     public let storedProperties: StoredPropertyRuleConfiguration
     public let syntaxConstructs: SyntaxConstructRuleConfiguration
     public let syntaxKinds: SyntaxKindRuleConfiguration
+    public let publicDeclarations: PublicDeclarationRuleConfiguration
     public let enumStateMachine: PathRuleConfiguration
 
     public init(
@@ -105,6 +62,7 @@ public struct RuleConfiguration: Equatable, Sendable {
         storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
         syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
         syntaxKinds: SyntaxKindRuleConfiguration = SyntaxKindRuleConfiguration(),
+        publicDeclarations: PublicDeclarationRuleConfiguration = PublicDeclarationRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
         self.forbiddenImports = forbiddenImports.isConfigured ? [forbiddenImports] : []
@@ -114,6 +72,7 @@ public struct RuleConfiguration: Equatable, Sendable {
         self.storedProperties = storedProperties
         self.syntaxConstructs = syntaxConstructs
         self.syntaxKinds = syntaxKinds
+        self.publicDeclarations = publicDeclarations
         self.enumStateMachine = enumStateMachine
     }
 
@@ -125,6 +84,7 @@ public struct RuleConfiguration: Equatable, Sendable {
         storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
         syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
         syntaxKinds: SyntaxKindRuleConfiguration = SyntaxKindRuleConfiguration(),
+        publicDeclarations: PublicDeclarationRuleConfiguration = PublicDeclarationRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
         self.forbiddenImports = forbiddenImports.filter(\.isConfigured)
@@ -134,6 +94,7 @@ public struct RuleConfiguration: Equatable, Sendable {
         self.storedProperties = storedProperties
         self.syntaxConstructs = syntaxConstructs
         self.syntaxKinds = syntaxKinds
+        self.publicDeclarations = publicDeclarations
         self.enumStateMachine = enumStateMachine
     }
 }
@@ -173,15 +134,18 @@ public struct StoredPropertyRuleConfiguration: Equatable, Sendable {
 public struct SyntaxConstructRuleConfiguration: Equatable, Sendable {
     public let severity: Severity
     public let paths: [String]
+    public let excludedPaths: [String]
     public let disallowedConstructs: Set<ImperativeConstruct>
 
     public init(
         severity: Severity = .off,
         paths: [String] = [],
+        excludedPaths: [String] = [],
         disallowedConstructs: Set<ImperativeConstruct> = []
     ) {
         self.severity = severity
         self.paths = paths
+        self.excludedPaths = excludedPaths
         self.disallowedConstructs = disallowedConstructs
     }
 }
@@ -202,6 +166,25 @@ public struct SyntaxKindRuleConfiguration: Equatable, Sendable {
         self.paths = paths
         self.requiredKinds = requiredKinds
         self.disallowedKinds = disallowedKinds
+    }
+}
+
+public struct PublicDeclarationRuleConfiguration: Equatable, Sendable {
+    public let severity: Severity
+    public let paths: [String]
+    public let requiredNames: Set<StringMatcher>
+    public let disallowedNames: Set<StringMatcher>
+
+    public init(
+        severity: Severity = .off,
+        paths: [String] = [],
+        requiredNames: Set<StringMatcher> = [],
+        disallowedNames: Set<StringMatcher> = []
+    ) {
+        self.severity = severity
+        self.paths = paths
+        self.requiredNames = requiredNames
+        self.disallowedNames = disallowedNames
     }
 }
 
@@ -241,11 +224,8 @@ extension Severity {
 public enum ConfigurationLoader {
     public static let fileName = "BumperBowling.swift"
 
-    public static func load(from root: URL) throws -> ArchitectureConfiguration {
-        ArchitectureConfiguration.bumperBowling
-    }
-
     public static func writeSample(to root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let url = root.appendingPathComponent(fileName)
         guard !FileManager.default.fileExists(atPath: url.path) else {
             throw BumperError.configurationAlreadyExists(url.path)
@@ -257,8 +237,9 @@ public enum ConfigurationLoader {
     private static let sampleDSL = """
     import BumperBowlingCore
 
-    // Bumper Bowling 0.0 exposes the Swift DSL as the typed configuration API.
-    // The CLI still uses its built-in repository config until config loading lands.
+    // Bumper Bowling exposes this Swift DSL to both shipped interfaces:
+    // - the CLI loads this file for shell hooks and CI jobs
+    // - BumperBowlingTesting can use the same configuration value in tests
     let configuration = BumperConfiguration {
         Included {
             "Sources"
@@ -270,9 +251,9 @@ public enum ConfigurationLoader {
         }
 
         Architecture {
-            Component(.core) {
-                Owns("Sources/BumperBowlingCore")
-                Modules("BumperBowlingCore")
+            Component(.app) {
+                Owns("Sources")
+                Modules("App")
                 MayUse(.foundation)
                 Requires(
                     .explicitDomainSurfaces,
@@ -280,14 +261,6 @@ public enum ConfigurationLoader {
                     .immutableStoredState,
                     severity: .warning
                 )
-                RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
-            }
-
-            Component(.cli) {
-                Owns("Sources/BumperBowling")
-                Modules("BumperBowling")
-                MayDependOn(.core)
-                MayUse(.foundation)
             }
         }
 
