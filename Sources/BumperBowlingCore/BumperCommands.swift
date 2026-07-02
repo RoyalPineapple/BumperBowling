@@ -27,6 +27,11 @@ public enum BumperCommands {
         return lines.joined(separator: "\n")
     }
 
+    public static func snapshot(root: URL) throws -> String {
+        let configuration = try ConfigurationLoader.load(from: root)
+        return try ArchitectureSnapshot(configuration: configuration).render()
+    }
+
     public static func lint(root: URL) async throws -> LintReport {
         let configuration = try ConfigurationLoader.load(from: root)
         let rules = try ArchitectureRules(configuration: configuration)

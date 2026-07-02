@@ -2,15 +2,76 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling is a tiny Swift 6 architectural linter for Swift repositories.
+Bumper Bowling keeps agents in their lane: declare the shape your Swift codebase should have, then validate every change against that shape.
 
-It is meant to run beside SwiftLint. SwiftLint owns local Swift style and code smells; Bumper Bowling owns architectural boundaries, dependency direction, and repo-specific taste.
+It is meant to run beside SwiftLint. SwiftLint owns local Swift style and code smells; Bumper Bowling owns the formal codebase shape: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
 
 ## Status
 
 Bumper Bowling is 0.0 shaping work.
 
-The current CLI is useful for proving the core model on this repository. The Swift DSL is available as the typed configuration API and sample authoring shape, but `bumper lint` still uses the built-in repository configuration. Loading `BumperBowling.swift` from disk is intentionally post-MVP.
+The current CLI is useful for proving the core model on this repository. The Swift DSL is available as the typed assertion API and sample authoring shape, but `bumper lint` still uses the built-in repository configuration. Loading `BumperBowling.swift` from disk is intentionally post-MVP.
+
+## Model
+
+```text
+SwiftSyntax reads the code
+Bumper records raw source facts
+Those facts form an ArchitectureGraph
+The Swift DSL encodes typed assertions
+Lint runs math over the graph
+```
+
+Bumper Bowling only asserts architecture visible to SwiftSyntax plus configured repo shape. It does not resolve symbols, infer types, expand macros semantically, or prove compiler-level dependencies. See [docs/SWIFTSYNTAX_SURFACE.md](docs/SWIFTSYNTAX_SURFACE.md) for the current fact surface.
+
+The core is intentionally lean: parse raw SwiftSyntax facts, normalize them into a graph, then run deterministic operations over that graph: set membership, path scope, edge checks, and cycle detection.
+
+Bumper keeps receipts. Every finding should trace back to an observed graph fact, and `scan`, `explain`, and `snapshot` expose the evidence Bumper used.
+
+Facts become rules when they are scoped by the DSL. You can use Bumper's semantic shorthand or compose your own:
+
+```swift
+extension ComponentRequirement {
+    static let valueCore = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .computedState,
+        .immutableStoredState,
+        .functionalCore
+    )
+}
+```
+
+That shorthand still lowers into raw fact assertions over stored properties, syntax constructs, and enum declarations.
+
+The DSL starts from the shape you want:
+
+```swift
+Component(.core) {
+    Owns("Sources/BumperBowlingCore")
+    Modules("BumperBowlingCore")
+    MayUse(.foundation)
+    Requires(.valueCore, severity: .warning)
+}
+```
+
+The rule engine derives violations from that contract. Bumper Bowling should not be a pile of disconnected "do not" rules.
+
+`bumper scan` and `bumper snapshot` expose the architecture the code currently expresses: owned files, imports, declarations, properties, selected imperative constructs, subsystem edges, and enabled assertions. They are receipts for the declared shape.
+
+The graph is a normalized projection of SwiftSyntax facts, not a copy of the full SwiftSyntax tree. Bumper Bowling should add graph facts only when a rule can use them.
+
+## Agent Workflow
+
+Bumper Bowling is designed for agentic coding loops:
+
+1.  Declare the lanes in the DSL.
+2.  Let an agent make a change.
+3.  Run `bumper lint`.
+4.  Use the receipt to see the observed graph fact, the declared lane, and the mismatch.
+5.  Repair the smallest thing: move the code, change the dependency, or intentionally update the lane.
+
+The goal is not to make agents timid. The goal is to give them fast, formal feedback when they cross an architectural boundary.
 
 ## What It Checks
 
@@ -19,11 +80,12 @@ MVP rules:
 - `forbidden_import`: disallow configured imports in linted source files.
 - `subsystem_boundary`: require subsystem imports to match declared dependencies.
 - `duplicate_ownership`: detect overlapping subsystem path ownership.
-- `dependency_cycle`: reject cycles in configured subsystem dependencies.
-- `domain_models`: enforce syntax-first domain model taste rules.
+- `declared_dependency_cycle`: reject cycles in declared subsystem dependencies.
+- `stored_properties`: enforce typed assertions over SwiftSyntax stored property facts.
+- `syntax_constructs`: enforce typed assertions over SwiftSyntax construct facts.
 - `enum_state_machine`: require parser files to declare an enum state machine.
 
-The `domain_models` rule is deliberately syntax-first in 0.0. It checks explicit stored-property type annotations for mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not perform compiler-level type inference or full public API analysis.
+The `stored_properties` rule is deliberately syntax-first in 0.0. It checks explicit stored-property type annotations for mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not perform compiler-level type inference or full public API analysis. See [docs/MODELING_ASSERTIONS.md](docs/MODELING_ASSERTIONS.md) for an example of using these assertions without overlapping SwiftLint.
 
 ## Quick Start
 
@@ -31,6 +93,7 @@ The `domain_models` rule is deliberately syntax-first in 0.0. It checks explicit
 swift test
 swift run bumper lint .
 swift run bumper scan .
+swift run bumper snapshot .
 swift run bumper explain Sources/BumperBowlingCore/ArchitectureLinter.swift
 ```
 
@@ -42,6 +105,7 @@ swift run bumper explain Sources/BumperBowlingCore/ArchitectureLinter.swift
 bumper init [root]
 bumper lint [root]
 bumper scan [root]
+bumper snapshot [root]
 bumper explain <path>
 ```
 
@@ -62,62 +126,45 @@ let configuration = BumperConfiguration {
         "DerivedData"
     }
 
-    Subsystems {
-        Subsystem(.core) {
-            Paths("Sources/BumperBowlingCore")
+    Architecture {
+        Component(.core) {
+            Owns("Sources/BumperBowlingCore")
             Modules("BumperBowlingCore")
+            MayUse(.foundation)
+            Requires(
+                .explicitDomainSurfaces,
+                .typedIdentity,
+                .immutableStoredState,
+                severity: .warning
+            )
+            RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
-        Subsystem(.cli) {
-            Paths("Sources/BumperBowling")
+        Component(.cli) {
+            Owns("Sources/BumperBowling")
             Modules("BumperBowling")
-            Dependencies(.core)
+            MayDependOn(.core)
+            MayUse(.foundation)
         }
     }
 
-    Rules {
-        ForbiddenImport(.error) {
-            Modules("XCTest", "Testing")
-        }
-
-        SubsystemBoundary(.error)
-        DuplicateOwnership(.error)
-        DependencyCycle(.error)
-
-        DomainModels(.warning) {
-            Paths("Sources/BumperBowlingCore")
-            Disallow(.any)
-            Disallow(.broadExistential)
-            Disallow(.storedVar)
-            Disallow(.rawStringIdentity)
-        }
-    }
-
-    OptInRules {
-        EnumStateMachine(.error) {
-            Paths("Sources/**/*Parser.swift")
-        }
+    Assertions {
+        DependencyBoundaries(.error)
+        SingleOwner(.error)
+        AcyclicDeclaredDependencies(.error)
     }
 }
 ```
 
-DSL constructors parse strings into typed values at the boundary. The rule engine works with types like `SubsystemID`, `ModuleName`, and `RelativeFilePath`, not loose strings.
+DSL constructors parse strings into typed values at the boundary. `Owns`, `MayDependOn`, `DoesNotDependOn`, `MayUse`, `DoesNotUse`, `Requires`, and `Disallows` compile down to typed graph assertions over parsed SwiftSyntax facts, not loose strings.
 
 ## Architecture
 
-Bumper Bowling is adapter-driven:
+Bumper Bowling is SwiftSyntax-driven. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the system shape, [docs/SWIFTSYNTAX_SURFACE.md](docs/SWIFTSYNTAX_SURFACE.md) for the observable fact surface, and [docs/ARCHITECTURE_SNAPSHOT.md](docs/ARCHITECTURE_SNAPSHOT.md) for the generated commands, pipeline, and rule snapshots.
 
-```text
-RepositoryScanner
-  -> RepositoryLanguageAdapter
-  -> SourceFileFacts
-  -> RepositoryFacts
-  -> RuleRegistry
-```
+Default semantic rule sets are documented in [docs/DEFAULT_RULE_SETS.md](docs/DEFAULT_RULE_SETS.md), including passing and failing examples for each shipped combination.
 
-Swift is the only implemented language adapter in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftLanguageAdapter`; the shared model remains language-neutral through `SourceFileFacts`.
-
-Objective-C, C, C++, and Metal adapters are future work.
+Swift is the only language surface in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftFileParser`; Bumper Bowling wraps those facts with DSL assertions.
 
 ## Development
 
@@ -131,6 +178,12 @@ swift run bumper lint .
 CI runs both commands on macOS.
 
 SwiftLint is intentionally adjacent. The repo includes `.swiftlint.yml`, but Bumper Bowling does not shell out to SwiftLint and is not a replacement for it.
+
+Regenerate the checked-in architecture snapshot with:
+
+```bash
+swift run -q bumper snapshot . > docs/ARCHITECTURE_SNAPSHOT.md
+```
 
 ## Non-Goals For 0.0
 

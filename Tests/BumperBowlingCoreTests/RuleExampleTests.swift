@@ -6,18 +6,31 @@ struct RuleExampleTests {
     @Test
     func forbiddenImportExamples() async throws {
         try await verifyRule(
-            .forbiddenImport(RuleSetting(severity: .error, values: ["XCTest"]))
+            .forbiddenImport([RuleSetting(severity: .error, values: ["XCTest"])])
         )
     }
 
     @Test
-    func domainModelExamples() async throws {
+    func storedPropertyExamples() async throws {
         try await verifyRule(
-            .domainModels(
-                DomainModelRuleConfiguration(
+            .storedProperties(
+                StoredPropertyRuleConfiguration(
                     severity: .error,
                     paths: ["Sources/BumperBowlingCore"],
                     disallowances: [.storedVar, .rawStringIdentity]
+                )
+            )
+        )
+    }
+
+    @Test
+    func syntaxConstructExamples() async throws {
+        try await verifyRule(
+            .syntaxConstructs(
+                SyntaxConstructRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/BumperBowlingCore"],
+                    disallowedConstructs: [.assignment, .mutableBinding]
                 )
             )
         )

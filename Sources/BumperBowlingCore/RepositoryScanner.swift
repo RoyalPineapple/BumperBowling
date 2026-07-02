@@ -2,22 +2,22 @@ import Foundation
 
 public struct RepositoryScanner: Sendable {
     private let rules: ArchitectureRules
-    private let adapters: [RepositoryLanguageAdapter]
+    private let parser: SwiftFileParser
 
     public init(
         configuration: ArchitectureConfiguration,
-        adapters: [RepositoryLanguageAdapter] = RepositoryLanguageAdapter.defaultAdapters
+        parser: SwiftFileParser = SwiftFileParser()
     ) throws {
         self.rules = try ArchitectureRules(configuration: configuration)
-        self.adapters = adapters
+        self.parser = parser
     }
 
     public init(
         rules: ArchitectureRules,
-        adapters: [RepositoryLanguageAdapter] = RepositoryLanguageAdapter.defaultAdapters
+        parser: SwiftFileParser = SwiftFileParser()
     ) {
         self.rules = rules
-        self.adapters = adapters
+        self.parser = parser
     }
 
     public func scan(root: URL) async throws -> RepositoryFacts {
@@ -25,11 +25,13 @@ public struct RepositoryScanner: Sendable {
 
         let files = try await withThrowingTaskGroup(of: SourceFileFacts.self) { group in
             for input in inputs {
-                guard let adapter = adapter(accepting: input.relativePath) else {
-                    continue
-                }
+                let parser = parser
                 group.addTask {
-                    try await adapter.parse(input)
+                    try parser.parseFile(
+                        at: input.url,
+                        relativePath: input.relativePath,
+                        subsystem: input.subsystem
+                    )
                 }
             }
 
@@ -43,7 +45,7 @@ public struct RepositoryScanner: Sendable {
         return RepositoryFacts(files: files.sorted(by: { $0.path.rawValue < $1.path.rawValue }))
     }
 
-    private func sourceFileInputs(in root: URL) -> [SourceFileInput] {
+    private func sourceFileInputs(in root: URL) -> [SwiftSourceFileInput] {
         let fileManager = FileManager.default
         guard let enumerator = fileManager.enumerator(
             at: root,
@@ -53,7 +55,7 @@ public struct RepositoryScanner: Sendable {
             return []
         }
 
-        var inputs: [SourceFileInput] = []
+        var inputs: [SwiftSourceFileInput] = []
 
         for case let url as URL in enumerator {
             let relativePath = Self.relativePath(for: url, root: root)
@@ -67,12 +69,12 @@ public struct RepositoryScanner: Sendable {
             guard let typedRelativePath = try? RelativeFilePath(relativePath),
                   rules.includes(typedRelativePath),
                   let subsystem = rules.subsystem(containing: typedRelativePath),
-                  adapter(accepting: typedRelativePath) != nil else {
+                  isSwiftFile(typedRelativePath) else {
                 continue
             }
 
             inputs.append(
-                SourceFileInput(
+                SwiftSourceFileInput(
                     url: url,
                     relativePath: typedRelativePath,
                     subsystem: subsystem.id
@@ -90,21 +92,19 @@ public struct RepositoryScanner: Sendable {
             throw BumperError.noSubsystemForFile(relativePath)
         }
 
-        guard let adapter = adapter(accepting: typedRelativePath) else {
+        guard isSwiftFile(typedRelativePath) else {
             throw BumperError.unsupportedLanguage(relativePath)
         }
 
-        return try await adapter.parse(
-            SourceFileInput(
-                url: url,
-                relativePath: typedRelativePath,
-            subsystem: subsystem.id,
-            )
+        return try parser.parseFile(
+            at: url,
+            relativePath: typedRelativePath,
+            subsystem: subsystem.id
         )
     }
 
-    private func adapter(accepting path: RelativeFilePath) -> RepositoryLanguageAdapter? {
-        adapters.first { $0.accepts(path) }
+    private func isSwiftFile(_ path: RelativeFilePath) -> Bool {
+        path.rawValue.hasSuffix(".swift")
     }
 
     private func shouldSkip(_ relativePath: String) -> Bool {
@@ -128,4 +128,10 @@ public struct RepositoryScanner: Sendable {
 
         return filePath
     }
+}
+
+private struct SwiftSourceFileInput: Sendable {
+    let url: URL
+    let relativePath: RelativeFilePath
+    let subsystem: SubsystemID
 }

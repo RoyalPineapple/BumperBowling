@@ -16,40 +16,61 @@ public struct RepositoryFacts: Equatable, Sendable {
     }
 }
 
+public struct ArchitectureGraph: Equatable, Sendable {
+    public let sourceFiles: [SourceFileFacts]
+    public let subsystemNodes: Set<SubsystemID>
+    public let moduleImportEdges: Set<DependencyEdge>
+    public let subsystemImportEdges: Set<SubsystemImportEdge>
+
+    public init(facts: RepositoryFacts, rules: ArchitectureRules) {
+        self.sourceFiles = facts.files
+        self.subsystemNodes = Set(facts.files.map(\.subsystem))
+        self.moduleImportEdges = facts.dependencyEdges
+        self.subsystemImportEdges = Set(
+            facts.files.flatMap { file in
+                file.imports.compactMap { importedModule in
+                    guard let targetSubsystem = rules.subsystemByModule[importedModule] else {
+                        return nil
+                    }
+
+                    return SubsystemImportEdge(
+                        sourceSubsystem: file.subsystem,
+                        targetSubsystem: targetSubsystem,
+                        importedModule: importedModule,
+                        sourcePath: file.path
+                    )
+                }
+            }
+        )
+    }
+}
+
 public struct SourceFileFacts: Equatable, Sendable {
-    public let language: SourceLanguage
     public let path: RelativeFilePath
     public let subsystem: SubsystemID
     public let imports: [ModuleName]
     public let publicDeclarations: [PublicDeclaration]
     public let storedProperties: [StoredProperty]
     public let enums: [DeclarationName]
+    public let imperativeConstructs: [ImperativeConstruct]
 
     public init(
-        language: SourceLanguage,
         path: RelativeFilePath,
         subsystem: SubsystemID,
         imports: [ModuleName],
         publicDeclarations: [PublicDeclaration],
         storedProperties: [StoredProperty] = [],
-        enums: [DeclarationName] = []
+        enums: [DeclarationName] = [],
+        imperativeConstructs: [ImperativeConstruct] = []
     ) {
-        self.language = language
         self.path = path
         self.subsystem = subsystem
         self.imports = imports
         self.publicDeclarations = publicDeclarations
         self.storedProperties = storedProperties
         self.enums = enums
+        self.imperativeConstructs = imperativeConstructs
     }
-}
-
-public enum SourceLanguage: String, Equatable, Sendable {
-    case swift
-    case objectiveC
-    case c
-    case cpp
-    case metal
 }
 
 public struct PublicDeclaration: Equatable, Sendable {
@@ -86,6 +107,25 @@ public struct DependencyEdge: Hashable, Sendable {
     }
 }
 
+public struct SubsystemImportEdge: Hashable, Sendable {
+    public let sourceSubsystem: SubsystemID
+    public let targetSubsystem: SubsystemID
+    public let importedModule: ModuleName
+    public let sourcePath: RelativeFilePath
+
+    public init(
+        sourceSubsystem: SubsystemID,
+        targetSubsystem: SubsystemID,
+        importedModule: ModuleName,
+        sourcePath: RelativeFilePath
+    ) {
+        self.sourceSubsystem = sourceSubsystem
+        self.targetSubsystem = targetSubsystem
+        self.importedModule = importedModule
+        self.sourcePath = sourcePath
+    }
+}
+
 public enum DeclarationKind: String, Equatable, Sendable {
     case actor
     case `class`
@@ -94,6 +134,14 @@ public enum DeclarationKind: String, Equatable, Sendable {
     case `protocol`
     case `struct`
     case variable
+}
+
+public enum ImperativeConstruct: String, Equatable, Hashable, Sendable {
+    case assignment
+    case loop
+    case mutableBinding
+    case inoutExpression
+    case mutatingDeclaration
 }
 
 public struct DeclarationName: Hashable, Sendable, CustomStringConvertible {

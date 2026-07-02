@@ -36,14 +36,22 @@ public struct ArchitectureConfiguration: Equatable, Sendable {
             ),
         ],
         rules: RuleConfiguration(
-            forbiddenImports: RuleSetting(
-                severity: .error,
-                values: ["XCTest"]
-            ),
+            forbiddenImports: [
+                RuleSetting(
+                    severity: .error,
+                    values: ["XCTest", "Testing"],
+                    paths: ["Sources/BumperBowlingCore"]
+                ),
+                RuleSetting(
+                    severity: .error,
+                    values: ["XCTest", "Testing"],
+                    paths: ["Sources/BumperBowling"]
+                ),
+            ],
             subsystemBoundary: .error,
             duplicateOwnership: .error,
-            dependencyCycle: .error,
-            domainModels: DomainModelRuleConfiguration(
+            declaredDependencyCycle: .error,
+            storedProperties: StoredPropertyRuleConfiguration(
                 severity: .warning,
                 paths: ["Sources/BumperBowlingCore"],
                 disallowances: [.any, .broadExistential, .storedVar, .rawStringIdentity]
@@ -79,26 +87,47 @@ public struct SubsystemConfiguration: Equatable, Sendable {
 }
 
 public struct RuleConfiguration: Equatable, Sendable {
-    public let forbiddenImports: RuleSetting
+    public let forbiddenImports: [RuleSetting]
     public let subsystemBoundary: Severity
     public let duplicateOwnership: Severity
-    public let dependencyCycle: Severity
-    public let domainModels: DomainModelRuleConfiguration
+    public let declaredDependencyCycle: Severity
+    public let storedProperties: StoredPropertyRuleConfiguration
+    public let syntaxConstructs: SyntaxConstructRuleConfiguration
     public let enumStateMachine: PathRuleConfiguration
 
     public init(
         forbiddenImports: RuleSetting = RuleSetting(severity: .off, values: []),
         subsystemBoundary: Severity = .off,
         duplicateOwnership: Severity = .off,
-        dependencyCycle: Severity = .off,
-        domainModels: DomainModelRuleConfiguration = DomainModelRuleConfiguration(),
+        declaredDependencyCycle: Severity = .off,
+        storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
+        syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
-        self.forbiddenImports = forbiddenImports
+        self.forbiddenImports = forbiddenImports.isConfigured ? [forbiddenImports] : []
         self.subsystemBoundary = subsystemBoundary
         self.duplicateOwnership = duplicateOwnership
-        self.dependencyCycle = dependencyCycle
-        self.domainModels = domainModels
+        self.declaredDependencyCycle = declaredDependencyCycle
+        self.storedProperties = storedProperties
+        self.syntaxConstructs = syntaxConstructs
+        self.enumStateMachine = enumStateMachine
+    }
+
+    public init(
+        forbiddenImports: [RuleSetting],
+        subsystemBoundary: Severity = .off,
+        duplicateOwnership: Severity = .off,
+        declaredDependencyCycle: Severity = .off,
+        storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
+        syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
+        enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
+    ) {
+        self.forbiddenImports = forbiddenImports.filter(\.isConfigured)
+        self.subsystemBoundary = subsystemBoundary
+        self.duplicateOwnership = duplicateOwnership
+        self.declaredDependencyCycle = declaredDependencyCycle
+        self.storedProperties = storedProperties
+        self.syntaxConstructs = syntaxConstructs
         self.enumStateMachine = enumStateMachine
     }
 }
@@ -106,26 +135,48 @@ public struct RuleConfiguration: Equatable, Sendable {
 public struct RuleSetting: Equatable, Sendable {
     public let severity: Severity
     public let values: [String]
+    public let paths: [String]
 
-    public init(severity: Severity, values: [String]) {
+    public init(severity: Severity, values: [String], paths: [String] = []) {
         self.severity = severity
         self.values = values
+        self.paths = paths
+    }
+
+    var isConfigured: Bool {
+        severity != .off || !values.isEmpty || !paths.isEmpty
     }
 }
 
-public struct DomainModelRuleConfiguration: Equatable, Sendable {
+public struct StoredPropertyRuleConfiguration: Equatable, Sendable {
     public let severity: Severity
     public let paths: [String]
-    public let disallowances: Set<DomainModelDisallowance>
+    public let disallowances: Set<StoredPropertyDisallowance>
 
     public init(
         severity: Severity = .off,
         paths: [String] = [],
-        disallowances: Set<DomainModelDisallowance> = []
+        disallowances: Set<StoredPropertyDisallowance> = []
     ) {
         self.severity = severity
         self.paths = paths
         self.disallowances = disallowances
+    }
+}
+
+public struct SyntaxConstructRuleConfiguration: Equatable, Sendable {
+    public let severity: Severity
+    public let paths: [String]
+    public let disallowedConstructs: Set<ImperativeConstruct>
+
+    public init(
+        severity: Severity = .off,
+        paths: [String] = [],
+        disallowedConstructs: Set<ImperativeConstruct> = []
+    ) {
+        self.severity = severity
+        self.paths = paths
+        self.disallowedConstructs = disallowedConstructs
     }
 }
 
@@ -139,11 +190,27 @@ public struct PathRuleConfiguration: Equatable, Sendable {
     }
 }
 
-public enum DomainModelDisallowance: String, Equatable, Hashable, Sendable {
+public enum StoredPropertyDisallowance: String, Equatable, Hashable, Sendable {
     case any
     case broadExistential
+    case storedProperty
     case storedVar
     case rawStringIdentity
+}
+
+extension Severity {
+    func merging(_ other: Severity) -> Severity {
+        switch (self, other) {
+        case (.error, _), (_, .error):
+            .error
+        case (.warning, _), (_, .warning):
+            .warning
+        case (.note, _), (_, .note):
+            .note
+        case (.off, .off):
+            .off
+        }
+    }
 }
 
 public enum ConfigurationLoader {
@@ -168,8 +235,6 @@ public enum ConfigurationLoader {
     // Bumper Bowling 0.0 exposes the Swift DSL as the typed configuration API.
     // The CLI still uses its built-in repository config until config loading lands.
     let configuration = BumperConfiguration {
-        Defaults(.strict)
-
         Included {
             "Sources"
         }
@@ -179,41 +244,32 @@ public enum ConfigurationLoader {
             "DerivedData"
         }
 
-        Subsystems {
-            Subsystem(.core) {
-                Paths("Sources/BumperBowlingCore")
+        Architecture {
+            Component(.core) {
+                Owns("Sources/BumperBowlingCore")
                 Modules("BumperBowlingCore")
+                MayUse(.foundation)
+                Requires(
+                    .explicitDomainSurfaces,
+                    .typedIdentity,
+                    .immutableStoredState,
+                    severity: .warning
+                )
+                RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
             }
 
-            Subsystem(.cli) {
-                Paths("Sources/BumperBowling")
+            Component(.cli) {
+                Owns("Sources/BumperBowling")
                 Modules("BumperBowling")
-                Dependencies(.core)
+                MayDependOn(.core)
+                MayUse(.foundation)
             }
         }
 
-        Rules {
-            ForbiddenImport(.error) {
-                Modules("XCTest", "Testing")
-            }
-
-            SubsystemBoundary(.error)
-            DuplicateOwnership(.error)
-            DependencyCycle(.error)
-
-            DomainModels(.warning) {
-                Paths("Sources/BumperBowlingCore")
-                Disallow(.any)
-                Disallow(.broadExistential)
-                Disallow(.storedVar)
-                Disallow(.rawStringIdentity)
-            }
-        }
-
-        OptInRules {
-            EnumStateMachine(.error) {
-                Paths("Sources/**/*Parser.swift")
-            }
+        Assertions {
+            DependencyBoundaries(.error)
+            SingleOwner(.error)
+            AcyclicDeclaredDependencies(.error)
         }
     }
     """

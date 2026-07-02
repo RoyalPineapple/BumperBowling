@@ -4,6 +4,45 @@ import Testing
 @Suite("ArchitectureLinter")
 struct ArchitectureLinterTests {
     @Test
+    func graphCarriesSourceFactsAndDerivedEdges() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/UI/ViewModel.swift"),
+            subsystem: try SubsystemID("ui"),
+            imports: [try ModuleName("DomainKit")],
+            publicDeclarations: [
+                PublicDeclaration(kind: .struct, name: try DeclarationName("ViewModel")),
+            ],
+            storedProperties: [
+                StoredProperty(name: try DeclarationName("id"), type: try TypeName("Identifier"), isMutable: false),
+            ],
+            enums: [try DeclarationName("ViewState")]
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "ui", modules: ["UIKitFeature"], paths: ["Sources/UI"], mayDependOn: ["domain"]),
+                SubsystemConfiguration(name: "domain", modules: ["DomainKit"], paths: ["Sources/Domain"]),
+            ]
+        )
+        let rules = try ArchitectureRules(configuration: configuration)
+
+        let graph = ArchitectureGraph(facts: RepositoryFacts(files: [file]), rules: rules)
+
+        #expect(graph.sourceFiles == [file])
+        #expect(graph.subsystemNodes == [try SubsystemID("ui")])
+        #expect(graph.moduleImportEdges == [
+            DependencyEdge(sourceSubsystem: try SubsystemID("ui"), importedModule: try ModuleName("DomainKit")),
+        ])
+        #expect(graph.subsystemImportEdges == [
+            SubsystemImportEdge(
+                sourceSubsystem: try SubsystemID("ui"),
+                targetSubsystem: try SubsystemID("domain"),
+                importedModule: try ModuleName("DomainKit"),
+                sourcePath: try RelativeFilePath("Sources/UI/ViewModel.swift")
+            ),
+        ])
+    }
+
+    @Test
     func flagsForbiddenImportsAndUndeclaredSubsystemDependencies() throws {
         let configuration = ArchitectureConfiguration(
             subsystems: [
@@ -19,7 +58,6 @@ struct ArchitectureLinterTests {
 
         let facts = RepositoryFacts(files: [
             SourceFileFacts(
-                language: .swift,
                 path: try RelativeFilePath("Sources/Recording/Recorder.swift"),
                 subsystem: try SubsystemID("Recording"),
                 imports: [try ModuleName("CoreKit"), try ModuleName("PlaybackKit"), try ModuleName("XCTest")],
@@ -37,7 +75,6 @@ struct ArchitectureLinterTests {
     @Test
     func warningSeverityDoesNotFailReport() throws {
         let file = SourceFileFacts(
-            language: .swift,
             path: try RelativeFilePath("Sources/Core/Thing.swift"),
             subsystem: try SubsystemID("core"),
             imports: [try ModuleName("XCTest")],
@@ -60,9 +97,8 @@ struct ArchitectureLinterTests {
     }
 
     @Test
-    func flagsDomainModelTasteViolations() throws {
+    func flagsStoredPropertyFactViolations() throws {
         let file = SourceFileFacts(
-            language: .swift,
             path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
             subsystem: try SubsystemID("core"),
             imports: [],
@@ -78,7 +114,7 @@ struct ArchitectureLinterTests {
                 SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
             ],
             rules: RuleConfiguration(
-                domainModels: DomainModelRuleConfiguration(
+                storedProperties: StoredPropertyRuleConfiguration(
                     severity: .error,
                     paths: ["Sources/Core/Domain"],
                     disallowances: [.any, .broadExistential, .storedVar, .rawStringIdentity]
@@ -97,9 +133,68 @@ struct ArchitectureLinterTests {
     }
 
     @Test
+    func flagsStoredPropertiesWhenComputedStateIsRequired() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
+            subsystem: try SubsystemID("core"),
+            imports: [],
+            publicDeclarations: [],
+            storedProperties: [
+                StoredProperty(name: try DeclarationName("fullName"), type: try TypeName("String"), isMutable: false),
+            ]
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
+            ],
+            rules: RuleConfiguration(
+                storedProperties: StoredPropertyRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/Core/Domain"],
+                    disallowances: [.storedProperty]
+                )
+            )
+        )
+
+        let report = try ArchitectureLinter(configuration: configuration)
+            .lint(RepositoryFacts(files: [file]))
+
+        #expect(report.violations.map(\.message).contains("Stored property fullName is stored"))
+    }
+
+    @Test
+    func flagsImperativeConstructsWhenFunctionalCoreIsRequired() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/Core/Domain/Reducer.swift"),
+            subsystem: try SubsystemID("core"),
+            imports: [],
+            publicDeclarations: [],
+            imperativeConstructs: [.mutableBinding, .assignment]
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
+            ],
+            rules: RuleConfiguration(
+                syntaxConstructs: SyntaxConstructRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/Core/Domain"],
+                    disallowedConstructs: [.mutableBinding, .assignment]
+                )
+            )
+        )
+
+        let report = try ArchitectureLinter(configuration: configuration)
+            .lint(RepositoryFacts(files: [file]))
+        let messages = Set(report.violations.map(\.message))
+
+        #expect(messages.contains("Uses imperative construct mutableBinding"))
+        #expect(messages.contains("Uses imperative construct assignment"))
+    }
+
+    @Test
     func flagsParserWithoutEnumStateMachine() throws {
         let file = SourceFileFacts(
-            language: .swift,
             path: try RelativeFilePath("Sources/Core/FooParser.swift"),
             subsystem: try SubsystemID("core"),
             imports: [],
@@ -131,13 +226,13 @@ struct ArchitectureLinterTests {
                 SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"], mayDependOn: ["ui"]),
                 SubsystemConfiguration(name: "ui", modules: ["UI"], paths: ["Sources/UI"], mayDependOn: ["core"]),
             ],
-            rules: RuleConfiguration(dependencyCycle: .error)
+            rules: RuleConfiguration(declaredDependencyCycle: .error)
         )
 
         let report = try ArchitectureLinter(configuration: configuration)
             .lint(RepositoryFacts(files: []))
 
-        #expect(report.violations.map(\.ruleID).contains(.dependencyCycle))
+        #expect(report.violations.map(\.ruleID).contains(.declaredDependencyCycle))
     }
 
     @Test

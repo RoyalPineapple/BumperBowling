@@ -13,7 +13,7 @@ public enum BumperError: Error, CustomStringConvertible {
         case .noSubsystemForFile(let path):
             "No subsystem matches \(path)."
         case .unsupportedLanguage(let path):
-            "No language adapter supports \(path)."
+            "Only Swift source files are supported: \(path)."
         case .unreadableFile(let path):
             "Could not read source file at \(path)."
         }

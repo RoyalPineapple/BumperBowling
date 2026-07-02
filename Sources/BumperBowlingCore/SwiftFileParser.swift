@@ -7,17 +7,20 @@ public struct SwiftFileSummary: Equatable, Sendable {
     public let publicDeclarations: [PublicDeclaration]
     public let storedProperties: [StoredProperty]
     public let enums: [DeclarationName]
+    public let imperativeConstructs: [ImperativeConstruct]
 
     public init(
         imports: [ModuleName],
         publicDeclarations: [PublicDeclaration],
         storedProperties: [StoredProperty] = [],
-        enums: [DeclarationName] = []
+        enums: [DeclarationName] = [],
+        imperativeConstructs: [ImperativeConstruct] = []
     ) {
         self.imports = imports
         self.publicDeclarations = publicDeclarations
         self.storedProperties = storedProperties
         self.enums = enums
+        self.imperativeConstructs = imperativeConstructs
     }
 }
 
@@ -31,6 +34,27 @@ public struct SwiftFileParser: Sendable {
 
         return visitor.state.summary
     }
+
+    public func parseFile(
+        at url: URL,
+        relativePath: RelativeFilePath,
+        subsystem: SubsystemID
+    ) throws -> SourceFileFacts {
+        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+            throw BumperError.unreadableFile(relativePath.rawValue)
+        }
+
+        let summary = parse(source)
+        return SourceFileFacts(
+            path: relativePath,
+            subsystem: subsystem,
+            imports: summary.imports,
+            publicDeclarations: summary.publicDeclarations,
+            storedProperties: summary.storedProperties,
+            enums: summary.enums,
+            imperativeConstructs: summary.imperativeConstructs
+        )
+    }
 }
 
 enum SwiftParseState: Equatable, Sendable {
@@ -38,74 +62,94 @@ enum SwiftParseState: Equatable, Sendable {
         imports: Set<ModuleName>,
         declarations: [PublicDeclaration],
         storedProperties: [StoredProperty],
-        enums: [DeclarationName]
+        enums: [DeclarationName],
+        imperativeConstructs: [ImperativeConstruct]
     )
 
     static let initial = SwiftParseState.scanning(
         imports: [],
         declarations: [],
         storedProperties: [],
-        enums: []
+        enums: [],
+        imperativeConstructs: []
     )
 
     var summary: SwiftFileSummary {
         switch self {
-        case .scanning(let imports, let declarations, let storedProperties, let enums):
+        case .scanning(let imports, let declarations, let storedProperties, let enums, let imperativeConstructs):
             SwiftFileSummary(
                 imports: Array(imports).sorted(by: { $0.rawValue < $1.rawValue }),
                 publicDeclarations: declarations,
                 storedProperties: storedProperties,
-                enums: enums
+                enums: enums,
+                imperativeConstructs: imperativeConstructs
             )
         }
     }
 
     func importing(_ moduleName: ModuleName) -> SwiftParseState {
         switch self {
-        case .scanning(let imports, let declarations, let storedProperties, let enums):
+        case .scanning(let imports, let declarations, let storedProperties, let enums, let imperativeConstructs):
             var nextImports = imports
             nextImports.insert(moduleName)
             return .scanning(
                 imports: nextImports,
                 declarations: declarations,
                 storedProperties: storedProperties,
-                enums: enums
+                enums: enums,
+                imperativeConstructs: imperativeConstructs
             )
         }
     }
 
     func declaring(_ declaration: PublicDeclaration) -> SwiftParseState {
         switch self {
-        case .scanning(let imports, let declarations, let storedProperties, let enums):
+        case .scanning(let imports, let declarations, let storedProperties, let enums, let imperativeConstructs):
             return .scanning(
                 imports: imports,
                 declarations: declarations + [declaration],
                 storedProperties: storedProperties,
-                enums: enums
+                enums: enums,
+                imperativeConstructs: imperativeConstructs
             )
         }
     }
 
     func storing(_ property: StoredProperty) -> SwiftParseState {
         switch self {
-        case .scanning(let imports, let declarations, let storedProperties, let enums):
+        case .scanning(let imports, let declarations, let storedProperties, let enums, let imperativeConstructs):
             return .scanning(
                 imports: imports,
                 declarations: declarations,
                 storedProperties: storedProperties + [property],
-                enums: enums
+                enums: enums,
+                imperativeConstructs: imperativeConstructs
             )
         }
     }
 
     func seeingEnum(_ name: DeclarationName) -> SwiftParseState {
         switch self {
-        case .scanning(let imports, let declarations, let storedProperties, let enums):
+        case .scanning(let imports, let declarations, let storedProperties, let enums, let imperativeConstructs):
             return .scanning(
                 imports: imports,
                 declarations: declarations,
                 storedProperties: storedProperties,
-                enums: enums + [name]
+                enums: enums + [name],
+                imperativeConstructs: imperativeConstructs
+            )
+        }
+    }
+
+    func seeingImperativeConstruct(_ construct: ImperativeConstruct) -> SwiftParseState {
+        switch self {
+        case .scanning(let imports, let declarations, let storedProperties, let enums, let imperativeConstructs):
+            return .scanning(
+                imports: imports,
+                declarations: declarations,
+                storedProperties: storedProperties,
+                enums: enums,
+                imperativeConstructs: imperativeConstructs + [construct]
             )
         }
     }
@@ -152,10 +196,17 @@ private final class SourceVisitor: SyntaxVisitor {
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         record(kind: .function, name: node.name.text, modifiers: node.modifiers, attributes: node.attributes)
-        return .skipChildren
+        if node.modifiers.contains(where: { $0.name.text == "mutating" }) {
+            state = state.seeingImperativeConstruct(.mutatingDeclaration)
+        }
+        return .visitChildren
     }
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+        if node.bindingSpecifier.tokenKind == .keyword(.var) {
+            state = state.seeingImperativeConstruct(.mutableBinding)
+        }
+
         for binding in node.bindings {
             if let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
                let declarationName = try? DeclarationName(identifier.identifier.text) {
@@ -183,6 +234,31 @@ private final class SourceVisitor: SyntaxVisitor {
         }
 
         return .skipChildren
+    }
+
+    override func visit(_ node: ForStmtSyntax) -> SyntaxVisitorContinueKind {
+        state = state.seeingImperativeConstruct(.loop)
+        return .visitChildren
+    }
+
+    override func visit(_ node: WhileStmtSyntax) -> SyntaxVisitorContinueKind {
+        state = state.seeingImperativeConstruct(.loop)
+        return .visitChildren
+    }
+
+    override func visit(_ node: RepeatStmtSyntax) -> SyntaxVisitorContinueKind {
+        state = state.seeingImperativeConstruct(.loop)
+        return .visitChildren
+    }
+
+    override func visit(_ node: AssignmentExprSyntax) -> SyntaxVisitorContinueKind {
+        state = state.seeingImperativeConstruct(.assignment)
+        return .visitChildren
+    }
+
+    override func visit(_ node: InOutExprSyntax) -> SyntaxVisitorContinueKind {
+        state = state.seeingImperativeConstruct(.inoutExpression)
+        return .visitChildren
     }
 
     private func isStoredMember(_ node: VariableDeclSyntax, binding: PatternBindingSyntax) -> Bool {

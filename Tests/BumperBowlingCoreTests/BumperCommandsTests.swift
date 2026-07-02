@@ -33,6 +33,17 @@ struct BumperCommandsTests {
         #expect(report.violations.map(\.ruleID).contains(.forbiddenImport))
     }
 
+    @Test
+    func architectureSnapshotIsDeterministicCommandOutput() throws {
+        let root = repositoryRoot()
+        let checkedInSnapshot = try String(
+            contentsOf: root.appendingPathComponent("docs/ARCHITECTURE_SNAPSHOT.md"),
+            encoding: .utf8
+        )
+
+        #expect(checkedInSnapshot == (try BumperCommands.snapshot(root: root)))
+    }
+
     private func makeRepository(source: String) throws -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
@@ -43,5 +54,12 @@ struct BumperCommandsTests {
         )
         try source.write(to: sourceFile, atomically: true, encoding: .utf8)
         return root
+    }
+
+    private func repositoryRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }

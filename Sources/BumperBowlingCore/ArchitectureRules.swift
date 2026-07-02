@@ -63,7 +63,7 @@ public struct ArchitectureRules: Equatable, Sendable {
         self.subsystemByID = subsystemByID
         self.subsystemByModule = subsystemByModule
         self.pathOwnershipConflicts = pathOwnershipConflicts
-        self.forbiddenImports = Set(try configuration.rules.forbiddenImports.values.map(ModuleName.init))
+        self.forbiddenImports = Set(try configuration.rules.forbiddenImports.flatMap(\.values).map(ModuleName.init))
         self.ruleConfiguration = configuration.rules
     }
 

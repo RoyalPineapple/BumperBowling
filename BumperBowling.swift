@@ -14,40 +14,26 @@ let configuration = BumperConfiguration {
         "DerivedData"
     }
 
-    Subsystems {
-        Subsystem(.core) {
-            Paths("Sources/BumperBowlingCore")
+    Architecture {
+        Component(.core) {
+            Owns("Sources/BumperBowlingCore")
             Modules("BumperBowlingCore")
+            MayUse(.foundation)
+            Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
+            RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
-        Subsystem(.cli) {
-            Paths("Sources/BumperBowling")
+        Component(.cli) {
+            Owns("Sources/BumperBowling")
             Modules("BumperBowling")
-            Dependencies(.core)
+            MayDependOn(.core)
+            MayUse(.foundation)
         }
     }
 
-    Rules {
-        ForbiddenImport(.error) {
-            Modules("XCTest", "Testing")
-        }
-
-        SubsystemBoundary(.error)
-        DuplicateOwnership(.error)
-        DependencyCycle(.error)
-
-        DomainModels(.warning) {
-            Paths("Sources/BumperBowlingCore")
-            Disallow(.any)
-            Disallow(.broadExistential)
-            Disallow(.storedVar)
-            Disallow(.rawStringIdentity)
-        }
-    }
-
-    OptInRules {
-        EnumStateMachine(.error) {
-            Paths("Sources/**/*Parser.swift")
-        }
+    Assertions {
+        DependencyBoundaries(.error)
+        SingleOwner(.error)
+        AcyclicDependencies(.error)
     }
 }
