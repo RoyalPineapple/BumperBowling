@@ -22,11 +22,27 @@ struct SwiftFileParserTests {
         """
 
         let summary = SwiftFileParser().parse(source)
+        let mainActor = try AttributeName("MainActor")
 
         #expect(summary.imports == [try ModuleName("Foundation"), try ModuleName("Playback")])
-        #expect(summary.publicDeclarations.contains(PublicDeclaration(kind: .class, name: try DeclarationName("Recorder"), attributes: [try AttributeName("MainActor")])))
-        #expect(summary.publicDeclarations.contains(PublicDeclaration(kind: .variable, name: try DeclarationName("isRecording"), attributes: [])))
-        #expect(summary.publicDeclarations.contains(PublicDeclaration(kind: .function, name: try DeclarationName("start"), attributes: [])))
+        #expect(summary.publicDeclarations.contains {
+            $0.kind == .class
+                && $0.name == (try? DeclarationName("Recorder"))
+                && $0.attributes == [mainActor]
+                && $0.location != nil
+        })
+        #expect(summary.publicDeclarations.contains {
+            $0.kind == .variable
+                && $0.name == (try? DeclarationName("isRecording"))
+                && $0.attributes.isEmpty
+                && $0.location != nil
+        })
+        #expect(summary.publicDeclarations.contains {
+            $0.kind == .function
+                && $0.name == (try? DeclarationName("start"))
+                && $0.attributes.isEmpty
+                && $0.location != nil
+        })
         #expect(!summary.publicDeclarations.contains { $0.name == (try? DeclarationName("stop")) })
     }
 
@@ -103,5 +119,29 @@ struct SwiftFileParserTests {
         #expect(summary.syntaxFacts.facts.contains { $0.family == .declaration && $0.nodeKind == .structDecl })
         #expect(summary.syntaxFacts.facts.contains { $0.family == .attribute && $0.nodeKind == .attribute })
         #expect(summary.syntaxFacts.facts.contains { $0.family == .literal && $0.nodeKind == .stringLiteralExpr })
+    }
+
+    @Test
+    func recordsDeterministicPositionsForObservedFacts() throws {
+        let source = """
+        import Foundation
+
+        struct Model {
+            var name: String
+
+            mutating func rename(to value: String) {
+                name = value
+            }
+        }
+        """
+
+        let summary = SwiftFileParser().parse(source)
+        let property = try #require(summary.storedProperties.first { $0.name == (try? DeclarationName("name")) })
+        let assignment = try #require(summary.observedImperativeConstructs.first { $0.construct == .assignment })
+        let structFact = try #require(summary.syntaxFacts.facts.first { $0.nodeKind == .structDecl })
+
+        #expect(property.location == SourcePosition(line: 4, column: 5))
+        #expect(assignment.location == SourcePosition(line: 7, column: 14))
+        #expect(structFact.location == SourcePosition(line: 3, column: 1))
     }
 }

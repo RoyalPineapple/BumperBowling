@@ -54,6 +54,7 @@ public struct SourceFileFacts: Equatable, Sendable {
     public let storedProperties: [StoredProperty]
     public let enums: [DeclarationName]
     public let imperativeConstructs: [ImperativeConstruct]
+    public let observedImperativeConstructs: [ObservedImperativeConstruct]
     public let syntaxFacts: SwiftSyntaxFactCatalog
 
     public init(
@@ -64,15 +65,22 @@ public struct SourceFileFacts: Equatable, Sendable {
         storedProperties: [StoredProperty] = [],
         enums: [DeclarationName] = [],
         imperativeConstructs: [ImperativeConstruct] = [],
+        observedImperativeConstructs: [ObservedImperativeConstruct] = [],
         syntaxFacts: SwiftSyntaxFactCatalog = SwiftSyntaxFactCatalog()
     ) {
+        let observedConstructs = observedImperativeConstructs.isEmpty
+            ? imperativeConstructs.map { ObservedImperativeConstruct(construct: $0) }
+            : observedImperativeConstructs
         self.path = path
         self.subsystem = subsystem
         self.imports = imports
         self.publicDeclarations = publicDeclarations
         self.storedProperties = storedProperties
         self.enums = enums
-        self.imperativeConstructs = imperativeConstructs
+        self.imperativeConstructs = imperativeConstructs.isEmpty
+            ? observedConstructs.map(\.construct)
+            : imperativeConstructs
+        self.observedImperativeConstructs = observedConstructs
         self.syntaxFacts = syntaxFacts
     }
 }
@@ -101,11 +109,18 @@ public struct ObservedSyntaxFact: Hashable, Sendable {
     public let family: SyntaxFactFamily
     public let nodeKind: SyntaxKind
     public let spelling: String?
+    public let location: SourcePosition?
 
-    public init(family: SyntaxFactFamily, nodeKind: SyntaxKind, spelling: String? = nil) {
+    public init(
+        family: SyntaxFactFamily,
+        nodeKind: SyntaxKind,
+        spelling: String? = nil,
+        location: SourcePosition? = nil
+    ) {
         self.family = family
         self.nodeKind = nodeKind
         self.spelling = spelling
+        self.location = location
     }
 }
 
@@ -132,11 +147,18 @@ public struct PublicDeclaration: Equatable, Sendable {
     public let kind: DeclarationKind
     public let name: DeclarationName
     public let attributes: [AttributeName]
+    public let location: SourcePosition?
 
-    public init(kind: DeclarationKind, name: DeclarationName, attributes: [AttributeName] = []) {
+    public init(
+        kind: DeclarationKind,
+        name: DeclarationName,
+        attributes: [AttributeName] = [],
+        location: SourcePosition? = nil
+    ) {
         self.kind = kind
         self.name = name
         self.attributes = attributes
+        self.location = location
     }
 }
 
@@ -144,11 +166,42 @@ public struct StoredProperty: Equatable, Sendable {
     public let name: DeclarationName
     public let type: TypeName?
     public let isMutable: Bool
+    public let location: SourcePosition?
 
-    public init(name: DeclarationName, type: TypeName?, isMutable: Bool) {
+    public init(
+        name: DeclarationName,
+        type: TypeName?,
+        isMutable: Bool,
+        location: SourcePosition? = nil
+    ) {
         self.name = name
         self.type = type
         self.isMutable = isMutable
+        self.location = location
+    }
+}
+
+public struct ObservedImperativeConstruct: Equatable, Sendable {
+    public let construct: ImperativeConstruct
+    public let location: SourcePosition?
+
+    public init(construct: ImperativeConstruct, location: SourcePosition? = nil) {
+        self.construct = construct
+        self.location = location
+    }
+}
+
+public struct SourcePosition: Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
+    public let line: Int
+    public let column: Int
+
+    public init(line: Int, column: Int) {
+        self.line = line
+        self.column = column
+    }
+
+    public var description: String {
+        "\(line):\(column)"
     }
 }
 

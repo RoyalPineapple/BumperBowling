@@ -308,15 +308,20 @@ public enum ArchitectureRule: Sendable {
                 return [ArchitectureViolation]()
             }
 
-            return file.imperativeConstructs.compactMap { construct in
-                guard configuration.disallowedConstructs.contains(construct) else {
+            return file.observedImperativeConstructs.compactMap { observed in
+                guard configuration.disallowedConstructs.contains(observed.construct) else {
                     return nil
                 }
 
                 return violation(
                     severity: configuration.severity,
                     path: file.path,
-                    message: "Uses imperative construct \(construct.rawValue)"
+                    message: "Uses imperative construct \(observed.construct.rawValue)",
+                    location: observed.location,
+                    evidence: ViolationEvidence(
+                        observed: "imperative construct \(observed.construct.rawValue)",
+                        expectation: "disallowed constructs: \(configuration.disallowedConstructs.map(\.rawValue).sorted().joined(separator: ", "))"
+                    )
                 )
             }
         }
@@ -346,10 +351,16 @@ public enum ArchitectureRule: Sendable {
             let disallowedKinds = configuration.disallowedKinds
                 .intersection(file.syntaxFacts.nodeKinds)
                 .map { kind in
-                    violation(
+                    let fact = file.syntaxFacts.facts.first { $0.nodeKind == kind }
+                    return violation(
                         severity: configuration.severity,
                         path: file.path,
-                        message: "Uses disallowed SwiftSyntax node kind \(kind)"
+                        message: "Uses disallowed SwiftSyntax node kind \(kind)",
+                        location: fact?.location,
+                        evidence: ViolationEvidence(
+                            observed: "SwiftSyntax node kind \(kind)",
+                            expectation: "disallowed SwiftSyntax node kinds: \(configuration.disallowedKinds.map { String(describing: $0) }.sorted().joined(separator: ", "))"
+                        )
                     )
                 }
 
@@ -390,7 +401,12 @@ public enum ArchitectureRule: Sendable {
                 return violation(
                     severity: configuration.severity,
                     path: file.path,
-                    message: "Public declaration \(declaration.name.rawValue) is disallowed"
+                    message: "Public declaration \(declaration.name.rawValue) is disallowed",
+                    location: declaration.location,
+                    evidence: ViolationEvidence(
+                        observed: "public declaration \(declaration.name.rawValue)",
+                        expectation: "disallowed public declaration matchers: \(configuration.disallowedNames.map(\.description).sorted().joined(separator: ", "))"
+                    )
                 )
             }
         }
@@ -411,7 +427,12 @@ public enum ArchitectureRule: Sendable {
                 violation(
                     severity: configuration.severity,
                     path: file.path,
-                    message: "Stored property \(property.name.rawValue) is stored"
+                    message: "Stored property \(property.name.rawValue) is stored",
+                    location: property.location,
+                    evidence: ViolationEvidence(
+                        observed: "stored property \(property.name.rawValue)",
+                        expectation: "stored properties are disallowed"
+                    )
                 )
             )
         }
@@ -421,7 +442,12 @@ public enum ArchitectureRule: Sendable {
                 violation(
                     severity: configuration.severity,
                     path: file.path,
-                    message: "Stored property \(property.name.rawValue) is mutable"
+                    message: "Stored property \(property.name.rawValue) is mutable",
+                    location: property.location,
+                    evidence: ViolationEvidence(
+                        observed: "mutable stored property \(property.name.rawValue)",
+                        expectation: "stored vars are disallowed"
+                    )
                 )
             )
         }
@@ -431,7 +457,12 @@ public enum ArchitectureRule: Sendable {
                 violation(
                     severity: configuration.severity,
                     path: file.path,
-                    message: "Stored property \(property.name.rawValue) uses Any"
+                    message: "Stored property \(property.name.rawValue) uses Any",
+                    location: property.location,
+                    evidence: ViolationEvidence(
+                        observed: "stored property \(property.name.rawValue): \(typeName)",
+                        expectation: "Any is disallowed in stored property types"
+                    )
                 )
             )
         }
@@ -441,7 +472,12 @@ public enum ArchitectureRule: Sendable {
                 violation(
                     severity: configuration.severity,
                     path: file.path,
-                    message: "Stored property \(property.name.rawValue) uses a broad existential"
+                    message: "Stored property \(property.name.rawValue) uses a broad existential",
+                    location: property.location,
+                    evidence: ViolationEvidence(
+                        observed: "stored property \(property.name.rawValue): \(typeName)",
+                        expectation: "broad existentials are disallowed in stored property types"
+                    )
                 )
             )
         }
@@ -451,7 +487,12 @@ public enum ArchitectureRule: Sendable {
                 violation(
                     severity: configuration.severity,
                     path: file.path,
-                    message: "Stored property \(property.name.rawValue) uses raw String"
+                    message: "Stored property \(property.name.rawValue) uses raw String",
+                    location: property.location,
+                    evidence: ViolationEvidence(
+                        observed: "stored property \(property.name.rawValue): \(typeName)",
+                        expectation: "raw String identity is disallowed in stored property types"
+                    )
                 )
             )
         }
@@ -531,13 +572,17 @@ public enum ArchitectureRule: Sendable {
     private func violation(
         severity: Severity,
         path: RelativeFilePath,
-        message: String
+        message: String,
+        location: SourcePosition? = nil,
+        evidence: ViolationEvidence? = nil
     ) -> ArchitectureViolation {
         ArchitectureViolation(
             ruleID: id,
             severity: severity,
             path: path,
-            message: message
+            location: location,
+            message: message,
+            evidence: evidence
         )
     }
 }
@@ -567,7 +612,7 @@ public struct LintReport: Equatable, Sendable, Codable {
         var lines = [hasErrors ? "Result: Gutter Ball" : "Result: Strike", ""]
         for violation in violations {
             lines.append(
-                "- [\(violation.severity.rawValue.uppercased())] \(violation.path.rawValue): \(violation.message) (\(violation.ruleID.rawValue))"
+                "- [\(violation.severity.rawValue.uppercased())] \(violation.markdownLocation): \(violation.message) (\(violation.ruleID.rawValue))"
             )
         }
         return lines.joined(separator: "\n")
@@ -578,13 +623,42 @@ public struct ArchitectureViolation: Equatable, Sendable, Codable {
     public let ruleID: RuleID
     public let severity: Severity
     public let path: RelativeFilePath
+    public let location: SourcePosition?
     public let message: String
+    public let evidence: ViolationEvidence?
 
-    public init(ruleID: RuleID, severity: Severity, path: RelativeFilePath, message: String) {
+    public init(
+        ruleID: RuleID,
+        severity: Severity,
+        path: RelativeFilePath,
+        location: SourcePosition? = nil,
+        message: String,
+        evidence: ViolationEvidence? = nil
+    ) {
         self.ruleID = ruleID
         self.severity = severity
         self.path = path
+        self.location = location
         self.message = message
+        self.evidence = evidence
+    }
+
+    public var markdownLocation: String {
+        guard let location else {
+            return path.rawValue
+        }
+
+        return "\(path.rawValue):\(location.line):\(location.column)"
+    }
+}
+
+public struct ViolationEvidence: Equatable, Sendable, Codable {
+    public let observed: String
+    public let expectation: String
+
+    public init(observed: String, expectation: String) {
+        self.observed = observed
+        self.expectation = expectation
     }
 }
 

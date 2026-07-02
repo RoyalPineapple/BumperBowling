@@ -26,6 +26,10 @@ struct SwiftSyntaxWrapperTests {
         )
 
         #expect(facts.imports == [try ModuleName("Foundation")])
-        #expect(facts.publicDeclarations.contains(PublicDeclaration(kind: .struct, name: try DeclarationName("Thing"))))
+        #expect(facts.publicDeclarations.contains {
+            $0.kind == .struct
+                && $0.name == (try? DeclarationName("Thing"))
+                && $0.location != nil
+        })
     }
 }

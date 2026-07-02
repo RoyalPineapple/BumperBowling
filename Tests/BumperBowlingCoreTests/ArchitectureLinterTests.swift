@@ -134,6 +134,48 @@ struct ArchitectureLinterTests {
     }
 
     @Test
+    func violationReceiptsCarryObservedFactEvidence() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
+            subsystem: try SubsystemID("core"),
+            imports: [],
+            publicDeclarations: [],
+            storedProperties: [
+                StoredProperty(
+                    name: try DeclarationName("id"),
+                    type: try TypeName("String"),
+                    isMutable: false,
+                    location: SourcePosition(line: 3, column: 5)
+                ),
+            ]
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
+            ],
+            rules: RuleConfiguration(
+                storedProperties: StoredPropertyRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/Core/Domain"],
+                    disallowances: [.rawStringIdentity]
+                )
+            )
+        )
+
+        let violation = try #require(
+            try ArchitectureLinter(configuration: configuration)
+                .lint(RepositoryFacts(files: [file]))
+                .violations
+                .first
+        )
+
+        #expect(violation.location == SourcePosition(line: 3, column: 5))
+        #expect(violation.evidence?.observed == "stored property id: String")
+        #expect(violation.evidence?.expectation == "raw String identity is disallowed in stored property types")
+        #expect(violation.markdownLocation == "Sources/Core/Domain/Model.swift:3:5")
+    }
+
+    @Test
     func flagsStoredPropertiesWhenComputedStateIsRequired() throws {
         let file = SourceFileFacts(
             path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),

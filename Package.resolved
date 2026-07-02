@@ -1,5 +1,5 @@
 {
-  "originHash" : "1cbf1bcbae1bacbd6ed206b58c76e8e657df44a5e5572f342fca039824bc562e",
+  "originHash" : "afc91e655e7a2eae08f9432a2bac8ed6cce0e45f5e5c1da10b32d6e8d029f7e3",
   "pins" : [
     {
       "identity" : "swift-syntax",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
         "version" : "602.0.0"
-      }
-    },
-    {
-      "identity" : "swiftsourcekit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/RoyalPineapple/SwiftSourceKit.git",
-      "state" : {
-        "revision" : "e71f4b141c13824ec977076166f0e4a01622f9a0",
-        "version" : "0.0.1"
       }
     }
   ],

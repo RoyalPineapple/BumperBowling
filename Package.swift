@@ -14,14 +14,12 @@ let package = Package(
         .executable(name: "bumper", targets: ["BumperBowling"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/RoyalPineapple/SwiftSourceKit.git", exact: "0.0.1"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0"),
     ],
     targets: [
         .target(
             name: "BumperBowlingCore",
             dependencies: [
-                .product(name: "SwiftSourceKit", package: "SwiftSourceKit"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
             ],
