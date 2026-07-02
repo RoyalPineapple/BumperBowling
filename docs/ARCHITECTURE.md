@@ -30,7 +30,9 @@ The DSL should declare the architecture the repository wants, then lower into as
 
 `scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence for the declared bounds, not a source of generated policy.
 
-SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep receipts for every finding: report the observed graph fact, the declared lane, and why they do not match.
+SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Bumper Bowling should not duplicate SwiftSyntax node types or maintain a second syntax enum. Raw syntax checks use SwiftSyntax's `SyntaxKind`; richer local checks use computed extensions on real SwiftSyntax nodes through `node.bumper`.
+
+Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep receipts for every finding: report the observed graph fact, the declared lane, and why they do not match.
 
 Semantic DSL names are not special engine concepts. `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)` applies scope and severity. Built-in shorthand and user-defined shorthand lower into the same raw graph assertions.
 

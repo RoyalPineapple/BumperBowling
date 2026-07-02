@@ -97,6 +97,12 @@ public extension ArchitectureRule {
                     ),
                 ]
             )
+        case .syntaxKinds:
+            RuleDescription(
+                id: id,
+                name: "Syntax Kinds",
+                description: description
+            )
         case .enumStateMachine:
             RuleDescription(
                 id: id,

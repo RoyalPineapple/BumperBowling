@@ -1,4 +1,6 @@
 import Testing
+import SwiftParser
+import SwiftSyntax
 @testable import BumperBowlingCore
 
 @Suite("BumperConfiguration DSL")
@@ -122,5 +124,63 @@ struct BumperConfigurationDSLTests {
             ComponentRequirement.pureDomain.factRules ==
                 ComponentRequirement(.swiftBasics, .functionalCore).factRules
         )
+    }
+
+    @Test
+    func composesSyntaxKindRules() {
+        let requirement = ComponentRequirement(
+            RequireSyntax(.structDecl),
+            DisallowSyntax(.forceUnwrapExpr),
+            DisallowSyntax(.whileStmt)
+        )
+
+        #expect(requirement.factRules.contains(.requireSyntaxKind(.structDecl)))
+        #expect(requirement.factRules.contains(.disallowSyntaxKind(.forceUnwrapExpr)))
+        #expect(requirement.factRules.contains(.disallowSyntaxKind(.whileStmt)))
+    }
+
+    @Test
+    func composesGenericPredicatesOverSwiftSyntaxNodes() throws {
+        let source = """
+        struct Model {
+            var id: String
+        }
+        """
+        let tree = Parser.parse(source: source)
+        let visitor = FirstNodeVisitor<VariableDeclSyntax>(viewMode: .sourceAccurate)
+        visitor.walk(tree)
+        guard let variable = visitor.node else {
+            Issue.record("Expected to find a variable declaration")
+            return
+        }
+        let assertion = BumperSyntaxAssertion(
+            VariableDeclSyntax.self,
+            where: BumperSyntaxPredicate { node in
+                node.bumper.isMutableBinding && !node.bumper.storedProperties.isEmpty
+            }
+        )
+
+        #expect(variable.bumper.kind == SyntaxKind.variableDecl)
+        #expect(variable.bumper.bindingNames == ["id"])
+        #expect(variable.bumper.explicitTypeNames == ["String"])
+        #expect(assertion.evaluate(variable) == true)
+        #expect(assertion.evaluate(tree) == nil)
+    }
+}
+
+private final class FirstNodeVisitor<Node: SyntaxProtocol>: SyntaxAnyVisitor {
+    var node: Node?
+
+    override func visitAny(_ syntax: Syntax) -> SyntaxVisitorContinueKind {
+        guard node == nil else {
+            return .skipChildren
+        }
+
+        if let typedNode = syntax.as(Node.self) {
+            node = typedNode
+            return .skipChildren
+        }
+
+        return .visitChildren
     }
 }

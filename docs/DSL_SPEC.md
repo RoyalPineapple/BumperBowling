@@ -28,6 +28,26 @@ extension ComponentRequirement {
 
 `Requires(.valueCore, severity: .error)` still lowers into raw graph checks over stored-property facts, syntax-construct facts, and enum facts.
 
+Raw syntax assertions use SwiftSyntax's own `SyntaxKind` values:
+
+```swift
+Requires(RequireSyntax(.enumDecl), severity: .error)
+Requires(DisallowSyntax(.forceUnwrapExpr), severity: .warning)
+```
+
+Bumper does not maintain a parallel enum of SwiftSyntax nodes. If a rule needs typed access to fields on a syntax node, it composes over SwiftSyntax node types with computed Bumper views:
+
+```swift
+BumperSyntaxAssertion(
+    VariableDeclSyntax.self,
+    where: BumperSyntaxPredicate { node in
+        node.bumper.isMutableBinding && !node.bumper.storedProperties.isEmpty
+    }
+)
+```
+
+The graph stores compact facts such as `SyntaxKind`. Typed node predicates are the escape hatch for facts that need the real SwiftSyntax API.
+
 ```text
 BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner -> ArchitectureGraph -> validator
 ```
@@ -40,6 +60,7 @@ BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner
 - Parse strings into typed values at the boundary.
 - Avoid generated accessors, dynamic lookup, JSON config, plugins, and clever DSL machinery.
 - Keep parsing SwiftSyntax-first and Swift-only in 0.0.
+- Do not duplicate SwiftSyntax's syntax model. Extend and compose over SwiftSyntax types instead.
 
 ## Default File Shape
 
@@ -136,6 +157,7 @@ bumper explain <path>
 - `stored_properties`
 - `syntax_constructs`
 - `enum_state_machine`
+- `syntax_kinds`
 
 Severities are:
 

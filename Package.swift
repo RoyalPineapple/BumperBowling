@@ -31,7 +31,10 @@ let package = Package(
         ),
         .testTarget(
             name: "BumperBowlingCoreTests",
-            dependencies: ["BumperBowlingCore"],
+            dependencies: [
+                "BumperBowlingCore",
+                .product(name: "SwiftParser", package: "swift-syntax"),
+            ],
             swiftSettings: strictConcurrencySettings
         ),
     ]

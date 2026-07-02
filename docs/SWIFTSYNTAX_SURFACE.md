@@ -4,6 +4,9 @@ Bumper Bowling validates declared codebase shape against selected SwiftSyntax fa
 
 SwiftSyntax can represent the full Swift source tree. Bumper Bowling does not copy that tree and does not expose an infinitely configurable query language. It records selected raw facts, projects them into `ArchitectureGraph`, then runs lean mathematical checks over that graph.
 
+Bumper Bowling also does not duplicate SwiftSyntax's type universe. The raw syntax vocabulary is SwiftSyntax's own `SyntaxKind`; richer local facts are computed as extensions over concrete SwiftSyntax nodes through `node.bumper`.
+
+See [FACT_CATALOG.md](FACT_CATALOG.md) for the broader SwiftSyntax fact vocabulary Bumper Bowling can grow into.
 ## Current Facts
 
 ### Files
@@ -53,6 +56,43 @@ These facts are descriptive. They become policy only when the DSL declares a lan
 Disallows(.assignment, .loop, .mutableBinding)
 ```
 
+### Syntax Kind Catalog
+
+Bumper records the `SyntaxKind` values observed while walking each Swift source file.
+
+Examples:
+
+- `.sourceFile`
+- `.importDecl`
+- `.structDecl`
+- `.variableDecl`
+- `.identifierType`
+- `.stringLiteralExpr`
+- `.forceUnwrapExpr`
+
+These remain SwiftSyntax values, not Bumper copies. A raw syntax-kind assertion looks like:
+
+```swift
+RequireSyntax(.enumDecl)
+DisallowSyntax(.forceUnwrapExpr)
+```
+
+This is set math over `SourceFileFacts.syntaxFacts.nodeKinds`.
+
+### Computed SwiftSyntax Views
+
+When a rule needs more than kind membership, Bumper composes over real SwiftSyntax node types with computed views:
+
+```swift
+variableDecl.bumper.kind
+variableDecl.bumper.isMutableBinding
+variableDecl.bumper.bindingNames
+variableDecl.bumper.explicitTypeNames
+variableDecl.bumper.storedProperties
+```
+
+These views add no stored state to SwiftSyntax nodes. They infer local facts from the node and, when needed, its syntax context.
+
 ## Configured Facts
 
 The DSL supplies the facts SwiftSyntax cannot know by itself:
@@ -77,7 +117,7 @@ The DSL supplies the facts SwiftSyntax cannot know by itself:
 - module import edges
 - component import edges
 
-Source files carry their observed imports, declarations, stored properties, enum names, and imperative constructs.
+Source files carry their observed imports, declarations, stored properties, enum names, imperative constructs, and syntax kind catalog.
 
 Rules operate on that projection with deterministic operations: path scope, set membership, graph edge checks, and cycle detection.
 

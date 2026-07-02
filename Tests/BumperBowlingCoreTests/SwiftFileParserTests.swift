@@ -1,4 +1,5 @@
 import Testing
+import SwiftSyntax
 @testable import BumperBowlingCore
 
 @Suite("SwiftFileParser")
@@ -53,5 +54,33 @@ struct SwiftFileParserTests {
         #expect(summary.imperativeConstructs.contains(.loop))
         #expect(summary.imperativeConstructs.contains(.assignment))
         #expect(summary.imperativeConstructs.contains(.inoutExpression))
+    }
+
+    @Test
+    func recordsFullSwiftSyntaxFactCatalog() {
+        let source = """
+        import Foundation
+
+        @MainActor
+        struct Model {
+            let id: String
+
+            func render() -> String {
+                "id: \\(id)"
+            }
+        }
+        """
+
+        let summary = SwiftFileParser().parse(source)
+
+        #expect(summary.syntaxFacts.nodeKinds.contains(.sourceFile))
+        #expect(summary.syntaxFacts.nodeKinds.contains(.importDecl))
+        #expect(summary.syntaxFacts.nodeKinds.contains(.structDecl))
+        #expect(summary.syntaxFacts.nodeKinds.contains(.attribute))
+        #expect(summary.syntaxFacts.nodeKinds.contains(.identifierType))
+        #expect(summary.syntaxFacts.nodeKinds.contains(.stringLiteralExpr))
+        #expect(summary.syntaxFacts.facts.contains { $0.family == .declaration && $0.nodeKind == .structDecl })
+        #expect(summary.syntaxFacts.facts.contains { $0.family == .attribute && $0.nodeKind == .attribute })
+        #expect(summary.syntaxFacts.facts.contains { $0.family == .literal && $0.nodeKind == .stringLiteralExpr })
     }
 }

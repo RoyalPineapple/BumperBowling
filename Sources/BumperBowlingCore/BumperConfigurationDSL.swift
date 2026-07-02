@@ -1,4 +1,5 @@
 import Foundation
+import SwiftSyntax
 
 public struct BumperConfiguration: Equatable, Sendable {
     public let architectureConfiguration: ArchitectureConfiguration
@@ -205,7 +206,17 @@ public enum Capability: CaseIterable, Equatable, Hashable, Sendable {
 public enum SourceFactRule: Hashable, Sendable {
     case disallowStoredProperty(StoredPropertyDisallowance)
     case disallowSyntaxConstruct(ImperativeConstruct)
+    case requireSyntaxKind(SyntaxKind)
+    case disallowSyntaxKind(SyntaxKind)
     case requireEnumStateMachine
+}
+
+public func RequireSyntax(_ kind: SyntaxKind) -> ComponentRequirement {
+    ComponentRequirement(.requireSyntaxKind(kind))
+}
+
+public func DisallowSyntax(_ kind: SyntaxKind) -> ComponentRequirement {
+    ComponentRequirement(.disallowSyntaxKind(kind))
 }
 
 public struct ComponentRequirement: Equatable, Sendable {
@@ -389,6 +400,10 @@ private extension Array where Element == ComponentRequirementSetting {
         var syntaxConstructSeverity = Severity.off
         var disallowedSyntaxConstructs = Set<ImperativeConstruct>()
         var syntaxConstructPaths: [String] = []
+        var syntaxKindSeverity = Severity.off
+        var requiredSyntaxKinds = Set<SyntaxKind>()
+        var disallowedSyntaxKinds = Set<SyntaxKind>()
+        var syntaxKindPaths: [String] = []
         var enumStateMachine = PathRuleConfiguration()
 
         for setting in self {
@@ -406,6 +421,15 @@ private extension Array where Element == ComponentRequirementSetting {
                 syntaxConstructSeverity = syntaxConstructSeverity.merging(setting.severity)
                 syntaxConstructPaths.append(contentsOf: scopedPaths)
                 disallowedSyntaxConstructs.formUnion(syntaxConstructRules)
+            }
+
+            let requiredKinds = setting.requirement.requiredSyntaxKinds
+            let disallowedKinds = setting.requirement.disallowedSyntaxKinds
+            if !requiredKinds.isEmpty || !disallowedKinds.isEmpty {
+                syntaxKindSeverity = syntaxKindSeverity.merging(setting.severity)
+                syntaxKindPaths.append(contentsOf: scopedPaths)
+                requiredSyntaxKinds.formUnion(requiredKinds)
+                disallowedSyntaxKinds.formUnion(disallowedKinds)
             }
 
             if setting.requirement.requiresEnumStateMachine {
@@ -427,6 +451,12 @@ private extension Array where Element == ComponentRequirementSetting {
                 paths: Swift.Array(Set(syntaxConstructPaths)).sorted(),
                 disallowedConstructs: disallowedSyntaxConstructs
             ),
+            syntaxKinds: SyntaxKindRuleConfiguration(
+                severity: syntaxKindSeverity,
+                paths: Swift.Array(Set(syntaxKindPaths)).sorted(),
+                requiredKinds: requiredSyntaxKinds,
+                disallowedKinds: disallowedSyntaxKinds
+            ),
             enumStateMachine: enumStateMachine
         )
     }
@@ -438,7 +468,7 @@ private extension ComponentRequirement {
             switch rule {
             case .disallowStoredProperty(let disallowance):
                 disallowance
-            case .disallowSyntaxConstruct, .requireEnumStateMachine:
+            case .disallowSyntaxConstruct, .requireSyntaxKind, .disallowSyntaxKind, .requireEnumStateMachine:
                 nil
             }
         })
@@ -449,7 +479,7 @@ private extension ComponentRequirement {
             switch rule {
             case .disallowSyntaxConstruct(let construct):
                 construct
-            case .disallowStoredProperty, .requireEnumStateMachine:
+            case .disallowStoredProperty, .requireSyntaxKind, .disallowSyntaxKind, .requireEnumStateMachine:
                 nil
             }
         })
@@ -457,6 +487,28 @@ private extension ComponentRequirement {
 
     var requiresEnumStateMachine: Bool {
         factRules.contains(.requireEnumStateMachine)
+    }
+
+    var requiredSyntaxKinds: Set<SyntaxKind> {
+        Set(factRules.compactMap { rule in
+            switch rule {
+            case .requireSyntaxKind(let kind):
+                kind
+            case .disallowStoredProperty, .disallowSyntaxConstruct, .disallowSyntaxKind, .requireEnumStateMachine:
+                nil
+            }
+        })
+    }
+
+    var disallowedSyntaxKinds: Set<SyntaxKind> {
+        Set(factRules.compactMap { rule in
+            switch rule {
+            case .disallowSyntaxKind(let kind):
+                kind
+            case .disallowStoredProperty, .disallowSyntaxConstruct, .requireSyntaxKind, .requireEnumStateMachine:
+                nil
+            }
+        })
     }
 }
 
@@ -529,6 +581,7 @@ private extension RuleConfiguration {
                 : declaredDependencyCycle,
             storedProperties: storedProperties.merging(other.storedProperties),
             syntaxConstructs: syntaxConstructs.merging(other.syntaxConstructs),
+            syntaxKinds: syntaxKinds.merging(other.syntaxKinds),
             enumStateMachine: enumStateMachine.merging(other.enumStateMachine)
         )
     }
@@ -550,6 +603,17 @@ private extension SyntaxConstructRuleConfiguration {
             severity: severity.merging(other.severity),
             paths: Array(Set(paths + other.paths)).sorted(),
             disallowedConstructs: disallowedConstructs.union(other.disallowedConstructs)
+        )
+    }
+}
+
+private extension SyntaxKindRuleConfiguration {
+    func merging(_ other: SyntaxKindRuleConfiguration) -> SyntaxKindRuleConfiguration {
+        SyntaxKindRuleConfiguration(
+            severity: severity.merging(other.severity),
+            paths: Array(Set(paths + other.paths)).sorted(),
+            requiredKinds: requiredKinds.union(other.requiredKinds),
+            disallowedKinds: disallowedKinds.union(other.disallowedKinds)
         )
     }
 }
@@ -578,6 +642,12 @@ private extension StoredPropertyRuleConfiguration {
 private extension SyntaxConstructRuleConfiguration {
     var isConfigured: Bool {
         severity != .off || !paths.isEmpty || !disallowedConstructs.isEmpty
+    }
+}
+
+private extension SyntaxKindRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !requiredKinds.isEmpty || !disallowedKinds.isEmpty
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftSyntax
 
 public struct ArchitectureConfiguration: Equatable, Sendable {
     public let includedPaths: [String]
@@ -93,6 +94,7 @@ public struct RuleConfiguration: Equatable, Sendable {
     public let declaredDependencyCycle: Severity
     public let storedProperties: StoredPropertyRuleConfiguration
     public let syntaxConstructs: SyntaxConstructRuleConfiguration
+    public let syntaxKinds: SyntaxKindRuleConfiguration
     public let enumStateMachine: PathRuleConfiguration
 
     public init(
@@ -102,6 +104,7 @@ public struct RuleConfiguration: Equatable, Sendable {
         declaredDependencyCycle: Severity = .off,
         storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
         syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
+        syntaxKinds: SyntaxKindRuleConfiguration = SyntaxKindRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
         self.forbiddenImports = forbiddenImports.isConfigured ? [forbiddenImports] : []
@@ -110,6 +113,7 @@ public struct RuleConfiguration: Equatable, Sendable {
         self.declaredDependencyCycle = declaredDependencyCycle
         self.storedProperties = storedProperties
         self.syntaxConstructs = syntaxConstructs
+        self.syntaxKinds = syntaxKinds
         self.enumStateMachine = enumStateMachine
     }
 
@@ -120,6 +124,7 @@ public struct RuleConfiguration: Equatable, Sendable {
         declaredDependencyCycle: Severity = .off,
         storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
         syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
+        syntaxKinds: SyntaxKindRuleConfiguration = SyntaxKindRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
         self.forbiddenImports = forbiddenImports.filter(\.isConfigured)
@@ -128,6 +133,7 @@ public struct RuleConfiguration: Equatable, Sendable {
         self.declaredDependencyCycle = declaredDependencyCycle
         self.storedProperties = storedProperties
         self.syntaxConstructs = syntaxConstructs
+        self.syntaxKinds = syntaxKinds
         self.enumStateMachine = enumStateMachine
     }
 }
@@ -177,6 +183,25 @@ public struct SyntaxConstructRuleConfiguration: Equatable, Sendable {
         self.severity = severity
         self.paths = paths
         self.disallowedConstructs = disallowedConstructs
+    }
+}
+
+public struct SyntaxKindRuleConfiguration: Equatable, Sendable {
+    public let severity: Severity
+    public let paths: [String]
+    public let requiredKinds: Set<SyntaxKind>
+    public let disallowedKinds: Set<SyntaxKind>
+
+    public init(
+        severity: Severity = .off,
+        paths: [String] = [],
+        requiredKinds: Set<SyntaxKind> = [],
+        disallowedKinds: Set<SyntaxKind> = []
+    ) {
+        self.severity = severity
+        self.paths = paths
+        self.requiredKinds = requiredKinds
+        self.disallowedKinds = disallowedKinds
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftSyntax
 
 public struct RepositoryFacts: Equatable, Sendable {
     public let files: [SourceFileFacts]
@@ -53,6 +54,7 @@ public struct SourceFileFacts: Equatable, Sendable {
     public let storedProperties: [StoredProperty]
     public let enums: [DeclarationName]
     public let imperativeConstructs: [ImperativeConstruct]
+    public let syntaxFacts: SwiftSyntaxFactCatalog
 
     public init(
         path: RelativeFilePath,
@@ -61,7 +63,8 @@ public struct SourceFileFacts: Equatable, Sendable {
         publicDeclarations: [PublicDeclaration],
         storedProperties: [StoredProperty] = [],
         enums: [DeclarationName] = [],
-        imperativeConstructs: [ImperativeConstruct] = []
+        imperativeConstructs: [ImperativeConstruct] = [],
+        syntaxFacts: SwiftSyntaxFactCatalog = SwiftSyntaxFactCatalog()
     ) {
         self.path = path
         self.subsystem = subsystem
@@ -70,7 +73,59 @@ public struct SourceFileFacts: Equatable, Sendable {
         self.storedProperties = storedProperties
         self.enums = enums
         self.imperativeConstructs = imperativeConstructs
+        self.syntaxFacts = syntaxFacts
     }
+}
+
+public struct SwiftSyntaxFactCatalog: Equatable, Sendable {
+    public let nodeKinds: Set<SyntaxKind>
+    public let facts: Set<ObservedSyntaxFact>
+
+    public init(
+        nodeKinds: Set<SyntaxKind> = [],
+        facts: Set<ObservedSyntaxFact> = []
+    ) {
+        self.nodeKinds = nodeKinds
+        self.facts = facts
+    }
+
+    public func adding(_ fact: ObservedSyntaxFact) -> SwiftSyntaxFactCatalog {
+        SwiftSyntaxFactCatalog(
+            nodeKinds: nodeKinds.union([fact.nodeKind]),
+            facts: facts.union([fact])
+        )
+    }
+}
+
+public struct ObservedSyntaxFact: Hashable, Sendable {
+    public let family: SyntaxFactFamily
+    public let nodeKind: SyntaxKind
+    public let spelling: String?
+
+    public init(family: SyntaxFactFamily, nodeKind: SyntaxKind, spelling: String? = nil) {
+        self.family = family
+        self.nodeKind = nodeKind
+        self.spelling = spelling
+    }
+}
+
+public enum SyntaxFactFamily: String, Equatable, Hashable, Sendable {
+    case sourceFile
+    case trivia
+    case importSyntax
+    case declaration
+    case typeSyntax
+    case pattern
+    case statement
+    case expression
+    case closure
+    case concurrency
+    case macro
+    case literal
+    case attribute
+    case modifier
+    case token
+    case unknown
 }
 
 public struct PublicDeclaration: Equatable, Sendable {

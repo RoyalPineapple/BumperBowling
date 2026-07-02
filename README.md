@@ -28,6 +28,23 @@ The core is intentionally lean: parse raw SwiftSyntax facts, normalize them into
 
 Bumper keeps receipts. Every finding should trace back to an observed graph fact, and `scan`, `explain`, and `snapshot` expose the evidence Bumper used.
 
+Bumper does not duplicate SwiftSyntax's type universe. Raw syntax assertions use SwiftSyntax's own `SyntaxKind` values:
+
+```swift
+RequireSyntax(.enumDecl)
+DisallowSyntax(.forceUnwrapExpr)
+```
+
+Richer local facts are computed as extensions on real SwiftSyntax nodes:
+
+```swift
+node.bumper.kind
+variableDecl.bumper.isMutableBinding
+variableDecl.bumper.storedProperties
+```
+
+That keeps SwiftSyntax as the source of truth while Bumper owns the assertion algebra.
+
 Facts become rules when they are scoped by the DSL. You can use Bumper's semantic shorthand or compose your own:
 
 ```swift

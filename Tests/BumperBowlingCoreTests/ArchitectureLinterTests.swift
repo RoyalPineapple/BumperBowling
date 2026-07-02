@@ -1,4 +1,5 @@
 import Testing
+import SwiftSyntax
 @testable import BumperBowlingCore
 
 @Suite("ArchitectureLinter")
@@ -217,6 +218,40 @@ struct ArchitectureLinterTests {
             .lint(RepositoryFacts(files: [file]))
 
         #expect(report.violations.map(\.ruleID).contains(.enumStateMachine))
+    }
+
+    @Test
+    func evaluatesGenericSwiftSyntaxKindRules() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/Core/Thing.swift"),
+            subsystem: try SubsystemID("core"),
+            imports: [],
+            publicDeclarations: [],
+            syntaxFacts: SwiftSyntaxFactCatalog(
+                nodeKinds: [.sourceFile, .structDecl, .forceUnwrapExpr]
+            )
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
+            ],
+            rules: RuleConfiguration(
+                syntaxKinds: SyntaxKindRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/Core"],
+                    requiredKinds: [.enumDecl],
+                    disallowedKinds: [.forceUnwrapExpr]
+                )
+            )
+        )
+
+        let report = try ArchitectureLinter(configuration: configuration)
+            .lint(RepositoryFacts(files: [file]))
+        let messages = Set(report.violations.map(\.message))
+
+        #expect(report.violations.allSatisfy { $0.ruleID == .syntaxKinds })
+        #expect(messages.contains("Missing required SwiftSyntax node kind enumDecl"))
+        #expect(messages.contains("Uses disallowed SwiftSyntax node kind forceUnwrapExpr"))
     }
 
     @Test

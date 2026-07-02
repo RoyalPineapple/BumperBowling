@@ -33,6 +33,7 @@ public struct RuleRegistry: Sendable {
             .declaredDependencyCycle(configuration.declaredDependencyCycle),
             .storedProperties(configuration.storedProperties),
             .syntaxConstructs(configuration.syntaxConstructs),
+            .syntaxKinds(configuration.syntaxKinds),
             .enumStateMachine(configuration.enumStateMachine),
         ].filter(\.isEnabled)
     }
@@ -45,6 +46,7 @@ public enum ArchitectureRule: Sendable {
     case declaredDependencyCycle(Severity)
     case storedProperties(StoredPropertyRuleConfiguration)
     case syntaxConstructs(SyntaxConstructRuleConfiguration)
+    case syntaxKinds(SyntaxKindRuleConfiguration)
     case enumStateMachine(PathRuleConfiguration)
 
     public var id: RuleID {
@@ -61,6 +63,8 @@ public enum ArchitectureRule: Sendable {
             .storedProperties
         case .syntaxConstructs:
             .syntaxConstructs
+        case .syntaxKinds:
+            .syntaxKinds
         case .enumStateMachine:
             .enumStateMachine
         }
@@ -80,6 +84,8 @@ public enum ArchitectureRule: Sendable {
             "Applies configured assertions over SwiftSyntax stored property facts."
         case .syntaxConstructs:
             "Applies configured assertions over SwiftSyntax construct facts."
+        case .syntaxKinds:
+            "Applies configured assertions over observed SwiftSyntax node kinds."
         case .enumStateMachine:
             "Requires parser files to declare an enum state machine."
         }
@@ -105,6 +111,8 @@ public enum ArchitectureRule: Sendable {
             configuration.severity
         case .syntaxConstructs(let configuration):
             configuration.severity
+        case .syntaxKinds(let configuration):
+            configuration.severity
         case .enumStateMachine(let configuration):
             configuration.severity
         }
@@ -124,6 +132,8 @@ public enum ArchitectureRule: Sendable {
             evaluateStoredProperties(graph: graph, configuration: configuration)
         case .syntaxConstructs(let configuration):
             evaluateSyntaxConstructs(graph: graph, configuration: configuration)
+        case .syntaxKinds(let configuration):
+            evaluateSyntaxKinds(graph: graph, configuration: configuration)
         case .enumStateMachine(let configuration):
             evaluateEnumStateMachines(graph: graph, configuration: configuration)
         }
@@ -294,6 +304,41 @@ public enum ArchitectureRule: Sendable {
                     message: "Uses imperative construct \(construct.rawValue)"
                 )
             }
+        }
+    }
+
+    private func evaluateSyntaxKinds(
+        graph: ArchitectureGraph,
+        configuration: SyntaxKindRuleConfiguration
+    ) -> [ArchitectureViolation] {
+        let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
+
+        return graph.sourceFiles.flatMap { file in
+            guard paths.isEmpty || paths.contains(where: { $0.contains(file.path) }) else {
+                return [ArchitectureViolation]()
+            }
+
+            let missingRequiredKinds = configuration.requiredKinds
+                .subtracting(file.syntaxFacts.nodeKinds)
+                .map { kind in
+                    violation(
+                        severity: configuration.severity,
+                        path: file.path,
+                        message: "Missing required SwiftSyntax node kind \(kind)"
+                    )
+                }
+
+            let disallowedKinds = configuration.disallowedKinds
+                .intersection(file.syntaxFacts.nodeKinds)
+                .map { kind in
+                    violation(
+                        severity: configuration.severity,
+                        path: file.path,
+                        message: "Uses disallowed SwiftSyntax node kind \(kind)"
+                    )
+                }
+
+            return missingRequiredKinds + disallowedKinds
         }
     }
 
@@ -491,6 +536,7 @@ public enum RuleID: String, CaseIterable, Equatable, Sendable {
     case declaredDependencyCycle = "declared_dependency_cycle"
     case storedProperties = "stored_properties"
     case syntaxConstructs = "syntax_constructs"
+    case syntaxKinds = "syntax_kinds"
     case enumStateMachine = "enum_state_machine"
 }
 
