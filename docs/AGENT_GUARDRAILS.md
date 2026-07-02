@@ -16,6 +16,6 @@
 - Preserve strict concurrency settings.
 - Keep parsing SwiftSyntax-first. Use SwiftSyntax/SwiftParser for Swift parsing rather than regular expressions.
 - Parse strings into domain types at boundaries; do not pass raw strings through core architecture logic.
-- Model parser progress with explicit enum state machines whose cases carry the parsed data.
+- Use explicit enum state machines when parser progress has state; keep stateless source-fact collection as direct projection over syntax.
 - Do not introduce stored properties explicitly typed as `Any` or broad existentials in guarded scopes.
 - Keep the tool tiny; avoid generated accessors, dynamic lookup, and nonessential framework code.

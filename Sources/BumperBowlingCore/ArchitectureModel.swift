@@ -1,6 +1,57 @@
 import Foundation
 import SwiftSyntax
 
+enum CollectedSourceFact: Equatable, Sendable {
+    case importModule(ModuleName)
+    case publicDeclaration(PublicDeclaration)
+    case storedProperty(StoredProperty)
+    case enumDeclaration(DeclarationName)
+    case imperativeConstruct(ObservedImperativeConstruct)
+    case syntax(ObservedSyntaxFact)
+}
+
+struct SourceFactSummary: Sendable {
+    let imports: [ModuleName]
+    let publicDeclarations: [PublicDeclaration]
+    let storedProperties: [StoredProperty]
+    let enums: [DeclarationName]
+    let observedImperativeConstructs: [ObservedImperativeConstruct]
+    let syntaxFacts: SwiftSyntaxFactCatalog
+
+    init(facts: [CollectedSourceFact]) {
+        var imports = Set<ModuleName>()
+        var publicDeclarations: [PublicDeclaration] = []
+        var storedProperties: [StoredProperty] = []
+        var enums: [DeclarationName] = []
+        var observedImperativeConstructs: [ObservedImperativeConstruct] = []
+        var syntaxFacts = SwiftSyntaxFactCatalog()
+
+        for fact in facts {
+            switch fact {
+            case .importModule(let module):
+                imports.insert(module)
+            case .publicDeclaration(let declaration):
+                publicDeclarations.append(declaration)
+            case .storedProperty(let property):
+                storedProperties.append(property)
+            case .enumDeclaration(let name):
+                enums.append(name)
+            case .imperativeConstruct(let construct):
+                observedImperativeConstructs.append(construct)
+            case .syntax(let fact):
+                syntaxFacts = syntaxFacts.adding(fact)
+            }
+        }
+
+        self.imports = imports.sorted(by: { $0.rawValue < $1.rawValue })
+        self.publicDeclarations = publicDeclarations
+        self.storedProperties = storedProperties
+        self.enums = enums
+        self.observedImperativeConstructs = observedImperativeConstructs
+        self.syntaxFacts = syntaxFacts
+    }
+}
+
 public struct RepositoryFacts: Equatable, Sendable {
     public let files: [SourceFileFacts]
     public let dependencyEdges: Set<DependencyEdge>
@@ -14,6 +65,24 @@ public struct RepositoryFacts: Equatable, Sendable {
                 }
             }
         )
+    }
+}
+
+public enum GraphScope: Equatable, Sendable {
+    case all
+    case paths(Set<RelativePathPrefix>)
+
+    public init(paths: [RelativePathPrefix]) {
+        self = paths.isEmpty ? .all : .paths(Set(paths))
+    }
+
+    public func contains(_ file: SourceFileFacts) -> Bool {
+        switch self {
+        case .all:
+            true
+        case .paths(let paths):
+            paths.contains { $0.contains(file.path) }
+        }
     }
 }
 
@@ -43,6 +112,50 @@ public struct ArchitectureGraph: Equatable, Sendable {
                 }
             }
         )
+    }
+
+    public func files(in scope: GraphScope) -> [SourceFileFacts] {
+        sourceFiles.filter { scope.contains($0) }
+    }
+
+    public func imports(in scope: GraphScope) -> [(file: SourceFileFacts, module: ModuleName)] {
+        files(in: scope).flatMap { file in
+            file.imports.map { module in
+                (file: file, module: module)
+            }
+        }
+    }
+
+    public func declarations(in scope: GraphScope) -> [(file: SourceFileFacts, declaration: PublicDeclaration)] {
+        files(in: scope).flatMap { file in
+            file.publicDeclarations.map { declaration in
+                (file: file, declaration: declaration)
+            }
+        }
+    }
+
+    public func storedProperties(in scope: GraphScope) -> [(file: SourceFileFacts, property: StoredProperty)] {
+        files(in: scope).flatMap { file in
+            file.storedProperties.map { property in
+                (file: file, property: property)
+            }
+        }
+    }
+
+    public func constructs(in scope: GraphScope) -> [(file: SourceFileFacts, construct: ObservedImperativeConstruct)] {
+        files(in: scope).flatMap { file in
+            file.observedImperativeConstructs.map { construct in
+                (file: file, construct: construct)
+            }
+        }
+    }
+
+    public func syntaxFacts(in scope: GraphScope) -> [(file: SourceFileFacts, fact: ObservedSyntaxFact)] {
+        files(in: scope).flatMap { file in
+            file.syntaxFacts.facts.map { fact in
+                (file: file, fact: fact)
+            }
+        }
     }
 }
 
@@ -82,6 +195,21 @@ public struct SourceFileFacts: Equatable, Sendable {
             : imperativeConstructs
         self.observedImperativeConstructs = observedConstructs
         self.syntaxFacts = syntaxFacts
+    }
+
+    init(path: RelativeFilePath, subsystem: SubsystemID, facts: [CollectedSourceFact]) {
+        let summary = SourceFactSummary(facts: facts)
+
+        self.init(
+            path: path,
+            subsystem: subsystem,
+            imports: summary.imports,
+            publicDeclarations: summary.publicDeclarations,
+            storedProperties: summary.storedProperties,
+            enums: summary.enums,
+            observedImperativeConstructs: summary.observedImperativeConstructs,
+            syntaxFacts: summary.syntaxFacts
+        )
     }
 }
 

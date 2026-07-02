@@ -44,6 +44,81 @@ struct ArchitectureLinterTests {
     }
 
     @Test
+    func graphQueriesFactsInScope() throws {
+        let uiFile = SourceFileFacts(
+            path: try RelativeFilePath("Sources/UI/ViewModel.swift"),
+            subsystem: try SubsystemID("ui"),
+            imports: [try ModuleName("DomainKit")],
+            publicDeclarations: [
+                PublicDeclaration(kind: .struct, name: try DeclarationName("ViewModel")),
+            ],
+            storedProperties: [
+                StoredProperty(name: try DeclarationName("state"), type: try TypeName("ViewState"), isMutable: false),
+            ],
+            observedImperativeConstructs: [
+                ObservedImperativeConstruct(construct: .assignment),
+            ],
+            syntaxFacts: SwiftSyntaxFactCatalog(
+                facts: [
+                    ObservedSyntaxFact(family: .declaration, nodeKind: .structDecl),
+                ]
+            )
+        )
+        let domainFile = SourceFileFacts(
+            path: try RelativeFilePath("Sources/Domain/Model.swift"),
+            subsystem: try SubsystemID("domain"),
+            imports: [],
+            publicDeclarations: [
+                PublicDeclaration(kind: .struct, name: try DeclarationName("Model")),
+            ]
+        )
+        let rules = try ArchitectureRules(
+            configuration: ArchitectureConfiguration(
+                subsystems: [
+                    SubsystemConfiguration(name: "ui", modules: ["UI"], paths: ["Sources/UI"]),
+                    SubsystemConfiguration(name: "domain", modules: ["DomainKit"], paths: ["Sources/Domain"]),
+                ]
+            )
+        )
+        let graph = ArchitectureGraph(facts: RepositoryFacts(files: [uiFile, domainFile]), rules: rules)
+        let uiScope = GraphScope(paths: [try RelativePathPrefix("Sources/UI")])
+
+        #expect(graph.files(in: uiScope).map(\.path) == [try RelativeFilePath("Sources/UI/ViewModel.swift")])
+        #expect(graph.imports(in: uiScope).map(\.module) == [try ModuleName("DomainKit")])
+        #expect(graph.declarations(in: uiScope).map(\.declaration.name) == [try DeclarationName("ViewModel")])
+        #expect(graph.storedProperties(in: uiScope).map(\.property.name) == [try DeclarationName("state")])
+        #expect(graph.constructs(in: uiScope).map(\.construct.construct) == [.assignment])
+        #expect(graph.syntaxFacts(in: uiScope).map(\.fact.nodeKind) == [.structDecl])
+    }
+
+    @Test
+    func sourceFileFactsNormalizeCollectedFacts() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/Core/Model.swift"),
+            subsystem: try SubsystemID("core"),
+            facts: [
+                .importModule(try ModuleName("Zed")),
+                .importModule(try ModuleName("Foundation")),
+                .importModule(try ModuleName("Foundation")),
+                .publicDeclaration(PublicDeclaration(kind: .struct, name: try DeclarationName("Model"))),
+                .storedProperty(
+                    StoredProperty(name: try DeclarationName("id"), type: try TypeName("ID"), isMutable: false)
+                ),
+                .enumDeclaration(try DeclarationName("ModelState")),
+                .imperativeConstruct(ObservedImperativeConstruct(construct: .mutableBinding)),
+                .syntax(ObservedSyntaxFact(family: .declaration, nodeKind: .structDecl)),
+            ]
+        )
+
+        #expect(file.imports == [try ModuleName("Foundation"), try ModuleName("Zed")])
+        #expect(file.publicDeclarations.map(\.name) == [try DeclarationName("Model")])
+        #expect(file.storedProperties.map(\.name) == [try DeclarationName("id")])
+        #expect(file.enums == [try DeclarationName("ModelState")])
+        #expect(file.imperativeConstructs == [.mutableBinding])
+        #expect(file.syntaxFacts.nodeKinds == [.structDecl])
+    }
+
+    @Test
     func flagsForbiddenImportsAndUndeclaredSubsystemDependencies() throws {
         let configuration = ArchitectureConfiguration(
             subsystems: [

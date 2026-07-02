@@ -191,7 +191,7 @@ The project house rules live in `Tests/BumperBowlingCoreTests/BumperProjectConfi
 - The core may not depend on the CLI or test harness.
 - Core code must not declare `bumperBowling` as a public symbol.
 - Core string matching must go through `StringMatcher`.
-- The Swift parser must keep an enum state machine.
+- Source fact collection must stay normalized through the graph model.
 
 `SelfLintTests` runs those rules through `BumperBowlingTesting`:
 
@@ -259,7 +259,6 @@ let configuration = BumperConfiguration {
                 .immutableStoredState,
                 severity: .warning
             )
-            RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
         Component(.cli) {
