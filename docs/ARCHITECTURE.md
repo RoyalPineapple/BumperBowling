@@ -24,7 +24,7 @@ Lint runs math over the graph
 
 Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane.
 
-The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md).
+The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md). The broader fact vocabulary is cataloged in [FACT_CATALOG.md](FACT_CATALOG.md).
 
 The DSL should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 

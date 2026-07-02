@@ -4,6 +4,8 @@ Bumper Bowling validates declared codebase shape against selected SwiftSyntax fa
 
 SwiftSyntax can represent the full Swift source tree. Bumper Bowling does not copy that tree and does not expose an infinitely configurable query language. It records selected raw facts, projects them into `ArchitectureGraph`, then runs lean mathematical checks over that graph.
 
+See [FACT_CATALOG.md](FACT_CATALOG.md) for the broader SwiftSyntax fact vocabulary Bumper Bowling can grow into.
+
 ## Current Facts
 
 ### Files

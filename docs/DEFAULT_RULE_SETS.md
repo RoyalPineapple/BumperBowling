@@ -216,7 +216,7 @@ Possible receipts:
 - `Stored property id is mutable`
 - `Stored property id uses raw String`
 - `Uses imperative construct mutatingDeclaration`
-- `Uses imperative construct inoutExpression`
+- `Uses imperative construct mutableBinding`
 - `Uses imperative construct assignment`
 
 ### `.computedState`
