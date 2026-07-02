@@ -201,18 +201,51 @@ public extension BumperSyntaxView where Node == ImportDeclSyntax {
 }
 
 extension BumperSyntaxView where Node == ClassDeclSyntax {
+    func nominalType(location: SourcePosition?) -> NominalType? {
+        makeNominalType(
+            kind: .class,
+            name: node.name.text,
+            modifiers: node.modifiers,
+            attributes: node.attributes,
+            inheritanceClause: node.inheritanceClause,
+            location: location
+        )
+    }
+
     func publicDeclarations(location: SourcePosition?) -> [PublicDeclaration] {
         publicDeclaration(kind: .class, name: node.name.text, modifiers: node.modifiers, attributes: node.attributes, location: location)
     }
 }
 
 extension BumperSyntaxView where Node == StructDeclSyntax {
+    func nominalType(location: SourcePosition?) -> NominalType? {
+        makeNominalType(
+            kind: .struct,
+            name: node.name.text,
+            modifiers: node.modifiers,
+            attributes: node.attributes,
+            inheritanceClause: node.inheritanceClause,
+            location: location
+        )
+    }
+
     func publicDeclarations(location: SourcePosition?) -> [PublicDeclaration] {
         publicDeclaration(kind: .struct, name: node.name.text, modifiers: node.modifiers, attributes: node.attributes, location: location)
     }
 }
 
 extension BumperSyntaxView where Node == EnumDeclSyntax {
+    func nominalType(location: SourcePosition?) -> NominalType? {
+        makeNominalType(
+            kind: .enum,
+            name: node.name.text,
+            modifiers: node.modifiers,
+            attributes: node.attributes,
+            inheritanceClause: node.inheritanceClause,
+            location: location
+        )
+    }
+
     var enumDeclaration: DeclarationName? {
         try? DeclarationName(node.name.text)
     }
@@ -223,14 +256,52 @@ extension BumperSyntaxView where Node == EnumDeclSyntax {
 }
 
 extension BumperSyntaxView where Node == ProtocolDeclSyntax {
+    func nominalType(location: SourcePosition?) -> NominalType? {
+        makeNominalType(
+            kind: .protocol,
+            name: node.name.text,
+            modifiers: node.modifiers,
+            attributes: node.attributes,
+            inheritanceClause: node.inheritanceClause,
+            location: location
+        )
+    }
+
     func publicDeclarations(location: SourcePosition?) -> [PublicDeclaration] {
         publicDeclaration(kind: .protocol, name: node.name.text, modifiers: node.modifiers, attributes: node.attributes, location: location)
     }
 }
 
 extension BumperSyntaxView where Node == ActorDeclSyntax {
+    func nominalType(location: SourcePosition?) -> NominalType? {
+        makeNominalType(
+            kind: .actor,
+            name: node.name.text,
+            modifiers: node.modifiers,
+            attributes: node.attributes,
+            inheritanceClause: node.inheritanceClause,
+            location: location
+        )
+    }
+
     func publicDeclarations(location: SourcePosition?) -> [PublicDeclaration] {
         publicDeclaration(kind: .actor, name: node.name.text, modifiers: node.modifiers, attributes: node.attributes, location: location)
+    }
+}
+
+extension BumperSyntaxView where Node == ExtensionDeclSyntax {
+    func extensionDeclaration(location: SourcePosition?) -> ExtensionDeclaration? {
+        guard let extendedType = try? TypeName(node.extendedType.trimmedDescription) else {
+            return nil
+        }
+
+        return ExtensionDeclaration(
+            extendedType: extendedType,
+            access: accessLevel(node.modifiers),
+            inheritedTypes: inheritedTypes(node.inheritanceClause),
+            attributes: attributeNames(node.attributes),
+            location: location
+        )
     }
 }
 
@@ -331,7 +402,7 @@ public extension BumperSyntaxView where Node == VariableDeclSyntax {
         }
     }
 
-    var storedProperties: [StoredProperty] {
+    func storedProperties(owner: TypeName? = nil) -> [StoredProperty] {
         guard isMemberDeclaration else {
             return []
         }
@@ -344,7 +415,14 @@ public extension BumperSyntaxView where Node == VariableDeclSyntax {
             }
 
             let typeName = binding.bumper.explicitTypeName.flatMap { try? TypeName($0) }
-            return StoredProperty(name: declarationName, type: typeName, isMutable: isMutableBinding)
+            return StoredProperty(
+                owner: owner,
+                name: declarationName,
+                type: typeName,
+                access: accessLevel(node.modifiers),
+                attributes: attributeNames(node.attributes),
+                isMutable: isMutableBinding
+            )
         }
     }
 
@@ -368,11 +446,14 @@ public extension BumperSyntaxView where Node == VariableDeclSyntax {
         }
     }
 
-    func storedProperties(location: SourcePosition?) -> [StoredProperty] {
-        storedProperties.map { property in
+    func storedProperties(owner: TypeName?, location: SourcePosition?) -> [StoredProperty] {
+        storedProperties(owner: owner).map { property in
             StoredProperty(
+                owner: property.owner,
                 name: property.name,
                 type: property.type,
+                access: property.access,
+                attributes: property.attributes,
                 isMutable: property.isMutable,
                 location: location
             )
@@ -407,11 +488,49 @@ private func publicDeclaration(
     ]
 }
 
-private func isPublic(_ modifiers: DeclModifierListSyntax) -> Bool {
-    modifiers.contains { modifier in
-        StringMatcher.exact("public").matches(modifier.name.text)
-            || StringMatcher.exact("open").matches(modifier.name.text)
+private func makeNominalType(
+    kind: DeclarationKind,
+    name: String,
+    modifiers: DeclModifierListSyntax,
+    attributes: AttributeListSyntax,
+    inheritanceClause: InheritanceClauseSyntax?,
+    location: SourcePosition?
+) -> NominalType? {
+    guard let typeName = try? TypeName(name) else {
+        return nil
     }
+
+    return NominalType(
+        kind: kind,
+        name: typeName,
+        access: accessLevel(modifiers),
+        inheritedTypes: inheritedTypes(inheritanceClause),
+        attributes: attributeNames(attributes),
+        location: location
+    )
+}
+
+private func isPublic(_ modifiers: DeclModifierListSyntax) -> Bool {
+    [.public, .open].contains(accessLevel(modifiers))
+}
+
+private func accessLevel(_ modifiers: DeclModifierListSyntax) -> AccessLevel {
+    if modifiers.contains(where: { StringMatcher.exact("open").matches($0.name.text) }) {
+        return .open
+    }
+    if modifiers.contains(where: { StringMatcher.exact("public").matches($0.name.text) }) {
+        return .public
+    }
+    if modifiers.contains(where: { StringMatcher.exact("package").matches($0.name.text) }) {
+        return .package
+    }
+    if modifiers.contains(where: { StringMatcher.exact("fileprivate").matches($0.name.text) }) {
+        return .fileprivate
+    }
+    if modifiers.contains(where: { StringMatcher.exact("private").matches($0.name.text) }) {
+        return .private
+    }
+    return .internal
 }
 
 private func attributeNames(_ attributes: AttributeListSyntax) -> [AttributeName] {
@@ -421,6 +540,12 @@ private func attributeNames(_ attributes: AttributeListSyntax) -> [AttributeName
         }
         return try? AttributeName(name)
     }
+}
+
+private func inheritedTypes(_ inheritanceClause: InheritanceClauseSyntax?) -> [TypeName] {
+    inheritanceClause?.inheritedTypes.compactMap { inheritedType in
+        try? TypeName(inheritedType.type.trimmedDescription)
+    } ?? []
 }
 
 private func syntaxFactSpelling(for node: some SyntaxProtocol) -> String? {

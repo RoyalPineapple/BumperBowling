@@ -178,9 +178,17 @@ struct ArchitectureLinterTests {
             path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
             subsystem: try SubsystemID("core"),
             imports: [],
+            nominalTypes: [
+                NominalType(
+                    kind: .struct,
+                    name: try TypeName("Model"),
+                    inheritedTypes: [try TypeName("Identifiable")]
+                ),
+            ],
             publicDeclarations: [],
             storedProperties: [
-                StoredProperty(name: try DeclarationName("id"), type: try TypeName("String"), isMutable: false),
+                StoredProperty(owner: try TypeName("Model"), name: try DeclarationName("id"), type: try TypeName("String"), isMutable: false),
+                StoredProperty(owner: try TypeName("Model"), name: try DeclarationName("fullName"), type: try TypeName("String"), isMutable: false),
                 StoredProperty(name: try DeclarationName("payload"), type: try TypeName("Any"), isMutable: true),
                 StoredProperty(name: try DeclarationName("service"), type: try TypeName("any Service"), isMutable: false),
             ]
@@ -206,6 +214,7 @@ struct ArchitectureLinterTests {
         #expect(messages.contains("Stored property payload uses Any"))
         #expect(messages.contains("Stored property payload is mutable"))
         #expect(messages.contains("Stored property service uses a broad existential"))
+        #expect(!messages.contains("Stored property fullName uses raw String"))
     }
 
     @Test
@@ -214,9 +223,17 @@ struct ArchitectureLinterTests {
             path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
             subsystem: try SubsystemID("core"),
             imports: [],
+            nominalTypes: [
+                NominalType(
+                    kind: .struct,
+                    name: try TypeName("Model"),
+                    inheritedTypes: [try TypeName("Identifiable")]
+                ),
+            ],
             publicDeclarations: [],
             storedProperties: [
                 StoredProperty(
+                    owner: try TypeName("Model"),
                     name: try DeclarationName("id"),
                     type: try TypeName("String"),
                     isMutable: false,
@@ -246,7 +263,7 @@ struct ArchitectureLinterTests {
 
         #expect(violation.location == SourcePosition(line: 3, column: 5))
         #expect(violation.evidence?.observed == "stored property id: String")
-        #expect(violation.evidence?.expectation == "raw String identity is disallowed in stored property types")
+        #expect(violation.evidence?.expectation == "Identifiable id properties must not use raw String")
         #expect(violation.markdownLocation == "Sources/Core/Domain/Model.swift:3:5")
     }
 

@@ -3,6 +3,8 @@ import SwiftSyntax
 
 enum CollectedSourceFact: Equatable, Sendable {
     case importModule(ModuleName)
+    case nominalType(NominalType)
+    case extensionDeclaration(ExtensionDeclaration)
     case publicDeclaration(PublicDeclaration)
     case storedProperty(StoredProperty)
     case enumDeclaration(DeclarationName)
@@ -12,6 +14,8 @@ enum CollectedSourceFact: Equatable, Sendable {
 
 struct SourceFactSummary: Sendable {
     let imports: [ModuleName]
+    let nominalTypes: [NominalType]
+    let extensionDeclarations: [ExtensionDeclaration]
     let publicDeclarations: [PublicDeclaration]
     let storedProperties: [StoredProperty]
     let enums: [DeclarationName]
@@ -20,6 +24,8 @@ struct SourceFactSummary: Sendable {
 
     init(facts: [CollectedSourceFact]) {
         var imports = Set<ModuleName>()
+        var nominalTypes: [NominalType] = []
+        var extensionDeclarations: [ExtensionDeclaration] = []
         var publicDeclarations: [PublicDeclaration] = []
         var storedProperties: [StoredProperty] = []
         var enums: [DeclarationName] = []
@@ -30,6 +36,10 @@ struct SourceFactSummary: Sendable {
             switch fact {
             case .importModule(let module):
                 imports.insert(module)
+            case .nominalType(let type):
+                nominalTypes.append(type)
+            case .extensionDeclaration(let declaration):
+                extensionDeclarations.append(declaration)
             case .publicDeclaration(let declaration):
                 publicDeclarations.append(declaration)
             case .storedProperty(let property):
@@ -44,6 +54,8 @@ struct SourceFactSummary: Sendable {
         }
 
         self.imports = imports.sorted(by: { $0.rawValue < $1.rawValue })
+        self.nominalTypes = nominalTypes
+        self.extensionDeclarations = extensionDeclarations
         self.publicDeclarations = publicDeclarations
         self.storedProperties = storedProperties
         self.enums = enums
@@ -126,6 +138,22 @@ public struct ArchitectureGraph: Equatable, Sendable {
         }
     }
 
+    public func nominalTypes(in scope: GraphScope) -> [(file: SourceFileFacts, type: NominalType)] {
+        files(in: scope).flatMap { file in
+            file.nominalTypes.map { type in
+                (file: file, type: type)
+            }
+        }
+    }
+
+    public func extensions(in scope: GraphScope) -> [(file: SourceFileFacts, declaration: ExtensionDeclaration)] {
+        files(in: scope).flatMap { file in
+            file.extensionDeclarations.map { declaration in
+                (file: file, declaration: declaration)
+            }
+        }
+    }
+
     public func declarations(in scope: GraphScope) -> [(file: SourceFileFacts, declaration: PublicDeclaration)] {
         files(in: scope).flatMap { file in
             file.publicDeclarations.map { declaration in
@@ -163,6 +191,8 @@ public struct SourceFileFacts: Equatable, Sendable {
     public let path: RelativeFilePath
     public let subsystem: SubsystemID
     public let imports: [ModuleName]
+    public let nominalTypes: [NominalType]
+    public let extensionDeclarations: [ExtensionDeclaration]
     public let publicDeclarations: [PublicDeclaration]
     public let storedProperties: [StoredProperty]
     public let enums: [DeclarationName]
@@ -174,6 +204,8 @@ public struct SourceFileFacts: Equatable, Sendable {
         path: RelativeFilePath,
         subsystem: SubsystemID,
         imports: [ModuleName],
+        nominalTypes: [NominalType] = [],
+        extensionDeclarations: [ExtensionDeclaration] = [],
         publicDeclarations: [PublicDeclaration],
         storedProperties: [StoredProperty] = [],
         enums: [DeclarationName] = [],
@@ -187,6 +219,8 @@ public struct SourceFileFacts: Equatable, Sendable {
         self.path = path
         self.subsystem = subsystem
         self.imports = imports
+        self.nominalTypes = nominalTypes
+        self.extensionDeclarations = extensionDeclarations
         self.publicDeclarations = publicDeclarations
         self.storedProperties = storedProperties
         self.enums = enums
@@ -204,6 +238,8 @@ public struct SourceFileFacts: Equatable, Sendable {
             path: path,
             subsystem: subsystem,
             imports: summary.imports,
+            nominalTypes: summary.nominalTypes,
+            extensionDeclarations: summary.extensionDeclarations,
             publicDeclarations: summary.publicDeclarations,
             storedProperties: summary.storedProperties,
             enums: summary.enums,
@@ -271,6 +307,53 @@ public enum SyntaxFactFamily: String, Equatable, Hashable, Sendable {
     case unknown
 }
 
+public struct NominalType: Equatable, Sendable {
+    public let kind: DeclarationKind
+    public let name: TypeName
+    public let access: AccessLevel
+    public let inheritedTypes: [TypeName]
+    public let attributes: [AttributeName]
+    public let location: SourcePosition?
+
+    public init(
+        kind: DeclarationKind,
+        name: TypeName,
+        access: AccessLevel = .internal,
+        inheritedTypes: [TypeName] = [],
+        attributes: [AttributeName] = [],
+        location: SourcePosition? = nil
+    ) {
+        self.kind = kind
+        self.name = name
+        self.access = access
+        self.inheritedTypes = inheritedTypes
+        self.attributes = attributes
+        self.location = location
+    }
+}
+
+public struct ExtensionDeclaration: Equatable, Sendable {
+    public let extendedType: TypeName
+    public let access: AccessLevel
+    public let inheritedTypes: [TypeName]
+    public let attributes: [AttributeName]
+    public let location: SourcePosition?
+
+    public init(
+        extendedType: TypeName,
+        access: AccessLevel = .internal,
+        inheritedTypes: [TypeName] = [],
+        attributes: [AttributeName] = [],
+        location: SourcePosition? = nil
+    ) {
+        self.extendedType = extendedType
+        self.access = access
+        self.inheritedTypes = inheritedTypes
+        self.attributes = attributes
+        self.location = location
+    }
+}
+
 public struct PublicDeclaration: Equatable, Sendable {
     public let kind: DeclarationKind
     public let name: DeclarationName
@@ -291,19 +374,28 @@ public struct PublicDeclaration: Equatable, Sendable {
 }
 
 public struct StoredProperty: Equatable, Sendable {
+    public let owner: TypeName?
     public let name: DeclarationName
     public let type: TypeName?
+    public let access: AccessLevel
+    public let attributes: [AttributeName]
     public let isMutable: Bool
     public let location: SourcePosition?
 
     public init(
+        owner: TypeName? = nil,
         name: DeclarationName,
         type: TypeName?,
+        access: AccessLevel = .internal,
+        attributes: [AttributeName] = [],
         isMutable: Bool,
         location: SourcePosition? = nil
     ) {
+        self.owner = owner
         self.name = name
         self.type = type
+        self.access = access
+        self.attributes = attributes
         self.isMutable = isMutable
         self.location = location
     }
@@ -370,6 +462,15 @@ public enum DeclarationKind: String, Equatable, Sendable {
     case `protocol`
     case `struct`
     case variable
+}
+
+public enum AccessLevel: String, Equatable, Sendable {
+    case `private`
+    case `fileprivate`
+    case `internal`
+    case `package`
+    case `public`
+    case open
 }
 
 public enum ImperativeConstruct: String, Equatable, Hashable, Sendable {
