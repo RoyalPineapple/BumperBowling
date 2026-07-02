@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling is architecture snapshot testing for Swift codebases.
+Bumper Bowling is a Swift architectural linter. Declare the lanes your code should stay in, add bumpers with the Swift DSL, and fail changes that violate the project's architectural rules.
 
-Declare the lanes your code should stay in, add bumpers with the Swift DSL, parse the repo into SwiftSyntax-backed facts, and validate every change against those house rules. Each run is a frame with a scorecard: what Bumper Bowling observed, which bumper was touched, and what changed.
+It parses the repo into SwiftSyntax-backed facts and reports what it found. Each run is a frame with a scorecard: what Bumper Bowling observed, which rule failed, and which lane was involved.
 
 It is meant to run beside SwiftLint. SwiftLint owns local Swift style and code smells; Bumper Bowling owns the formal codebase shape: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
 
@@ -20,7 +20,7 @@ What makes Bumper Bowling interesting is the combination:
 
 Bumper Bowling uses the metaphor in the docs, but the API keeps the domain terms.
 
-- **Lane**: a component, scope, or architectural boundary.
+- **Lane**: a declared architectural boundary. In API terms, a lane is usually a `Component` with owned paths, module aliases, allowed dependencies, and allowed capabilities. A rule can also define a narrower lane with an explicit path scope.
 - **Bumper**: a scoped architecture assertion.
 - **House rules**: the repo's selected configuration and custom rule sets.
 - **League rules**: rule sets Bumper Bowling ships. They are the same underlying type as house rules and can be used, combined, or modified.
@@ -103,7 +103,7 @@ Component(.core) {
 
 The rule engine derives violations from that contract. Bumper Bowling should not be a pile of disconnected "do not" rules.
 
-`scan` and `snapshot` expose the architecture the code currently expresses: owned files, imports, declarations, properties, selected imperative constructs, subsystem edges, and enabled assertions. They are scorecards for the declared shape.
+`scan` and `snapshot` expose the architecture the code currently expresses: owned files, imports, declarations, properties, selected imperative constructs, subsystem edges, and enabled assertions. They are scorecards for the declared architecture.
 
 The graph is a normalized projection of SwiftSyntax facts, not a copy of the full SwiftSyntax tree. Bumper Bowling should add graph facts only when a rule can use them.
 
@@ -111,7 +111,7 @@ The graph is a normalized projection of SwiftSyntax facts, not a copy of the ful
 
 Bumper Bowling is useful in the space between lint and compile.
 
-SwiftLint can tell you whether local Swift code follows style and convention. The compiler can tell you whether the program builds. Bumper Bowling asks a different question: does this change preserve the declared shape of the codebase?
+SwiftLint can tell you whether local Swift code follows style and convention. The compiler can tell you whether the program builds. Bumper Bowling asks a different question: does this change violate the project's architectural rules?
 
 Examples:
 

@@ -1,12 +1,12 @@
 # Bumper Bowling Architecture
 
-Bumper Bowling is architecture snapshot testing for Swift codebases: a Swift 6 assertion engine over SwiftSyntax-observed source facts.
+Bumper Bowling is a Swift architectural linter: a Swift 6 assertion engine over SwiftSyntax-observed source facts.
 
 The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). Bumper Bowling ships one engine and two dumb interfaces over that engine: the `bumper` CLI for shell workflows and `BumperBowlingTesting` for Swift test suites.
 
 Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, reports, and a primary `bumper lint` command.
 
-It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns the formal codebase shape: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
+It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns the project's architectural rules: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
 
 SwiftLint configuration lives in `.swiftlint.yml`.
 
@@ -44,9 +44,25 @@ Bumper Bowling lives between linting and compilation.
 
 - SwiftLint owns local style, convention, and code smells.
 - The compiler owns type checking, symbol resolution, macro expansion, and build truth.
-- Bumper Bowling owns declared codebase shape when that shape can be checked from SwiftSyntax facts and repo metadata.
+- Bumper Bowling owns architectural rules when they can be checked from SwiftSyntax facts and repo metadata.
 
 That lane is especially useful for agentic work because it gives an automated editor a formal contract before it touches the repository, then leaves a scorecard after it does.
+
+## Lanes
+
+A lane is a declared architectural boundary.
+
+Most lanes are `Component` values. A component lane has:
+
+- owned paths
+- module aliases
+- allowed dependencies
+- allowed capabilities
+- scoped assertions
+
+Some assertions use narrower lanes. `RequiresScoped(...)` and assertion path filters apply a rule to a specific path scope inside the repository.
+
+The rule engine should always know which lane a finding came from. A report without a lane is hard to fix.
 
 ## Subsystems
 
