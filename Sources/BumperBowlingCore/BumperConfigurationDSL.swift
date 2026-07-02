@@ -258,6 +258,16 @@ public struct ComponentRequirement: Equatable, Sendable {
         .disallowSyntaxConstruct(.inoutExpression),
         .disallowSyntaxConstruct(.mutatingDeclaration)
     )
+    public static let swiftBasics = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState
+    )
+    public static let parserStateMachine = ComponentRequirement(.enumStateMachine)
+    public static let pureDomain = ComponentRequirement(
+        .swiftBasics,
+        .functionalCore
+    )
 }
 
 public func + (left: ComponentRequirement, right: ComponentRequirement) -> ComponentRequirement {

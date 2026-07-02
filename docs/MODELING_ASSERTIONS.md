@@ -126,3 +126,5 @@ That keeps strong modeling constraints intentional, local, and reviewable.
 If the rule is about how code looks, use SwiftLint.
 
 If the rule is about what architectural states are allowed to exist, and SwiftSyntax can observe enough source facts to check it deterministically, it belongs in Bumper Bowling.
+
+See [DEFAULT_RULE_SETS.md](DEFAULT_RULE_SETS.md) for the shipped semantic combinations and passing/failing examples.

@@ -162,6 +162,8 @@ DSL constructors parse strings into typed values at the boundary. `Owns`, `MayDe
 
 Bumper Bowling is SwiftSyntax-driven. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the system shape, [docs/SWIFTSYNTAX_SURFACE.md](docs/SWIFTSYNTAX_SURFACE.md) for the observable fact surface, and [docs/ARCHITECTURE_SNAPSHOT.md](docs/ARCHITECTURE_SNAPSHOT.md) for the generated commands, pipeline, and rule snapshots.
 
+Default semantic rule sets are documented in [docs/DEFAULT_RULE_SETS.md](docs/DEFAULT_RULE_SETS.md), including passing and failing examples for each shipped combination.
+
 Swift is the only language surface in 0.0. SwiftSyntax and SwiftParser stay inside `SwiftFileParser`; Bumper Bowling wraps those facts with DSL assertions.
 
 ## Development

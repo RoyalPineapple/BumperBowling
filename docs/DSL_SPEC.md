@@ -152,6 +152,8 @@ Only `error` fails `bumper lint`.
 
 See [MODELING_ASSERTIONS.md](MODELING_ASSERTIONS.md) for an example of using Bumper Bowling for architecture and SwiftSyntax fact assertions without overlapping SwiftLint style rules.
 
+See [DEFAULT_RULE_SETS.md](DEFAULT_RULE_SETS.md) for the shipped semantic combinations, what each one lowers to, and passing/failing examples.
+
 ## SwiftSyntax Boundary
 
 Bumper Bowling is SwiftSyntax-driven:

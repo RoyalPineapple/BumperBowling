@@ -106,4 +106,21 @@ struct BumperConfigurationDSLTests {
         #expect(rules.ruleConfiguration.storedProperties.paths == ["Sources/Core"])
         #expect(rules.ruleConfiguration.syntaxConstructs.paths == ["Sources/Core"])
     }
+
+    @Test
+    func shippedSemanticRuleSetsLowerToFactRules() {
+        #expect(
+            ComponentRequirement.swiftBasics.factRules ==
+                ComponentRequirement(
+                    .explicitDomainSurfaces,
+                    .typedIdentity,
+                    .immutableStoredState
+                ).factRules
+        )
+        #expect(ComponentRequirement.parserStateMachine.factRules == ComponentRequirement.enumStateMachine.factRules)
+        #expect(
+            ComponentRequirement.pureDomain.factRules ==
+                ComponentRequirement(.swiftBasics, .functionalCore).factRules
+        )
+    }
 }
