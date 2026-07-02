@@ -51,4 +51,38 @@ struct ArchitectureRulesTests {
         #expect(conflict.overlappingPath == (try RelativePathPrefix("Sources/Core")))
         #expect(conflict.overlappingOwner == (try SubsystemID("Core")))
     }
+
+    @Test
+    func rejectsAbsoluteConfiguredPaths() {
+        let configuration = ArchitectureConfiguration(
+            includedPaths: ["/Sources"],
+            subsystems: [
+                SubsystemConfiguration(name: "Core", paths: ["Sources/Core"]),
+            ]
+        )
+
+        #expect(throws: ConfigurationError.unsafePath("/Sources")) {
+            try ArchitectureRules(configuration: configuration)
+        }
+    }
+
+    @Test
+    func rejectsTraversalInRulePaths() {
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "Core", paths: ["Sources/Core"]),
+            ],
+            rules: RuleConfiguration(
+                storedProperties: StoredPropertyRuleConfiguration(
+                    severity: .error,
+                    paths: ["../Secrets"],
+                    disallowances: [.any]
+                )
+            )
+        )
+
+        #expect(throws: ConfigurationError.unsafePath("../Secrets")) {
+            try ArchitectureRules(configuration: configuration)
+        }
+    }
 }

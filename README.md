@@ -160,6 +160,8 @@ swift run bumper lint /tmp/BumperExample
 
 `bumper init` writes a runnable `BumperBowling.swift`. `bumper lint` loads that Swift file, evaluates the typed DSL, scans the repository, and exits nonzero only for `error` findings.
 
+Security note: the CLI executes `BumperBowling.swift` as native Swift through SwiftPM. Treat that file as trusted code and do not run `bumper lint`, `scan`, `snapshot`, or `explain` in repositories whose configuration you have not reviewed.
+
 In test suites, use `BumperBowlingTesting` with the same configuration value:
 
 ```swift
@@ -227,6 +229,8 @@ bumper explain <path>
 ```
 
 `bumper init` writes a sample `BumperBowling.swift` file. The CLI executes that file through SwiftPM so the config remains real Swift.
+
+Because the configuration is executable Swift, the CLI is intended for trusted repositories. Use the testing API when the configuration is already compiled into a trusted test target.
 
 ## Configuration Shape
 

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum ConfigurationCommand: Sendable {
@@ -46,6 +47,8 @@ public extension ConfigurationLoader {
 private extension ConfigurationLoader {
     static let outputBeginMarker = "__BUMPER_OUTPUT_BEGIN__"
     static let outputEndMarker = "__BUMPER_OUTPUT_END__"
+    static let configurationCommandTimeoutSeconds: TimeInterval = 300
+    static let configurationCommandOutputLimitBytes = 4 * 1024 * 1024
 
     static func runConfigurationCommand(_ command: ConfigurationCommand, root: URL) throws -> String {
         let root = root.standardizedFileURL
@@ -63,14 +66,6 @@ private extension ConfigurationLoader {
             try? FileManager.default.removeItem(at: workingDirectory)
         }
 
-        let stderrURL = workingDirectory.appendingPathComponent("stderr.txt")
-        FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
-        let stderrHandle = try FileHandle(forWritingTo: stderrURL)
-        defer {
-            try? stderrHandle.close()
-        }
-
-        let stdout = Pipe()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [
@@ -82,19 +77,32 @@ private extension ConfigurationLoader {
             root.path,
             command.rawValue,
         ] + command.arguments
-        process.standardOutput = stdout
-        process.standardError = stderrHandle
 
-        try process.run()
-        process.waitUntilExit()
+        let result = try runProcess(
+            process,
+            timeoutSeconds: configurationCommandTimeoutSeconds,
+            outputLimitBytes: configurationCommandOutputLimitBytes
+        )
 
-        let stdoutText = String(
-            data: stdout.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8
-        ) ?? ""
-        let stderrText = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
+        if result.timedOut {
+            throw BumperError.configurationExecutionTimedOut(
+                configurationURL.path,
+                Int(configurationCommandTimeoutSeconds)
+            )
+        }
 
-        guard process.terminationStatus == 0 else {
+        if let stream = result.outputTooLargeStream {
+            throw BumperError.configurationOutputTooLarge(
+                configurationURL.path,
+                stream,
+                configurationCommandOutputLimitBytes
+            )
+        }
+
+        let stdoutText = try outputText(result.stdout, stream: "stdout")
+        let stderrText = String(data: result.stderr, encoding: .utf8) ?? "<non-UTF-8 stderr>"
+
+        guard result.terminationStatus == 0 else {
             throw BumperError.configurationExecutionFailed(
                 configurationURL.path,
                 stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -102,6 +110,97 @@ private extension ConfigurationLoader {
         }
 
         return try extractPayload(from: stdoutText)
+    }
+
+    static func runProcess(
+        _ process: Process,
+        timeoutSeconds: TimeInterval,
+        outputLimitBytes: Int
+    ) throws -> CapturedProcessOutput {
+        let stdout = Pipe()
+        let stderr = Pipe()
+        let stdoutBuffer = BoundedOutputBuffer(limit: outputLimitBytes)
+        let stderrBuffer = BoundedOutputBuffer(limit: outputLimitBytes)
+
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        let stdoutHandle = stdout.fileHandleForReading
+        let stderrHandle = stderr.fileHandleForReading
+        stdoutHandle.readabilityHandler = { handle in
+            stdoutBuffer.append(handle.availableData)
+        }
+        stderrHandle.readabilityHandler = { handle in
+            stderrBuffer.append(handle.availableData)
+        }
+        defer {
+            stdoutHandle.readabilityHandler = nil
+            stderrHandle.readabilityHandler = nil
+        }
+
+        try process.run()
+
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        var timedOut = false
+        var outputTooLargeStream: String?
+
+        while process.isRunning {
+            if stdoutBuffer.hasExceededLimit {
+                outputTooLargeStream = "stdout"
+                process.terminate()
+                break
+            }
+            if stderrBuffer.hasExceededLimit {
+                outputTooLargeStream = "stderr"
+                process.terminate()
+                break
+            }
+            if Date() >= deadline {
+                timedOut = true
+                process.terminate()
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+
+        if process.isRunning {
+            let terminationDeadline = Date().addingTimeInterval(5)
+            while process.isRunning && Date() < terminationDeadline {
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+            if process.isRunning {
+                Darwin.kill(process.processIdentifier, SIGKILL)
+            }
+        }
+
+        process.waitUntilExit()
+        stdoutHandle.readabilityHandler = nil
+        stderrHandle.readabilityHandler = nil
+        stdoutBuffer.append(stdoutHandle.readDataToEndOfFile())
+        stderrBuffer.append(stderrHandle.readDataToEndOfFile())
+
+        if outputTooLargeStream == nil {
+            if stdoutBuffer.hasExceededLimit {
+                outputTooLargeStream = "stdout"
+            } else if stderrBuffer.hasExceededLimit {
+                outputTooLargeStream = "stderr"
+            }
+        }
+
+        return CapturedProcessOutput(
+            stdout: stdoutBuffer.data,
+            stderr: stderrBuffer.data,
+            terminationStatus: process.terminationStatus,
+            timedOut: timedOut,
+            outputTooLargeStream: outputTooLargeStream
+        )
+    }
+
+    static func outputText(_ data: Data, stream: String) throws -> String {
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw BumperError.configurationOutputMalformed("configuration \(stream) was not valid UTF-8")
+        }
+        return text
     }
 
     static func makeTemporaryPackage(
@@ -260,5 +359,58 @@ private extension ConfigurationLoader {
             payload.removeLast()
         }
         return payload
+    }
+}
+
+private struct CapturedProcessOutput {
+    let stdout: Data
+    let stderr: Data
+    let terminationStatus: Int32
+    let timedOut: Bool
+    let outputTooLargeStream: String?
+}
+
+private final class BoundedOutputBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private let limit: Int
+    private var storage = Data()
+    private var exceededLimit = false
+
+    init(limit: Int) {
+        self.limit = Swift.max(1, limit)
+    }
+
+    var data: Data {
+        lock.withLock {
+            storage
+        }
+    }
+
+    var hasExceededLimit: Bool {
+        lock.withLock {
+            exceededLimit
+        }
+    }
+
+    func append(_ chunk: Data) {
+        guard !chunk.isEmpty else {
+            return
+        }
+
+        lock.withLock {
+            guard !exceededLimit else {
+                return
+            }
+
+            let remaining = limit - storage.count
+            if chunk.count > remaining {
+                if remaining > 0 {
+                    storage.append(contentsOf: chunk.prefix(remaining))
+                }
+                exceededLimit = true
+            } else {
+                storage.append(chunk)
+            }
+        }
     }
 }
