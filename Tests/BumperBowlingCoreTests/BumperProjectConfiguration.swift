@@ -23,11 +23,6 @@ enum BumperProjectConfiguration {
                     .immutableStoredState,
                     severity: .warning
                 )
-                RequiresScoped(
-                    .enumStateMachine,
-                    "Sources/BumperBowlingCore/SwiftFileParser.swift",
-                    severity: .error
-                )
             }
 
             Component(.cli) {

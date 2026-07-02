@@ -81,7 +81,7 @@ The rule engine should always know which lane a finding came from. A report with
 - Duplicate subsystem IDs, module aliases, and path ownership are invalid.
 - SwiftSyntax parsing is syntax-only. Reports must not imply compiler-level symbol resolution.
 - Public API detection is syntactic and covers declarations marked `public` or `open`.
-- Parsers use explicit enum-based state machines. State cases carry their data; parsing transitions produce the next state.
+- Stateful parsers use explicit enum-based state machines. Stateless fact collection should stay as direct functional projection over SwiftSyntax nodes.
 - Avoid `Any` and broad existential abstractions in domain code.
 - Avoid code generation unless it directly supports a core linting workflow.
 

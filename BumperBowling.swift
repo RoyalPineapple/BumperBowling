@@ -20,7 +20,6 @@ let configuration = BumperConfiguration {
             MayUse(.foundation)
             DoesNot(Declare("bumperBowling"), severity: .error)
             Requires(.explicitDomainSurfaces, .typedIdentity, .immutableStoredState, severity: .warning)
-            RequiresScoped(.enumStateMachine, "Sources/BumperBowlingCore/SwiftFileParser.swift", severity: .error)
         }
 
         Component(.cli) {

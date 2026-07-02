@@ -112,15 +112,3 @@ flowchart LR
     PublicDeclarations --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
 ```
-
-### `enum_state_machine`
-
-Requires parser files to declare an enum state machine.
-
-```mermaid
-flowchart LR
-    Enums["ArchitectureGraph.sourceFiles.enums"] --> EnumStateMachine["enum_state_machine"]
-    Paths["PathRuleConfiguration.paths"] --> EnumStateMachine
-    EnumStateMachine --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
-```

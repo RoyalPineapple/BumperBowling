@@ -152,24 +152,16 @@ public enum ArchitectureRule: Sendable {
     private func evaluateForbiddenImports(graph: ArchitectureGraph, settings: [RuleSetting]) -> [ArchitectureViolation] {
         settings.flatMap { setting in
             let forbiddenImports = Set((try? setting.values.map(ModuleName.init)) ?? [])
-            let scopedPaths = (try? setting.paths.map(RelativePathPrefix.init)) ?? []
-
-            return graph.sourceFiles.flatMap { file in
-                guard scopedPaths.isEmpty || scopedPaths.contains(where: { $0.contains(file.path) }) else {
-                    return [ArchitectureViolation]()
+            return graph.imports(in: scope(paths: setting.paths)).compactMap { importFact -> ArchitectureViolation? in
+                guard forbiddenImports.contains(importFact.module) else {
+                    return nil
                 }
 
-                return file.imports.compactMap { importedModule in
-                    guard forbiddenImports.contains(importedModule) else {
-                        return nil
-                    }
-
-                    return violation(
-                        severity: setting.severity,
-                        path: file.path,
-                        message: "\(file.subsystem) imports forbidden module \(importedModule)"
-                    )
-                }
+                return violation(
+                    severity: setting.severity,
+                    path: importFact.file.path,
+                    message: "\(importFact.file.subsystem) imports forbidden module \(importFact.module)"
+                )
             }
         }
     }
@@ -275,20 +267,12 @@ public enum ArchitectureRule: Sendable {
         graph: ArchitectureGraph,
         configuration: StoredPropertyRuleConfiguration
     ) -> [ArchitectureViolation] {
-        let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
-
-        return graph.sourceFiles.flatMap { file in
-            guard paths.isEmpty || paths.contains(where: { $0.contains(file.path) }) else {
-                return [ArchitectureViolation]()
-            }
-
-            return file.storedProperties.flatMap { property in
-                storedPropertyViolations(
-                    file: file,
-                    property: property,
-                    configuration: configuration
-                )
-            }
+        graph.storedProperties(in: scope(paths: configuration.paths)).flatMap { propertyFact in
+            storedPropertyViolations(
+                file: propertyFact.file,
+                property: propertyFact.property,
+                configuration: configuration
+            )
         }
     }
 
@@ -296,34 +280,27 @@ public enum ArchitectureRule: Sendable {
         graph: ArchitectureGraph,
         configuration: SyntaxConstructRuleConfiguration
     ) -> [ArchitectureViolation] {
-        let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
         let excludedPaths = (try? configuration.excludedPaths.map(RelativePathPrefix.init)) ?? []
 
-        return graph.sourceFiles.flatMap { file in
-            guard paths.isEmpty || paths.contains(where: { $0.contains(file.path) }) else {
-                return [ArchitectureViolation]()
+        return graph.constructs(in: scope(paths: configuration.paths)).compactMap { constructFact -> ArchitectureViolation? in
+            guard !excludedPaths.contains(where: { $0.contains(constructFact.file.path) }) else {
+                return nil
             }
 
-            guard !excludedPaths.contains(where: { $0.contains(file.path) }) else {
-                return [ArchitectureViolation]()
+            guard configuration.disallowedConstructs.contains(constructFact.construct.construct) else {
+                return nil
             }
 
-            return file.observedImperativeConstructs.compactMap { observed in
-                guard configuration.disallowedConstructs.contains(observed.construct) else {
-                    return nil
-                }
-
-                return violation(
-                    severity: configuration.severity,
-                    path: file.path,
-                    message: "Uses imperative construct \(observed.construct.rawValue)",
-                    location: observed.location,
-                    evidence: ViolationEvidence(
-                        observed: "imperative construct \(observed.construct.rawValue)",
-                        expectation: "disallowed constructs: \(configuration.disallowedConstructs.map(\.rawValue).sorted().joined(separator: ", "))"
-                    )
+            return violation(
+                severity: configuration.severity,
+                path: constructFact.file.path,
+                message: "Uses imperative construct \(constructFact.construct.construct.rawValue)",
+                location: constructFact.construct.location,
+                evidence: ViolationEvidence(
+                    observed: "imperative construct \(constructFact.construct.construct.rawValue)",
+                    expectation: "disallowed constructs: \(configuration.disallowedConstructs.map(\.rawValue).sorted().joined(separator: ", "))"
                 )
-            }
+            )
         }
     }
 
@@ -331,13 +308,7 @@ public enum ArchitectureRule: Sendable {
         graph: ArchitectureGraph,
         configuration: SyntaxKindRuleConfiguration
     ) -> [ArchitectureViolation] {
-        let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
-
-        return graph.sourceFiles.flatMap { file in
-            guard paths.isEmpty || paths.contains(where: { $0.contains(file.path) }) else {
-                return [ArchitectureViolation]()
-            }
-
+        graph.files(in: scope(paths: configuration.paths)).flatMap { file in
             let missingRequiredKinds = configuration.requiredKinds
                 .subtracting(file.syntaxFacts.nodeKinds)
                 .map { kind in
@@ -352,6 +323,10 @@ public enum ArchitectureRule: Sendable {
                 .intersection(file.syntaxFacts.nodeKinds)
                 .map { kind in
                     let fact = file.syntaxFacts.facts.first { $0.nodeKind == kind }
+                    let expectedKinds = configuration.disallowedKinds
+                        .map { String(describing: $0) }
+                        .sorted()
+                        .joined(separator: ", ")
                     return violation(
                         severity: configuration.severity,
                         path: file.path,
@@ -359,7 +334,7 @@ public enum ArchitectureRule: Sendable {
                         location: fact?.location,
                         evidence: ViolationEvidence(
                             observed: "SwiftSyntax node kind \(kind)",
-                            expectation: "disallowed SwiftSyntax node kinds: \(configuration.disallowedKinds.map { String(describing: $0) }.sorted().joined(separator: ", "))"
+                            expectation: "disallowed SwiftSyntax node kinds: \(expectedKinds)"
                         )
                     )
                 }
@@ -372,43 +347,38 @@ public enum ArchitectureRule: Sendable {
         graph: ArchitectureGraph,
         configuration: PublicDeclarationRuleConfiguration
     ) -> [ArchitectureViolation] {
-        let paths = (try? configuration.paths.map(RelativePathPrefix.init)) ?? []
-        let scopedFiles = graph.sourceFiles.filter { file in
-            paths.isEmpty || paths.contains(where: { $0.contains(file.path) })
-        }
-        let declaredNames = scopedFiles.flatMap { file in
-            file.publicDeclarations.map(\.name)
-        }
+        let scope = scope(paths: configuration.paths)
+        let scopedFiles = graph.files(in: scope)
+        let scopedDeclarations = graph.declarations(in: scope)
+        let declaredNames = scopedDeclarations.map(\.declaration.name)
         let missingRequiredNames = configuration.requiredNames
             .filter { matcher in
                 !declaredNames.contains { matcher.matches($0) }
             }
             .sorted { $0.description < $1.description }
             .map { matcher in
-                violation(
-                    severity: configuration.severity,
-                    path: scopedFiles.first?.path ?? paths.first?.asFilePath ?? fallbackPath,
-                    message: "Missing required public declaration \(matcher)"
-                )
-            }
-
-        let disallowedNames: [ArchitectureViolation] = scopedFiles.flatMap { file -> [ArchitectureViolation] in
-            file.publicDeclarations.compactMap { declaration -> ArchitectureViolation? in
-                guard configuration.disallowedNames.contains(where: { $0.matches(declaration.name) }) else {
-                    return nil
+                    violation(
+                        severity: configuration.severity,
+                        path: scopedFiles.first?.path ?? firstPath(in: scope) ?? fallbackPath,
+                        message: "Missing required public declaration \(matcher)"
+                    )
                 }
 
-                return violation(
-                    severity: configuration.severity,
-                    path: file.path,
-                    message: "Public declaration \(declaration.name.rawValue) is disallowed",
-                    location: declaration.location,
-                    evidence: ViolationEvidence(
-                        observed: "public declaration \(declaration.name.rawValue)",
-                        expectation: "disallowed public declaration matchers: \(configuration.disallowedNames.map(\.description).sorted().joined(separator: ", "))"
-                    )
-                )
+        let disallowedNames: [ArchitectureViolation] = scopedDeclarations.compactMap { declarationFact -> ArchitectureViolation? in
+            guard configuration.disallowedNames.contains(where: { $0.matches(declarationFact.declaration.name) }) else {
+                return nil
             }
+
+            return violation(
+                severity: configuration.severity,
+                path: declarationFact.file.path,
+                message: "Public declaration \(declarationFact.declaration.name.rawValue) is disallowed",
+                location: declarationFact.declaration.location,
+                evidence: ViolationEvidence(
+                    observed: "public declaration \(declarationFact.declaration.name.rawValue)",
+                    expectation: "disallowed public declaration matchers: \(configuration.disallowedNames.map(\.description).sorted().joined(separator: ", "))"
+                )
+            )
         }
 
         return missingRequiredNames + disallowedNames
@@ -560,6 +530,19 @@ public enum ArchitectureRule: Sendable {
         }
 
         return fallbackPath
+    }
+
+    private func scope(paths: [String]) -> GraphScope {
+        GraphScope(paths: (try? paths.map(RelativePathPrefix.init)) ?? [])
+    }
+
+    private func firstPath(in scope: GraphScope) -> RelativeFilePath? {
+        switch scope {
+        case .all:
+            nil
+        case .paths(let paths):
+            paths.sorted(by: { $0.rawValue < $1.rawValue }).first?.asFilePath
+        }
     }
 
     private var fallbackPath: RelativeFilePath {
