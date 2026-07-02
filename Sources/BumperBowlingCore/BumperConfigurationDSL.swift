@@ -241,6 +241,7 @@ public struct ComponentRequirement: Equatable, Sendable {
     public static let noBroadExistentialStoredProperties =
         ComponentRequirement(.disallowStoredProperty(.broadExistential))
     public static let noRawStringStoredProperties = ComponentRequirement(.disallowStoredProperty(.rawStringIdentity))
+    public static let noStoredProperties = ComponentRequirement(.disallowStoredProperty(.storedProperty))
     public static let immutableStoredState = ComponentRequirement(.disallowStoredProperty(.storedVar))
     public static let enumStateMachine = ComponentRequirement(.requireEnumStateMachine)
 
@@ -249,6 +250,7 @@ public struct ComponentRequirement: Equatable, Sendable {
         .noBroadExistentialStoredProperties
     )
     public static let typedIdentity = ComponentRequirement(.noRawStringStoredProperties)
+    public static let computedState = ComponentRequirement(.noStoredProperties)
     public static let functionalCore = ComponentRequirement(
         .disallowSyntaxConstruct(.assignment),
         .disallowSyntaxConstruct(.loop),

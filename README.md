@@ -35,6 +35,7 @@ extension ComponentRequirement {
     static let valueCore = ComponentRequirement(
         .explicitDomainSurfaces,
         .typedIdentity,
+        .computedState,
         .immutableStoredState,
         .functionalCore
     )

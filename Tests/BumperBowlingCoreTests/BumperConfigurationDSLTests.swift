@@ -78,7 +78,8 @@ struct BumperConfigurationDSLTests {
         let valueCore = ComponentRequirement(
             .typedIdentity,
             .immutableStoredState,
-            ComponentRequirement(.disallowSyntaxConstruct(.assignment))
+            .computedState,
+            .functionalCore
         )
 
         let configuration = BumperConfiguration {
@@ -94,11 +95,13 @@ struct BumperConfigurationDSLTests {
 
         #expect(
             rules.ruleConfiguration.storedProperties.disallowances ==
-                Set<StoredPropertyDisallowance>([.rawStringIdentity, .storedVar])
+                Set<StoredPropertyDisallowance>([.rawStringIdentity, .storedVar, .storedProperty])
         )
         #expect(
             rules.ruleConfiguration.syntaxConstructs.disallowedConstructs ==
-                Set<ImperativeConstruct>([.assignment])
+                Set<ImperativeConstruct>(
+                    [.assignment, .loop, .mutableBinding, .inoutExpression, .mutatingDeclaration]
+                )
         )
         #expect(rules.ruleConfiguration.storedProperties.paths == ["Sources/Core"])
         #expect(rules.ruleConfiguration.syntaxConstructs.paths == ["Sources/Core"])

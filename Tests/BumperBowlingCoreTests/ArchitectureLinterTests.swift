@@ -133,6 +133,36 @@ struct ArchitectureLinterTests {
     }
 
     @Test
+    func flagsStoredPropertiesWhenComputedStateIsRequired() throws {
+        let file = SourceFileFacts(
+            path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
+            subsystem: try SubsystemID("core"),
+            imports: [],
+            publicDeclarations: [],
+            storedProperties: [
+                StoredProperty(name: try DeclarationName("fullName"), type: try TypeName("String"), isMutable: false),
+            ]
+        )
+        let configuration = ArchitectureConfiguration(
+            subsystems: [
+                SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
+            ],
+            rules: RuleConfiguration(
+                storedProperties: StoredPropertyRuleConfiguration(
+                    severity: .error,
+                    paths: ["Sources/Core/Domain"],
+                    disallowances: [.storedProperty]
+                )
+            )
+        )
+
+        let report = try ArchitectureLinter(configuration: configuration)
+            .lint(RepositoryFacts(files: [file]))
+
+        #expect(report.violations.map(\.message).contains("Stored property fullName is stored"))
+    }
+
+    @Test
     func flagsImperativeConstructsWhenFunctionalCoreIsRequired() throws {
         let file = SourceFileFacts(
             path: try RelativeFilePath("Sources/Core/Domain/Reducer.swift"),

@@ -19,6 +19,7 @@ extension ComponentRequirement {
     static let valueCore = ComponentRequirement(
         .explicitDomainSurfaces,
         .typedIdentity,
+        .computedState,
         .immutableStoredState,
         .functionalCore
     )
@@ -102,7 +103,9 @@ Current modeling requirements include:
 
 - `.explicitDomainSurfaces`: shorthand for no `Any` or broad existential stored properties.
 - `.typedIdentity`: shorthand for no raw `String` stored properties.
+- `.computedState`: shorthand for no stored properties in the configured scope.
 - `.functionalCore`: shorthand for no selected imperative syntax constructs.
+- `.noStoredProperties`: disallow any stored property.
 - `.noAnyStoredProperties`: disallow stored properties explicitly typed as `Any`.
 - `.noBroadExistentialStoredProperties`: disallow stored properties with explicit `any ...` types.
 - `.noRawStringStoredProperties`: disallow stored properties explicitly typed as `String`.

@@ -193,6 +193,7 @@ public struct PathRuleConfiguration: Equatable, Sendable {
 public enum StoredPropertyDisallowance: String, Equatable, Hashable, Sendable {
     case any
     case broadExistential
+    case storedProperty
     case storedVar
     case rawStringIdentity
 }

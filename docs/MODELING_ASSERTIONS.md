@@ -60,6 +60,7 @@ extension ComponentRequirement {
     static let validatedFunctionalDomain = ComponentRequirement(
         .explicitDomainSurfaces,
         .typedIdentity,
+        .computedState,
         .immutableStoredState,
         .functionalCore
     )
@@ -109,6 +110,8 @@ That keeps strong modeling constraints intentional, local, and reviewable.
 ## What This Means
 
 `Requires(.immutableStoredState)` is not a formatting preference. It asserts that SwiftSyntax should not observe mutable stored properties in the configured scope.
+
+`Requires(.computedState)` is semantic shorthand. It lowers to the raw fact-rule that SwiftSyntax should not observe any stored property in the configured scope. It does not prove a value can be computed; it enforces the lane where stored state is not allowed.
 
 `Disallows(.assignment, .loop, .mutableBinding)` is not a formatting preference. It asserts that configured paths should not contain those syntax constructs when SwiftSyntax observes them.
 

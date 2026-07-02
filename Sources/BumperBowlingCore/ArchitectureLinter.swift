@@ -305,6 +305,16 @@ public enum ArchitectureRule: Sendable {
         var violations: [ArchitectureViolation] = []
         let typeName = property.type?.rawValue ?? ""
 
+        if configuration.disallowances.contains(.storedProperty) {
+            violations.append(
+                violation(
+                    severity: configuration.severity,
+                    path: file.path,
+                    message: "Stored property \(property.name.rawValue) is stored"
+                )
+            )
+        }
+
         if configuration.disallowances.contains(.storedVar), property.isMutable {
             violations.append(
                 violation(
