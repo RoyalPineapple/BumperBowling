@@ -13,6 +13,7 @@ public struct ArchitectureRules: Equatable, Sendable {
     public init(configuration: ArchitectureConfiguration) throws {
         self.includedPaths = Set(try configuration.includedPaths.map(RelativePathPrefix.init))
         self.excludedPaths = Set(try configuration.excludedPaths.map(RelativePathPrefix.init))
+        try Self.validateRuleConfiguration(configuration.rules)
 
         var subsystems: [SubsystemRule] = []
         var subsystemByID: [SubsystemID: SubsystemRule] = [:]
@@ -65,6 +66,20 @@ public struct ArchitectureRules: Equatable, Sendable {
         self.pathOwnershipConflicts = pathOwnershipConflicts
         self.forbiddenImports = Set(try configuration.rules.forbiddenImports.flatMap(\.values).map(ModuleName.init))
         self.ruleConfiguration = configuration.rules
+    }
+
+    private static func validateRuleConfiguration(_ configuration: RuleConfiguration) throws {
+        for setting in configuration.forbiddenImports {
+            _ = try setting.values.map(ModuleName.init)
+            _ = try setting.paths.map(RelativePathPrefix.init)
+        }
+
+        _ = try configuration.storedProperties.paths.map(RelativePathPrefix.init)
+        _ = try configuration.syntaxConstructs.paths.map(RelativePathPrefix.init)
+        _ = try configuration.syntaxConstructs.excludedPaths.map(RelativePathPrefix.init)
+        _ = try configuration.syntaxKinds.paths.map(RelativePathPrefix.init)
+        _ = try configuration.publicDeclarations.paths.map(RelativePathPrefix.init)
+        _ = try configuration.enumStateMachine.paths.map(RelativePathPrefix.init)
     }
 
     public func subsystem(containing relativePath: RelativeFilePath) -> SubsystemRule? {
@@ -152,11 +167,7 @@ public struct RelativeFilePath: Hashable, Sendable, CustomStringConvertible, Cod
     public let rawValue: String
 
     public init(_ rawValue: String) throws {
-        let normalized = rawValue.trimmingCharacters(in: CharacterSet(charactersIn: "/ \n\t"))
-        guard !normalized.isEmpty else {
-            throw ConfigurationError.emptyPath
-        }
-        self.rawValue = normalized
+        self.rawValue = try normalizedRelativePath(rawValue)
     }
 
     public var description: String {
@@ -177,11 +188,7 @@ public struct RelativePathPrefix: Hashable, Sendable, CustomStringConvertible {
     public let rawValue: String
 
     public init(_ rawValue: String) throws {
-        let normalized = rawValue.trimmingCharacters(in: CharacterSet(charactersIn: "/ \n\t"))
-        guard !normalized.isEmpty else {
-            throw ConfigurationError.emptyPath
-        }
-        self.rawValue = normalized
+        self.rawValue = try normalizedRelativePath(rawValue)
     }
 
     public func contains(_ relativePath: RelativeFilePath) -> Bool {
@@ -210,6 +217,7 @@ public enum ConfigurationError: Error, Equatable, CustomStringConvertible, Senda
     case duplicateSubsystem(String)
     case duplicateModule(String)
     case duplicatePath(String)
+    case unsafePath(String)
     case unknownDependency(String, String)
 
     public var description: String {
@@ -234,8 +242,35 @@ public enum ConfigurationError: Error, Equatable, CustomStringConvertible, Senda
             "Duplicate module alias: \(module)."
         case .duplicatePath(let path):
             "Duplicate subsystem path: \(path)."
+        case .unsafePath(let path):
+            "Paths must be relative and stay within the repository: \(path)."
         case .unknownDependency(let subsystem, let dependency):
             "Subsystem \(subsystem) references unknown dependency \(dependency)."
         }
     }
+}
+
+private func normalizedRelativePath(_ rawValue: String) throws -> String {
+    let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+        throw ConfigurationError.emptyPath
+    }
+
+    guard !StringMatcher.prefix("/").matches(trimmed) else {
+        throw ConfigurationError.unsafePath(rawValue)
+    }
+
+    let normalized = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    let components = normalized.split(separator: "/", omittingEmptySubsequences: false)
+    guard !components.isEmpty,
+          !components.contains(where: { component in
+              let component = String(component)
+              return component.isEmpty
+                  || StringMatcher.exact(".").matches(component)
+                  || StringMatcher.exact("..").matches(component)
+          }) else {
+        throw ConfigurationError.unsafePath(rawValue)
+    }
+
+    return normalized
 }
