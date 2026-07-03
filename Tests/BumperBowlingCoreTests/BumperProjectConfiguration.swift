@@ -16,12 +16,17 @@ enum BumperProjectConfiguration {
                 Owns("Sources/BumperBowlingCore")
                 Modules("BumperBowlingCore")
                 MayUse(.foundation)
+                DoesNotDependOn(.cli, .tests)
                 DoesNot(Declare("bumperBowling"), severity: .error)
+                Requires(DisallowSyntax(.regexLiteralExpr), severity: .error)
+                Requires(.explicitDomainSurfaces, .typedIdentity, severity: .warning)
                 Requires(
-                    .explicitDomainSurfaces,
-                    .typedIdentity,
                     .immutableStoredState,
-                    severity: .warning
+                    except: [
+                        "Sources/BumperBowlingCore/ConfigurationCommandRunner.swift",
+                        "Sources/BumperBowlingCore/SwiftFileParser.swift",
+                    ],
+                    severity: .error
                 )
             }
 
@@ -29,7 +34,18 @@ enum BumperProjectConfiguration {
                 Owns("Sources/BumperBowling")
                 Modules("BumperBowling")
                 MayDependOn(.core)
+                DoesNotDependOn(.tests)
                 MayUse(.foundation)
+                Requires(.immutableStoredState, .typedIdentity, severity: .error)
+            }
+
+            Component(.tests) {
+                Owns("Sources/BumperBowlingTesting")
+                Modules("BumperBowlingTesting")
+                MayDependOn(.core)
+                DoesNotDependOn(.cli)
+                MayUse(.foundation)
+                Requires(.immutableStoredState, .typedIdentity, severity: .error)
             }
         }
 

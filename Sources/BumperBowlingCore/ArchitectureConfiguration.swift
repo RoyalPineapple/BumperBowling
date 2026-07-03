@@ -118,15 +118,18 @@ public struct RuleSetting: Equatable, Sendable, Codable {
 public struct StoredPropertyRuleConfiguration: Equatable, Sendable, Codable {
     public let severity: Severity
     public let paths: [String]
+    public let excludedPaths: [String]
     public let disallowances: Set<StoredPropertyDisallowance>
 
     public init(
         severity: Severity = .off,
         paths: [String] = [],
+        excludedPaths: [String] = [],
         disallowances: Set<StoredPropertyDisallowance> = []
     ) {
         self.severity = severity
         self.paths = paths
+        self.excludedPaths = excludedPaths
         self.disallowances = disallowances
     }
 }
