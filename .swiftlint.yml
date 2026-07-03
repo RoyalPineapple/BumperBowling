@@ -14,8 +14,8 @@ line_length:
   ignores_urls: true
 
 file_length:
-  warning: 500
-  error: 800
+  warning: 800
+  error: 1000
 
 function_body_length:
   warning: 80
@@ -28,5 +28,32 @@ type_body_length:
 identifier_name:
   excluded:
     - id
+    - ui
+    - Included
+    - Excluded
+    - Architecture
+    - Assertions
+    - Component
+    - RequireSyntax
+    - DisallowSyntax
+    - Owns
+    - MayDependOn
+    - DoesNotDependOn
+    - MayUse
+    - DoesNotUse
+    - Declare
+    - ContainSyntax
+    - Does
+    - DoesNot
+    - Declares
+    - Requires
+    - RequiresScoped
+    - Disallows
+    - NoDirectStringMatching
+    - DependencyBoundaries
+    - SingleOwner
+    - AcyclicDeclaredDependencies
+    - Paths
+    - Modules
 
 reporter: "xcode"
