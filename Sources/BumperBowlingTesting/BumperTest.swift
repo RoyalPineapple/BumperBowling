@@ -1,7 +1,7 @@
 import BumperBowlingCore
 import Foundation
 
-public struct BumperTestHarness: Sendable {
+public struct BumperTest: Sendable {
     public let configuration: ArchitectureConfiguration
 
     public init(configuration: ArchitectureConfiguration) {
