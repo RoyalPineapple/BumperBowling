@@ -4,10 +4,9 @@ import Testing
 
 @Suite("Configuration Execution Safety")
 struct ConfigurationExecutionSafetyTests {
-    /// Configurations outside the declarative subset are compiled and
-    /// executed. That execution must not observe the caller's environment,
-    /// must not be able to write files, and must still produce the value the
-    /// configuration computes.
+    /// Configurations are compiled and run to produce their value. That
+    /// execution must not observe the caller's environment, must not be able
+    /// to write files, and must still produce the value the config computes.
     @Test
     func executedConfigurationCannotReadEnvironmentOrWriteFiles() throws {
         setenv("BUMPER_CANARY_SECRET", "LEAKED", 1)
@@ -44,11 +43,6 @@ struct ConfigurationExecutionSafetyTests {
             atomically: true,
             encoding: .utf8
         )
-
-        guard case .requiresExecution = try ConfigurationInterpreter.interpret(source: source) else {
-            Issue.record("Expected this configuration to require sandboxed execution.")
-            return
-        }
 
         let configuration = try ConfigurationLoader.loadConfiguration(root: root)
 

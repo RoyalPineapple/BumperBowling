@@ -3,28 +3,11 @@ import CryptoKit
 import Foundation
 
 public extension ConfigurationLoader {
+    /// Loads `BumperBowling.swift` the way SwiftPM loads `Package.swift`:
+    /// compile it into a package, run the product in a sandbox, read back the
+    /// value it prints. The build is cached against the file's content hash,
+    /// so the compile happens once per change, not once per lint.
     static func loadConfiguration(root: URL) throws -> ArchitectureConfiguration {
-        switch try interpretation(root: root) {
-        case .configuration(let configuration):
-            return configuration
-        case .requiresExecution:
-            return try executeConfiguration(root: root)
-        }
-    }
-
-    static func interpretation(root: URL) throws -> ConfigurationInterpretation {
-        let configurationURL = root.standardizedFileURL.appendingPathComponent(fileName)
-        guard FileManager.default.fileExists(atPath: configurationURL.path) else {
-            throw BumperError.configurationMissing(configurationURL.path)
-        }
-        guard let source = try? String(contentsOf: configurationURL, encoding: .utf8) else {
-            throw BumperError.unreadableFile(configurationURL.path)
-        }
-
-        return try ConfigurationInterpreter.interpret(source: source)
-    }
-
-    static func executeConfiguration(root: URL) throws -> ArchitectureConfiguration {
         let output = try evaluateConfiguration(root: root.standardizedFileURL)
         guard !output.isEmpty else {
             throw BumperError.configurationOutputMalformed("empty configuration payload")
