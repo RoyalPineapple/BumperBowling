@@ -50,7 +50,7 @@ Bumper Bowling currently records selected syntax facts:
 - `inout` expression
 - `mutating` declaration
 
-These facts are descriptive. They become policy only when the DSL declares a lane such as:
+These facts are descriptive. They become policy only when a configuration declares a lane such as:
 
 ```swift
 Disallows(.assignment, .loop, .mutableBinding)
@@ -95,7 +95,7 @@ These views add no stored state to SwiftSyntax nodes. They infer local facts fro
 
 ## Configured Facts
 
-The DSL supplies the facts SwiftSyntax cannot know by itself:
+The configuration supplies the facts SwiftSyntax cannot know by itself:
 
 - included paths
 - excluded paths
@@ -121,7 +121,7 @@ Source files carry their observed imports, declarations, stored properties, enum
 
 Rules operate on that projection with deterministic operations: path scope, set membership, graph edge checks, and cycle detection.
 
-Semantic DSL shorthand does not add hidden facts. It composes `SourceFactRule` atoms, then lowers into these same graph operations.
+Semantic shorthand does not add hidden facts. It composes `SourceFactRule` atoms, then lowers into these same graph operations.
 
 ## Not Known
 

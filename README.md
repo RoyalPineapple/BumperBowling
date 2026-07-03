@@ -2,23 +2,23 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling is a Swift architecture linter.
+Bumper Bowling is a Swift architecture linter. SwiftLint owns local style;
+Bumper Bowling owns repo shape: which components exist, what paths they own,
+who may depend on whom, and what each component must prove.
 
-It parses Swift source with SwiftSyntax, projects source facts into an
-`ArchitectureGraph`, then checks those facts against a configuration written
-in familiar Swift syntax. Use it next to SwiftLint: SwiftLint owns local
-style; Bumper Bowling owns repo shape.
+It reads your source with SwiftSyntax, turns what it sees into a graph of
+facts, and checks that graph against the architecture you declared. The
+declaration is itself familiar Swift.
 
 ## Quick Start
 
 ```bash
-swift test
-swift run bumper init /tmp/BumperExample
-swift run bumper lint /tmp/BumperExample
+swift run bumper init .
+swift run bumper lint .
 ```
 
-`bumper init` writes `BumperBowling.swift`. `bumper lint` loads that
-configuration, scans the repo, and exits nonzero for `error` findings.
+`bumper init` writes a starter `BumperBowling.swift`. `bumper lint` loads it,
+scans the repo, and exits nonzero for `error` findings.
 
 ## Configuration
 
@@ -28,11 +28,6 @@ import BumperBowlingCore
 let configuration = BumperConfiguration {
     Included {
         "Sources"
-    }
-
-    Excluded {
-        ".build"
-        "DerivedData"
     }
 
     Architecture {
@@ -59,7 +54,8 @@ let configuration = BumperConfiguration {
 }
 ```
 
-Use the same typed value in tests:
+The same value works in your test suite, so architecture failures are just
+test failures:
 
 ```swift
 import BumperBowlingTesting
@@ -75,53 +71,34 @@ func architectureStaysInLane() async throws {
 }
 ```
 
+The full vocabulary and every shipped rule live in the
+[configuration language spec](docs/DSL_SPEC.md) and
+[default rule sets](docs/DEFAULT_RULE_SETS.md).
+
 ## Commands
 
 ```bash
-bumper init [root]
-bumper lint [root]
-bumper scan [root]
-bumper snapshot [root]
-bumper config [root]
-bumper explain <path>
+bumper init [root]      # write a starter configuration
+bumper lint [root]      # check the repo against it
+bumper scan [root]      # show the architecture graph the code expresses
+bumper snapshot [root]  # render the configured architecture
+bumper config [root]    # how your configuration loads, and whether it is valid
+bumper explain <path>   # what bumper sees in one file
 ```
 
-`bumper config` tells you whether your configuration is read as text or must
-be compiled and run, why, and whether it is valid. It exits nonzero when the
-configuration is not valid.
-
-## Rules
-
-- `forbidden_import`: disallow configured imports.
-- `subsystem_boundary`: require imports to match declared component dependencies.
-- `duplicate_ownership`: reject overlapping component path ownership.
-- `declared_dependency_cycle`: reject cycles in declared dependencies.
-- `stored_properties`: check stored property facts such as `String`, `Any`,
-  `any ...`, mutable state, and stored state.
-- `syntax_constructs`: check selected syntax facts such as assignment, loops,
-  mutable bindings, `inout`, `mutating`, and direct string matching.
-- `syntax_kinds`: require or disallow SwiftSyntax `SyntaxKind` values.
-- `public_declarations`: require or disallow public declarations by name.
-- `enum_state_machine`: require parser-like files to declare an enum whose name
-  ends in `State`.
-
-## Security Model
+## Loading Is Not Running
 
 `BumperBowling.swift` is Swift, but loading it is not running it.
 
-Write your configuration in plain, familiar Swift — one
-`let configuration = BumperConfiguration { ... }` made of known constructors,
-string literals, and leading-dot shorthands — and Bumper Bowling reads it the
-way you do: as text. Nothing is compiled. Nothing is run. The value it reads
-is the same value the compiler would have produced.
+Keep the configuration plain — known constructors, string literals,
+leading-dot shorthands — and Bumper Bowling reads it the way you do: as
+text. Nothing is compiled. Nothing is run. The value it reads is the same
+value the compiler would have produced.
 
-Write something fancier and Bumper Bowling compiles it and runs it in a
-sealed-off process, the same way SwiftPM treats `Package.swift`: no network,
-nowhere to write, an empty environment. The configuration value comes back
-over stdout, and that is all that comes back.
-
-Scanning and linting always run in the `bumper` process itself, never in
-configuration code.
+Write something fancier and it is compiled and run in a sealed-off process,
+the same way SwiftPM treats `Package.swift`: no network, nowhere to write,
+an empty environment. Only the configuration value comes back. Scanning and
+linting always run in the `bumper` process itself.
 
 `bumper config` tells you which kind of configuration you have, why, and
 whether it is valid.
@@ -130,21 +107,14 @@ One honest caveat: compiling a hostile configuration still runs its build.
 Keep configurations plain and they are never run at all. If a configuration
 must be executable, lint repositories you trust.
 
-## Fact Surface
+## What It Can And Cannot See
 
-Bumper Bowling sees what SwiftSyntax sees:
-
-- files and configured component ownership
-- imports
-- syntactic public declarations
-- stored properties with explicit type annotations
-- enum names
-- selected imperative constructs
-- observed SwiftSyntax `SyntaxKind` values
-
-It does not do type inference, symbol resolution, macro expansion semantics,
-target membership, data flow, or runtime analysis. Rules that need those facts
-belong in a compiler-backed analyzer, not this SwiftSyntax-only pass.
+Bumper Bowling sees what SwiftSyntax sees: files and ownership, imports,
+public declarations, stored properties with explicit types, enum names, and
+selected imperative constructs. It does no type inference and no symbol
+resolution. Rules that need the compiler belong in a compiler-backed
+analyzer, not this pass; the exact fact surface is in
+[SWIFTSYNTAX_SURFACE.md](docs/SWIFTSYNTAX_SURFACE.md).
 
 ## Development
 
@@ -153,14 +123,15 @@ swift test
 swift run bumper lint .
 ```
 
-The repo lints itself with `BumperBowlingTesting`; that is the main product
-test. The checked-in architecture snapshot is generated by `bumper snapshot`.
+The repo lints itself; that is the main product test. The checked-in
+architecture snapshot is generated by `bumper snapshot`.
 
 ## Docs
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [SwiftSyntax surface](docs/SWIFTSYNTAX_SURFACE.md)
+- [Configuration language](docs/DSL_SPEC.md)
 - [Default rule sets](docs/DEFAULT_RULE_SETS.md)
+- [SwiftSyntax surface](docs/SWIFTSYNTAX_SURFACE.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 
 ## License

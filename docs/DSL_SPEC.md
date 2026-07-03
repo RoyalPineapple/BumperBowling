@@ -1,18 +1,18 @@
-# Bumper Bowling Swift DSL Specification
+# Bumper Bowling Configuration Language Specification
 
-Bumper Bowling's assertion surface is Swift. The DSL is intentionally small and familiar to SwiftLint users, but its center is architecture snapshot testing: components own code, declare dependency edges and import capabilities, and require specific SwiftSyntax-observed facts.
+Bumper Bowling's assertion surface is Swift. The configuration language is intentionally small and familiar to SwiftLint users, but its center is architecture snapshot testing: components own code, declare dependency edges and import capabilities, and require specific SwiftSyntax-observed facts.
 
-Bumper Bowling exposes the DSL through two shipped interfaces. The CLI loads `BumperBowling.swift` for shell workflows. `BumperBowlingTesting` accepts the same typed configuration value directly inside Swift Testing or XCTest.
+Bumper Bowling exposes the configuration language through two shipped interfaces. The CLI loads `BumperBowling.swift` for shell workflows. `BumperBowlingTesting` accepts the same typed configuration value directly inside Swift Testing or XCTest.
 
-The DSL declares the shape the repository wants using Swift types. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed graph facts satisfy the declared shape.
+A configuration declares the shape the repository wants using Swift types. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed graph facts satisfy the declared shape.
 
-`bumper scan` shows the architecture graph the code currently expresses. The DSL declares the bounds; scan is evidence for those bounds.
+`bumper scan` shows the architecture graph the code currently expresses. The configuration declares the bounds; scan is evidence for those bounds.
 
 The graph is intentionally not a second AST. It is a compact projection of facts Bumper Bowling rules can use, and it is the evidence trail for every finding.
 
-The DSL compiles into typed architecture rules. Validation is deliberately lean math over the parsed graph: path scope, set membership, edge checks, and cycle detection.
+The configuration compiles into typed architecture rules. Validation is deliberately lean math over the parsed graph: path scope, set membership, edge checks, and cycle detection.
 
-Facts become rules when the DSL scopes them. The atom is `SourceFactRule`; a `ComponentRequirement` is a composable set of those atoms. Bumper Bowling ships semantic shorthand, and users can define their own:
+Facts become rules when the configuration scopes them. The atom is `SourceFactRule`; a `ComponentRequirement` is a composable set of those atoms. Bumper Bowling ships semantic shorthand, and users can define their own (custom shorthand takes a configuration beyond plain, familiar Swift, so it loads through the sandboxed runner instead of the static interpreter):
 
 ```swift
 extension ComponentRequirement {
@@ -60,7 +60,7 @@ BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner
 - Make every violation explainable as observed fact plus declared lane.
 - Support agentic coding loops by making architecture executable in hooks, CI, and tests.
 - Parse strings into typed values at the boundary.
-- Avoid generated accessors, dynamic lookup, JSON config, plugins, and clever DSL machinery.
+- Avoid generated accessors, dynamic lookup, JSON config, plugins, and clever configuration machinery.
 - Keep parsing SwiftSyntax-first and Swift-only in 0.1.
 - Do not duplicate SwiftSyntax's syntax model. Extend and compose over SwiftSyntax types instead.
 
@@ -154,6 +154,7 @@ bumper init [root]
 bumper lint [root]
 bumper scan [root]
 bumper snapshot [root]
+bumper config [root]
 bumper explain <path>
 ```
 
@@ -196,7 +197,7 @@ Bumper Bowling is SwiftSyntax-driven:
 SwiftSyntax -> SourceFileFacts -> RepositoryFacts -> ArchitectureGraph -> RuleRegistry
 ```
 
-Swift is the only language surface in 0.1. The DSL must not promise facts SwiftSyntax cannot observe, such as symbol resolution, inferred types, or compiler-level dependency truth.
+Swift is the only language surface in 0.1. The configuration language must not promise facts SwiftSyntax cannot observe, such as symbol resolution, inferred types, or compiler-level dependency truth.
 
 See [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md) for the exact 0.1 fact surface.
 

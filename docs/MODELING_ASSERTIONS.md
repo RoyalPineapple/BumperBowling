@@ -53,9 +53,9 @@ let configuration = BumperConfiguration {
 }
 ```
 
-## How The DSL Pushes Policy
+## How The Configuration Pushes Policy
 
-The DSL makes architectural policy concrete before enforcement starts. The center is the architecture you want, not a pile of disconnected prohibitions.
+The configuration makes architectural policy concrete before enforcement starts. The center is the architecture you want, not a pile of disconnected prohibitions.
 
 You can compose your own semantic vocabulary:
 
