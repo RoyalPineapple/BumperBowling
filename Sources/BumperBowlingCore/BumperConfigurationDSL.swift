@@ -223,6 +223,19 @@ public struct ComponentRequirementSetting: Equatable, Sendable {
     public let requirement: ComponentRequirement
     public let severity: Severity
     public let paths: [String]
+    public let excludedPaths: [String]
+
+    public init(
+        requirement: ComponentRequirement,
+        severity: Severity,
+        paths: [String],
+        excludedPaths: [String] = []
+    ) {
+        self.requirement = requirement
+        self.severity = severity
+        self.paths = paths
+        self.excludedPaths = excludedPaths
+    }
 }
 
 public struct ImperativeDisallowanceSetting: Equatable, Sendable {
@@ -338,6 +351,21 @@ public func RequiresScoped(
     .requires([ComponentRequirementSetting(requirement: requirement, severity: severity, paths: paths)])
 }
 
+public func Requires(
+    _ requirement: ComponentRequirement,
+    except excludedPaths: [String],
+    severity: Severity = .error
+) -> ComponentElement {
+    .requires([
+        ComponentRequirementSetting(
+            requirement: requirement,
+            severity: severity,
+            paths: [],
+            excludedPaths: excludedPaths
+        ),
+    ])
+}
+
 public func Disallows(_ constructs: ImperativeConstruct..., severity: Severity = .error) -> ComponentElement {
     .disallows([ImperativeDisallowanceSetting(constructs: Set(constructs), severity: severity, paths: [])])
 }
@@ -413,6 +441,7 @@ private extension Array where Element == ComponentRequirementSetting {
         var storedPropertySeverity = Severity.off
         var storedPropertyDisallowances = Set<StoredPropertyDisallowance>()
         var storedPropertyPaths: [String] = []
+        var storedPropertyExcludedPaths: [String] = []
         var syntaxConstructSeverity = Severity.off
         var disallowedSyntaxConstructs = Set<ImperativeConstruct>()
         var syntaxConstructPaths: [String] = []
@@ -429,6 +458,7 @@ private extension Array where Element == ComponentRequirementSetting {
             if !storedPropertyRules.isEmpty {
                 storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
                 storedPropertyPaths.append(contentsOf: scopedPaths)
+                storedPropertyExcludedPaths.append(contentsOf: setting.excludedPaths)
                 storedPropertyDisallowances.formUnion(storedPropertyRules)
             }
 
@@ -460,6 +490,7 @@ private extension Array where Element == ComponentRequirementSetting {
             storedProperties: StoredPropertyRuleConfiguration(
                 severity: storedPropertySeverity,
                 paths: Swift.Array(Set(storedPropertyPaths)).sorted(),
+                excludedPaths: Swift.Array(Set(storedPropertyExcludedPaths)).sorted(),
                 disallowances: storedPropertyDisallowances
             ),
             syntaxConstructs: SyntaxConstructRuleConfiguration(
@@ -668,6 +699,7 @@ private extension StoredPropertyRuleConfiguration {
         StoredPropertyRuleConfiguration(
             severity: severity.merging(other.severity),
             paths: Array(Set(paths + other.paths)).sorted(),
+            excludedPaths: Array(Set(excludedPaths + other.excludedPaths)).sorted(),
             disallowances: disallowances.union(other.disallowances)
         )
     }

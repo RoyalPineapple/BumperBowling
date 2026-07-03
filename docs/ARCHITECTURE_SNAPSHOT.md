@@ -101,6 +101,18 @@ flowchart LR
     Findings --> Report["LintReport"]
 ```
 
+### `syntax_kinds`
+
+Applies configured assertions over observed SwiftSyntax node kinds.
+
+```mermaid
+flowchart LR
+    Kinds["ArchitectureGraph.sourceFiles.syntaxFacts.nodeKinds"] --> SyntaxKinds["syntax_kinds"]
+    Policy["SyntaxKindRuleConfiguration"] --> SyntaxKinds
+    SyntaxKinds --> Findings["ArchitectureViolation[]"]
+    Findings --> Report["LintReport"]
+```
+
 ### `public_declarations`
 
 Applies configured assertions over public declaration facts.

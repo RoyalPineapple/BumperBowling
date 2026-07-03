@@ -171,9 +171,15 @@ private extension ConfigurationInterpreter {
         "Requires": { call in
             let arguments = try Arguments(of: call)
             let severity = try arguments.severity(default: .error)
+            let excludedPaths = try arguments.optional("except").map(stringArray) ?? []
             return .requires(
                 try arguments.unlabeled().map(componentRequirement).map { requirement in
-                    ComponentRequirementSetting(requirement: requirement, severity: severity, paths: [])
+                    ComponentRequirementSetting(
+                        requirement: requirement,
+                        severity: severity,
+                        paths: [],
+                        excludedPaths: excludedPaths
+                    )
                 }
             )
         },
@@ -300,10 +306,41 @@ private extension ConfigurationInterpreter {
     }
 
     static func componentRequirement(of expression: ExprSyntax) throws -> ComponentRequirement {
+        if let call = expression.as(FunctionCallExprSyntax.self) {
+            guard let name = calleeName(of: call),
+                  let build = syntaxRequirementBuilders[name] else {
+                throw needsExecution("it builds a requirement bumper cannot read without running it")
+            }
+            return try build(try Arguments(of: call).single())
+        }
+
         guard let requirement = componentRequirements[try memberName(of: expression)] else {
             throw needsExecution("it names a requirement bumper does not know")
         }
         return requirement
+    }
+
+    static let syntaxRequirementBuilders: [String: @Sendable (ExprSyntax) throws -> ComponentRequirement] = [
+        "RequireSyntax": { RequireSyntax(try syntaxKind(of: $0)) },
+        "DisallowSyntax": { DisallowSyntax(try syntaxKind(of: $0)) },
+    ]
+
+    // SyntaxKind isn't RawRepresentable or CaseIterable, so there's no name -> kind
+    // lookup. This table covers the kinds a configuration commonly disallows; any
+    // other kind falls back to execution, which is safe (the compiled path reads it).
+    static let syntaxKinds: [String: SyntaxKind] = [
+        "regexLiteralExpr": .regexLiteralExpr,
+        "forceUnwrapExpr": .forceUnwrapExpr,
+        "enumDecl": .enumDecl,
+        "classDecl": .classDecl,
+        "closureExpr": .closureExpr,
+    ]
+
+    static func syntaxKind(of expression: ExprSyntax) throws -> SyntaxKind {
+        guard let kind = syntaxKinds[try memberName(of: expression)] else {
+            throw needsExecution("it names a SwiftSyntax kind bumper cannot read without running it")
+        }
+        return kind
     }
 
     static func imperativeConstruct(of expression: ExprSyntax) throws -> ImperativeConstruct {

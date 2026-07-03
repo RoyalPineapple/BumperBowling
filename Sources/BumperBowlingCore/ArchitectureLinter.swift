@@ -267,8 +267,14 @@ public enum ArchitectureRule: Sendable {
         graph: ArchitectureGraph,
         configuration: StoredPropertyRuleConfiguration
     ) -> [ArchitectureViolation] {
-        graph.storedProperties(in: scope(paths: configuration.paths)).flatMap { propertyFact in
-            storedPropertyViolations(
+        let excludedPaths = (try? configuration.excludedPaths.map(RelativePathPrefix.init)) ?? []
+
+        return graph.storedProperties(in: scope(paths: configuration.paths)).flatMap { propertyFact -> [ArchitectureViolation] in
+            guard !excludedPaths.contains(where: { $0.contains(propertyFact.file.path) }) else {
+                return []
+            }
+
+            return storedPropertyViolations(
                 file: propertyFact.file,
                 property: propertyFact.property,
                 graph: graph,

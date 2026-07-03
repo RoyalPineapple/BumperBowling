@@ -171,6 +171,33 @@ struct ConfigurationInterpreterTests {
     }
 
     @Test
+    func interpretsRequiresWithSyntaxKindAndExcept() throws {
+        let source = """
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Requires(DisallowSyntax(.regexLiteralExpr), severity: .error)
+                    Requires(.immutableStoredState, except: ["Sources/Core/Buffer.swift"], severity: .error)
+                }
+            }
+        }
+        """
+
+        let expected = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Requires(DisallowSyntax(.regexLiteralExpr), severity: .error)
+                    Requires(.immutableStoredState, except: ["Sources/Core/Buffer.swift"], severity: .error)
+                }
+            }
+        }.architectureConfiguration
+
+        #expect(try ConfigurationInterpreter.interpret(source: source) == .configuration(expected))
+    }
+
+    @Test
     func interpretationFailsOnInvalidDeclarationNames() {
         let source = """
         let configuration = BumperConfiguration {
