@@ -4,12 +4,13 @@
 
 Bumper Bowling is a Swift architecture linter.
 
-As [SwiftLint](https://github.com/realm/swiftlint) owns local style;
-Bumper Bowling owns repo shape: which components exist, what paths they own,
-who may depend on whom, and what each component must prove.
+[SwiftLint](https://github.com/realm/swiftlint) owns local style; Bumper
+Bowling owns repo shape: which components exist, what paths they own, who may
+depend on whom, and what each component must prove.
 
-Declare your indended structure in familiar Swift. Bumper Bowling parses your source with SwiftSyntax, turns what it sees into a graph of
-facts, and checks that graph against your intent. 
+Declare your intended structure in familiar Swift. Bumper Bowling parses your
+source with SwiftSyntax, turns what it sees into a graph of facts, and checks
+that graph against your intent.
 
 ## Quick Start
 
