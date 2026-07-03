@@ -2,13 +2,14 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling is a Swift architecture linter. SwiftLint owns local style;
+Bumper Bowling is a Swift architecture linter.
+
+As [SwiftLint](https://github.com/realm/swiftlint) owns local style;
 Bumper Bowling owns repo shape: which components exist, what paths they own,
 who may depend on whom, and what each component must prove.
 
-It reads your source with SwiftSyntax, turns what it sees into a graph of
-facts, and checks that graph against the architecture you declared. The
-declaration is itself familiar Swift.
+Declare your indended structure in familiar Swift. Bumper Bowling parses your source with SwiftSyntax, turns what it sees into a graph of
+facts, and checks that graph against your intent. 
 
 ## Quick Start
 
