@@ -12,7 +12,7 @@ The graph is intentionally not a second AST. It is a compact projection of facts
 
 The configuration compiles into typed architecture rules. Validation is deliberately lean math over the parsed graph: path scope, set membership, edge checks, and cycle detection.
 
-Facts become rules when the configuration scopes them. The atom is `SourceFactRule`; a `ComponentRequirement` is a composable set of those atoms. Bumper Bowling ships semantic shorthand, and users can define their own (custom shorthand takes a configuration beyond plain, familiar Swift, so it loads through the sandboxed runner instead of the static interpreter):
+Facts become rules when the configuration scopes them. The atom is `SourceFactRule`; a `ComponentRequirement` is a composable set of those atoms. Bumper Bowling ships semantic shorthand, and users can define their own:
 
 ```swift
 extension ComponentRequirement {

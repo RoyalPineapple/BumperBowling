@@ -86,26 +86,26 @@ bumper config [root]    # how your configuration loads, and whether it is valid
 bumper explain <path>   # what bumper sees in one file
 ```
 
-## Loading Is Not Running
+## How The Configuration Loads
 
-`BumperBowling.swift` is Swift, but loading it is not running it.
+`BumperBowling.swift` is a program, not a data file — the same as
+`Package.swift`. So Bumper Bowling loads it the way SwiftPM loads a manifest:
+it compiles the file, runs it in a sealed-off process, and reads back the
+configuration value the run produced.
 
-Keep the configuration plain — known constructors, string literals,
-leading-dot shorthands — and Bumper Bowling reads it the way you do: as
-text. Nothing is compiled. Nothing is run. The value it reads is the same
-value the compiler would have produced.
+The sealed-off process has no network, nowhere to write, and an empty
+environment. It emits one thing — the configuration, as JSON — and nothing
+else crosses back. Scanning and linting run in the `bumper` process itself,
+never in configuration code.
 
-Write something fancier and it is compiled and run in a sealed-off process,
-the same way SwiftPM treats `Package.swift`: no network, nowhere to write,
-an empty environment. Only the configuration value comes back. Scanning and
-linting always run in the `bumper` process itself.
+The compile is cached against the file's contents, so it happens once per
+change to `BumperBowling.swift`, not once per lint. An unchanged
+configuration loads from cache with no build at all.
 
-`bumper config` tells you which kind of configuration you have, why, and
-whether it is valid.
+`bumper config` loads your configuration and tells you whether it is valid.
 
-One honest caveat: compiling a hostile configuration still runs its build.
-Keep configurations plain and they are never run at all. If a configuration
-must be executable, lint repositories you trust.
+One honest caveat: compiling a configuration runs its build. Lint
+repositories you trust.
 
 ## What It Can And Cannot See
 
