@@ -3,15 +3,13 @@
 ## 0.1.0 - Unreleased
 
 - Added configuration in familiar Swift through `BumperBowling.swift`.
-- Added static interpretation of configurations written in familiar Swift
-  syntax: they load through SwiftSyntax without compiling or executing any
-  configuration code.
-- Added `bumper config`, which reports a configuration's loading lane
-  (statically interpreted or sandbox-executed), the reason, and validity.
-- Hardened executable configurations: the runner now only evaluates the
-  configuration value (scan and lint run in the host process) inside a
-  deny-default sandbox with an empty environment, no network, and no writable
-  paths.
+- Loaded configurations the way SwiftPM loads `Package.swift`: the file is
+  compiled and run in a deny-default sandbox (no network, no writable paths,
+  empty environment) that emits only the configuration value as JSON; scan and
+  lint run in the host process. The build is cached against the file's content
+  hash, so it happens once per change, not once per lint.
+- Added `bumper config`, which loads the configuration and reports whether it
+  is valid.
 - Made `ArchitectureConfiguration` and its rule configurations `Codable`;
   SwiftSyntax node kinds are carried as typed `SyntaxKindName` values.
 - Added `BumperBowlingTesting` as a test-suite interface over the core engine.

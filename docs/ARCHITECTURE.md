@@ -30,12 +30,11 @@ The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](S
 
 ## Configuration Loading
 
-`BumperBowling.swift` loads through two lanes, tried in order:
+`BumperBowling.swift` loads the way SwiftPM loads `Package.swift`: it is a program, so it is compiled and run rather than parsed.
 
-1. `ConfigurationInterpreter` statically evaluates configurations written in familiar Swift syntax — known constructors, string literals, leading-dot shorthands — with SwiftSyntax. Nothing is compiled or executed; the interpreter lowers through the same configuration functions the compiled path uses, so both lanes produce value-equal configurations.
-2. Files that go beyond that fall back to the configuration runner: the file is compiled through SwiftPM and evaluated in a deny-default sandboxed subprocess with an empty environment, no network, and no writable paths. The subprocess computes only the configuration value and prints it as JSON; scanning and linting always run in the host process.
+The configuration runner generates a small package that links `BumperBowlingCore`, compiles `BumperBowling.swift` into it, and runs the product in a deny-default sandbox — no network, no writable paths, an empty environment. The run computes the configuration value and prints it as JSON on stdout; nothing else crosses back, and scanning and linting run in the host process, never in configuration code.
 
-The interpreter never guesses. Any construct it does not model falls back to execution instead of being interpreted loosely, so the compiled path stays the semantic authority. `bumper config` reports a configuration's lane, the reason, and validity.
+The build is cached against the configuration's content hash (plus the toolchain identity and the runner's own hashes), so the compile happens once per change to `BumperBowling.swift`, not once per lint. An unchanged configuration loads from the cached binary with no build. `bumper config` loads the configuration and reports whether it is valid.
 
 A configuration should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 

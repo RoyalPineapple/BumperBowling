@@ -79,15 +79,15 @@ struct BumperCLI {
       bumper explain <path>
 
     Security:
-      A BumperBowling.swift written in plain, familiar Swift is read as text and
-      understood. It is never compiled and never run. A configuration fancier than
-      that is compiled and run in a sealed-off process: no network, nowhere to
-      write, an empty environment. Only the configuration value comes back.
+      BumperBowling.swift is a program, like Package.swift. Bumper compiles it
+      and runs it in a sealed-off process — no network, nowhere to write, an
+      empty environment — and reads back only the configuration value. The
+      build is cached, so it runs once per change, not once per lint.
 
-      `bumper config` tells you which kind you have and whether it is valid.
+      `bumper config` loads the configuration and tells you whether it is valid.
 
-      Compiling a stranger's configuration still runs their build. Lint
-      repositories you trust.
+      Compiling a stranger's configuration runs their build. Lint repositories
+      you trust.
     """
 }
 
