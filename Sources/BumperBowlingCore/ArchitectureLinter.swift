@@ -271,6 +271,7 @@ public enum ArchitectureRule: Sendable {
             storedPropertyViolations(
                 file: propertyFact.file,
                 property: propertyFact.property,
+                graph: graph,
                 configuration: configuration
             )
         }
@@ -387,6 +388,7 @@ public enum ArchitectureRule: Sendable {
     private func storedPropertyViolations(
         file: SourceFileFacts,
         property: StoredProperty,
+        graph: ArchitectureGraph,
         configuration: StoredPropertyRuleConfiguration
     ) -> [ArchitectureViolation] {
         var violations: [ArchitectureViolation] = []
@@ -452,7 +454,9 @@ public enum ArchitectureRule: Sendable {
             )
         }
 
-        if configuration.disallowances.contains(.rawStringIdentity), StringMatcher.exact("String").matches(typeName) {
+        if configuration.disallowances.contains(.rawStringIdentity),
+           StringMatcher.exact("String").matches(typeName),
+           isIdentifiableID(property, graph: graph) {
             violations.append(
                 violation(
                     severity: configuration.severity,
@@ -461,13 +465,33 @@ public enum ArchitectureRule: Sendable {
                     location: property.location,
                     evidence: ViolationEvidence(
                         observed: "stored property \(property.name.rawValue): \(typeName)",
-                        expectation: "raw String identity is disallowed in stored property types"
+                        expectation: "Identifiable id properties must not use raw String"
                     )
                 )
             )
         }
 
         return violations
+    }
+
+    private func isIdentifiableID(_ property: StoredProperty, graph: ArchitectureGraph) -> Bool {
+        guard StringMatcher.exact("id").matches(property.name.rawValue),
+              let owner = property.owner else {
+            return false
+        }
+
+        return graph.sourceFiles.contains { file in
+            file.nominalTypes.contains { type in
+                type.name == owner && type.inheritedTypes.contains(where: isIdentifiable)
+            } || file.extensionDeclarations.contains { declaration in
+                declaration.extendedType == owner && declaration.inheritedTypes.contains(where: isIdentifiable)
+            }
+        }
+    }
+
+    private func isIdentifiable(_ type: TypeName) -> Bool {
+        StringMatcher.exact("Identifiable").matches(type.rawValue)
+            || StringMatcher.suffix(".Identifiable").matches(type.rawValue)
     }
 
     private func evaluateEnumStateMachines(

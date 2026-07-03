@@ -4,6 +4,8 @@ import SwiftSyntax
 
 public struct SwiftFileSummary: Equatable, Sendable {
     public let imports: [ModuleName]
+    public let nominalTypes: [NominalType]
+    public let extensionDeclarations: [ExtensionDeclaration]
     public let publicDeclarations: [PublicDeclaration]
     public let storedProperties: [StoredProperty]
     public let enums: [DeclarationName]
@@ -13,6 +15,8 @@ public struct SwiftFileSummary: Equatable, Sendable {
 
     public init(
         imports: [ModuleName],
+        nominalTypes: [NominalType] = [],
+        extensionDeclarations: [ExtensionDeclaration] = [],
         publicDeclarations: [PublicDeclaration],
         storedProperties: [StoredProperty] = [],
         enums: [DeclarationName] = [],
@@ -24,6 +28,8 @@ public struct SwiftFileSummary: Equatable, Sendable {
             ? imperativeConstructs.map { ObservedImperativeConstruct(construct: $0) }
             : observedImperativeConstructs
         self.imports = imports
+        self.nominalTypes = nominalTypes
+        self.extensionDeclarations = extensionDeclarations
         self.publicDeclarations = publicDeclarations
         self.storedProperties = storedProperties
         self.enums = enums
@@ -39,6 +45,8 @@ public struct SwiftFileSummary: Equatable, Sendable {
 
         self.init(
             imports: summary.imports,
+            nominalTypes: summary.nominalTypes,
+            extensionDeclarations: summary.extensionDeclarations,
             publicDeclarations: summary.publicDeclarations,
             storedProperties: summary.storedProperties,
             enums: summary.enums,
@@ -83,6 +91,7 @@ public struct SwiftFileParser: Sendable {
 private final class SourceVisitor: SyntaxAnyVisitor {
     private(set) var facts: [CollectedSourceFact] = []
     private let locationConverter: SourceLocationConverter
+    private var ownerStack: [TypeName?] = []
 
     init(locationConverter: SourceLocationConverter) {
         self.locationConverter = locationConverter
@@ -104,35 +113,83 @@ private final class SourceVisitor: SyntaxAnyVisitor {
 
     override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
         recordSyntax(Syntax(node))
-        facts.append(contentsOf: node.bumper.publicDeclarations(location: location(for: node)).map(CollectedSourceFact.publicDeclaration))
+        let location = location(for: node)
+        let type = node.bumper.nominalType(location: location)
+        appendNominalType(type)
+        facts.append(contentsOf: node.bumper.publicDeclarations(location: location).map(CollectedSourceFact.publicDeclaration))
         return .visitChildren
+    }
+
+    override func visitPost(_ node: ClassDeclSyntax) {
+        ownerStack.removeLast()
     }
 
     override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
         recordSyntax(Syntax(node))
-        facts.append(contentsOf: node.bumper.publicDeclarations(location: location(for: node)).map(CollectedSourceFact.publicDeclaration))
+        let location = location(for: node)
+        let type = node.bumper.nominalType(location: location)
+        appendNominalType(type)
+        facts.append(contentsOf: node.bumper.publicDeclarations(location: location).map(CollectedSourceFact.publicDeclaration))
         return .visitChildren
+    }
+
+    override func visitPost(_ node: StructDeclSyntax) {
+        ownerStack.removeLast()
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
         recordSyntax(Syntax(node))
+        let location = location(for: node)
+        appendNominalType(node.bumper.nominalType(location: location))
         if let enumName = node.bumper.enumDeclaration {
             facts.append(.enumDeclaration(enumName))
         }
-        facts.append(contentsOf: node.bumper.publicDeclarations(location: location(for: node)).map(CollectedSourceFact.publicDeclaration))
+        facts.append(contentsOf: node.bumper.publicDeclarations(location: location).map(CollectedSourceFact.publicDeclaration))
         return .visitChildren
+    }
+
+    override func visitPost(_ node: EnumDeclSyntax) {
+        ownerStack.removeLast()
     }
 
     override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
         recordSyntax(Syntax(node))
-        facts.append(contentsOf: node.bumper.publicDeclarations(location: location(for: node)).map(CollectedSourceFact.publicDeclaration))
+        let location = location(for: node)
+        let type = node.bumper.nominalType(location: location)
+        appendNominalType(type)
+        facts.append(contentsOf: node.bumper.publicDeclarations(location: location).map(CollectedSourceFact.publicDeclaration))
         return .visitChildren
+    }
+
+    override func visitPost(_ node: ProtocolDeclSyntax) {
+        ownerStack.removeLast()
     }
 
     override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
         recordSyntax(Syntax(node))
-        facts.append(contentsOf: node.bumper.publicDeclarations(location: location(for: node)).map(CollectedSourceFact.publicDeclaration))
+        let location = location(for: node)
+        let type = node.bumper.nominalType(location: location)
+        appendNominalType(type)
+        facts.append(contentsOf: node.bumper.publicDeclarations(location: location).map(CollectedSourceFact.publicDeclaration))
         return .visitChildren
+    }
+
+    override func visitPost(_ node: ActorDeclSyntax) {
+        ownerStack.removeLast()
+    }
+
+    override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordSyntax(Syntax(node))
+        let declaration = node.bumper.extensionDeclaration(location: location(for: node))
+        if let declaration {
+            facts.append(.extensionDeclaration(declaration))
+        }
+        ownerStack.append(declaration?.extendedType)
+        return .visitChildren
+    }
+
+    override func visitPost(_ node: ExtensionDeclSyntax) {
+        ownerStack.removeLast()
     }
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -148,7 +205,7 @@ private final class SourceVisitor: SyntaxAnyVisitor {
         let location = location(for: node)
         facts.append(contentsOf: node.bumper.imperativeConstructs(location: location).map(CollectedSourceFact.imperativeConstruct))
         facts.append(contentsOf: node.bumper.publicDeclarations(location: location).map(CollectedSourceFact.publicDeclaration))
-        facts.append(contentsOf: node.bumper.storedProperties(location: location).map(CollectedSourceFact.storedProperty))
+        facts.append(contentsOf: node.bumper.storedProperties(owner: currentOwner, location: location).map(CollectedSourceFact.storedProperty))
 
         return .skipChildren
     }
@@ -197,6 +254,19 @@ private final class SourceVisitor: SyntaxAnyVisitor {
 
     private func recordSyntax(_ node: Syntax) {
         facts.append(node.bumper.syntaxFact(location: location(for: node)))
+    }
+
+    private var currentOwner: TypeName? {
+        ownerStack.reversed().compactMap { $0 }.first
+    }
+
+    private func appendNominalType(_ type: NominalType?) {
+        if let type {
+            facts.append(.nominalType(type))
+            ownerStack.append(type.name)
+        } else {
+            ownerStack.append(nil)
+        }
     }
 
     private func location(for node: some SyntaxProtocol) -> SourcePosition {

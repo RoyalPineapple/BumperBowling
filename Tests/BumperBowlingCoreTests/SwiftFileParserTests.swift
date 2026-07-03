@@ -94,6 +94,34 @@ struct SwiftFileParserTests {
     }
 
     @Test
+    func parsesOwnerAwareTypeFacts() throws {
+        let source = """
+        @MainActor
+        public struct User {
+            let id: UserID
+        }
+
+        extension User: Identifiable {}
+        """
+
+        let summary = SwiftFileParser().parse(source)
+        let userName = try TypeName("User")
+        let userIDName = try TypeName("UserID")
+        let identifiableName = try TypeName("Identifiable")
+        let user = try #require(summary.nominalTypes.first { $0.name == (try? TypeName("User")) })
+        let id = try #require(summary.storedProperties.first { $0.name == (try? DeclarationName("id")) })
+        let userExtension = try #require(summary.extensionDeclarations.first)
+
+        #expect(user.kind == .struct)
+        #expect(user.access == .public)
+        #expect(user.attributes == [try AttributeName("MainActor")])
+        #expect(id.owner == userName)
+        #expect(id.type == userIDName)
+        #expect(userExtension.extendedType == userName)
+        #expect(userExtension.inheritedTypes == [identifiableName])
+    }
+
+    @Test
     func recordsFullSwiftSyntaxFactCatalog() {
         let source = """
         import Foundation

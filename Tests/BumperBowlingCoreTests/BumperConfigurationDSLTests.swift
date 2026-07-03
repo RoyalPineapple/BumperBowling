@@ -233,7 +233,7 @@ struct BumperConfigurationDSLTests {
         let assertion = BumperSyntaxAssertion(
             VariableDeclSyntax.self,
             where: BumperSyntaxPredicate { node in
-                node.bumper.isMutableBinding && !node.bumper.storedProperties.isEmpty
+                node.bumper.isMutableBinding && !node.bumper.storedProperties().isEmpty
             }
         )
 
