@@ -840,11 +840,19 @@ private extension PathRuleConfiguration {
 }
 
 public extension SubsystemID {
-    static let core = try! SubsystemID("core")
-    static let cli = try! SubsystemID("cli")
-    static let app = try! SubsystemID("app")
-    static let ui = try! SubsystemID("ui")
-    static let tests = try! SubsystemID("tests")
+    static let core = knownSubsystemID("core")
+    static let cli = knownSubsystemID("cli")
+    static let app = knownSubsystemID("app")
+    static let ui = knownSubsystemID("ui")
+    static let tests = knownSubsystemID("tests")
+}
+
+private func knownSubsystemID(_ rawValue: String) -> SubsystemID {
+    guard let id = try? SubsystemID(rawValue) else {
+        preconditionFailure("Invalid built-in subsystem id: \(rawValue)")
+    }
+
+    return id
 }
 
 private func knownDeclarationMatchers(_ rawNames: [String]) -> Set<StringMatcher> {

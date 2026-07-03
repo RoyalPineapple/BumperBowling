@@ -23,7 +23,7 @@ public enum BumperCommands {
         lines.append("")
         lines.append("## Dependencies")
 
-        for edge in model.dependencyEdges.sorted(by: { "\($0.sourceSubsystem.rawValue).\($0.importedModule.rawValue)" < "\($1.sourceSubsystem.rawValue).\($1.importedModule.rawValue)" }) {
+        for edge in model.dependencyEdges.sorted(by: dependencyEdgeSortKey) {
             lines.append("- \(edge.sourceSubsystem) imports \(edge.importedModule)")
         }
 
@@ -76,4 +76,9 @@ public enum BumperCommands {
         return lines.joined(separator: "\n")
     }
 
+}
+
+private func dependencyEdgeSortKey(_ lhs: DependencyEdge, _ rhs: DependencyEdge) -> Bool {
+    "\(lhs.sourceSubsystem.rawValue).\(lhs.importedModule.rawValue)"
+        < "\(rhs.sourceSubsystem.rawValue).\(rhs.importedModule.rawValue)"
 }
