@@ -618,7 +618,7 @@ public struct LintReport: Equatable, Sendable, Codable {
         }
 
         var lines = [
-            hasErrors ? "The code breaks the architecture's rules:" : "The architecture holds. A few nudges worth noting:",
+            hasErrors ? "The code breaks the architecture's rules:" : "The architecture holds, but note these warnings:",
             "",
         ]
         for violation in violations {
