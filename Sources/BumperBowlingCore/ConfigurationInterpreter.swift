@@ -52,7 +52,8 @@ private extension ConfigurationInterpreter {
         for item in file.statements {
             if let importDecl = item.item.as(ImportDeclSyntax.self) {
                 guard let module = importDecl.bumper.importedModuleName, coreModule.matches(module) else {
-                    throw needsExecution("it imports something besides BumperBowlingCore")
+                    let module = importDecl.bumper.importedModuleName ?? "a module bumper cannot name"
+                    throw needsExecution("it imports \(module), and a plain configuration imports only BumperBowlingCore")
                 }
                 continue
             }
