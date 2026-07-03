@@ -614,10 +614,10 @@ public struct LintReport: Equatable, Sendable, Codable {
 
     public var markdownSummary: String {
         if violations.isEmpty {
-            return "Result: Strike\n\nNo architecture violations found."
+            return "No architecture violations found."
         }
 
-        var lines = [hasErrors ? "Result: Gutter Ball" : "Result: Strike", ""]
+        var lines = [hasErrors ? "The architecture breaks its rules:" : "The architecture holds. A few nudges:", ""]
         for violation in violations {
             lines.append(
                 "- [\(violation.severity.rawValue.uppercased())] \(violation.markdownLocation): \(violation.message) (\(violation.ruleID.rawValue))"
