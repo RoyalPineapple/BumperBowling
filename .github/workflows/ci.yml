@@ -33,11 +33,5 @@ jobs:
       - name: Run Swift package tests
         run: swift test
 
-      - name: Run Bumper command receipt tests
-        run: swift test --filter BumperCommands
-
-      - name: Run Bumper self-lint product test
-        run: swift test --filter SelfLint
-
       - name: Run Bumper CLI lint
         run: swift run bumper lint .
