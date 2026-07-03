@@ -8,7 +8,7 @@ public enum BumperCommands {
     }
 
     public static func scan(root: URL) async throws -> String {
-        try ConfigurationLoader.runStringCommand(.scan, root: root)
+        try await scan(root: root, configuration: ConfigurationLoader.loadConfiguration(root: root))
     }
 
     public static func scan(root: URL, configuration: ArchitectureConfiguration) async throws -> String {
@@ -31,7 +31,7 @@ public enum BumperCommands {
     }
 
     public static func snapshot(root: URL) throws -> String {
-        try ConfigurationLoader.runStringCommand(.snapshot, root: root)
+        try snapshot(configuration: ConfigurationLoader.loadConfiguration(root: root))
     }
 
     public static func snapshot(configuration: ArchitectureConfiguration) throws -> String {
@@ -39,7 +39,7 @@ public enum BumperCommands {
     }
 
     public static func lint(root: URL) async throws -> LintReport {
-        try ConfigurationLoader.runLint(root: root)
+        try await lint(root: root, configuration: ConfigurationLoader.loadConfiguration(root: root))
     }
 
     public static func lint(root: URL, configuration: ArchitectureConfiguration) async throws -> LintReport {
@@ -49,7 +49,11 @@ public enum BumperCommands {
     }
 
     public static func explain(path: URL, root: URL) async throws -> String {
-        try ConfigurationLoader.runStringCommand(.explain(path), root: root)
+        try await explain(
+            path: path,
+            root: root,
+            configuration: ConfigurationLoader.loadConfiguration(root: root)
+        )
     }
 
     public static func explain(path: URL, root: URL, configuration: ArchitectureConfiguration) async throws -> String {

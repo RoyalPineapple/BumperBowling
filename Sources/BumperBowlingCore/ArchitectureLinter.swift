@@ -310,8 +310,9 @@ public enum ArchitectureRule: Sendable {
         configuration: SyntaxKindRuleConfiguration
     ) -> [ArchitectureViolation] {
         graph.files(in: scope(paths: configuration.paths)).flatMap { file in
+            let observedKinds = Set(file.syntaxFacts.nodeKinds.map(SyntaxKindName.init))
             let missingRequiredKinds = configuration.requiredKinds
-                .subtracting(file.syntaxFacts.nodeKinds)
+                .subtracting(observedKinds)
                 .map { kind in
                     violation(
                         severity: configuration.severity,
@@ -321,11 +322,11 @@ public enum ArchitectureRule: Sendable {
                 }
 
             let disallowedKinds = configuration.disallowedKinds
-                .intersection(file.syntaxFacts.nodeKinds)
+                .intersection(observedKinds)
                 .map { kind in
-                    let fact = file.syntaxFacts.facts.first { $0.nodeKind == kind }
+                    let fact = file.syntaxFacts.facts.first { SyntaxKindName($0.nodeKind) == kind }
                     let expectedKinds = configuration.disallowedKinds
-                        .map { String(describing: $0) }
+                        .map(\.rawValue)
                         .sorted()
                         .joined(separator: ", ")
                     return violation(

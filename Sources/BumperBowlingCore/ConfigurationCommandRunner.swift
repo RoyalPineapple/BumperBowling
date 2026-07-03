@@ -2,58 +2,55 @@ import Darwin
 import CryptoKit
 import Foundation
 
-public enum ConfigurationCommand: Sendable {
-    case lint
-    case scan
-    case snapshot
-    case explain(URL)
-
-    var rawValue: String {
-        switch self {
-        case .lint:
-            "lint"
-        case .scan:
-            "scan"
-        case .snapshot:
-            "snapshot"
-        case .explain:
-            "explain"
-        }
-    }
-
-    var arguments: [String] {
-        switch self {
-        case .lint, .scan, .snapshot:
-            []
-        case .explain(let path):
-            [path.path]
-        }
-    }
-}
-
 public extension ConfigurationLoader {
-    static func runLint(root: URL) throws -> LintReport {
-        let output = try runConfigurationCommand(.lint, root: root)
-        guard !output.isEmpty else {
-            throw BumperError.configurationOutputMalformed("empty lint payload")
+    static func loadConfiguration(root: URL) throws -> ArchitectureConfiguration {
+        let root = root.standardizedFileURL
+        let configurationURL = root.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: configurationURL.path) else {
+            throw BumperError.configurationMissing(configurationURL.path)
         }
-        return try JSONDecoder().decode(LintReport.self, from: Data(output.utf8))
-    }
+        guard let source = try? String(contentsOf: configurationURL, encoding: .utf8) else {
+            throw BumperError.unreadableFile(configurationURL.path)
+        }
 
-    static func runStringCommand(_ command: ConfigurationCommand, root: URL) throws -> String {
-        try runConfigurationCommand(command, root: root)
+        switch try ConfigurationInterpreter.interpret(source: source) {
+        case .configuration(let configuration):
+            return configuration
+        case .requiresExecution:
+            let output = try evaluateConfiguration(root: root)
+            guard !output.isEmpty else {
+                throw BumperError.configurationOutputMalformed("empty configuration payload")
+            }
+            return try JSONDecoder().decode(ArchitectureConfiguration.self, from: Data(output.utf8))
+        }
     }
 }
 
 private extension ConfigurationLoader {
     static let outputBeginMarker = "__BUMPER_OUTPUT_BEGIN__"
     static let outputEndMarker = "__BUMPER_OUTPUT_END__"
-    static let configurationCommandTimeoutSeconds: TimeInterval = 300
+    static let configurationBuildTimeoutSeconds: TimeInterval = 300
+    static let configurationEvaluationTimeoutSeconds: TimeInterval = 60
     static let configurationCommandOutputLimitBytes = 4 * 1024 * 1024
     static let swiftToolchainIdentityTimeoutSeconds: TimeInterval = 10
     static let swiftToolchainIdentityOutputLimitBytes = 16 * 1024
 
-    static func runConfigurationCommand(_ command: ConfigurationCommand, root: URL) throws -> String {
+    /// The configuration runner computes a pure value: it evaluates the
+    /// repository's `BumperBowling.swift` into an `ArchitectureConfiguration`
+    /// and prints it as JSON. It needs no repository access, no writable
+    /// paths, and no network, so it runs under a deny-default Darwin sandbox
+    /// (the same mechanism SwiftPM uses to evaluate `Package.swift`).
+    static let sandboxProfile = """
+    (version 1)
+    (deny default)
+    (import "system.sb")
+    (deny network*)
+    (allow process-exec)
+    (allow file-read*)
+    (allow sysctl-read)
+    """
+
+    static func evaluateConfiguration(root: URL) throws -> String {
         let root = root.standardizedFileURL
         let configurationURL = root.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: configurationURL.path) else {
@@ -68,22 +65,24 @@ private extension ConfigurationLoader {
         try buildCachedPackageIfNeeded(cachedPackage)
 
         let process = Process()
-        process.executableURL = cachedPackage.executableURL
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
         process.arguments = [
-            root.path,
-            command.rawValue,
-        ] + command.arguments
+            "-p",
+            sandboxProfile,
+            cachedPackage.executableURL.path,
+        ]
+        process.environment = [:]
 
         let result = try runProcess(
             process,
-            timeoutSeconds: configurationCommandTimeoutSeconds,
+            timeoutSeconds: configurationEvaluationTimeoutSeconds,
             outputLimitBytes: configurationCommandOutputLimitBytes
         )
 
         if result.timedOut {
             throw BumperError.configurationExecutionTimedOut(
                 configurationURL.path,
-                Int(configurationCommandTimeoutSeconds)
+                Int(configurationEvaluationTimeoutSeconds)
             )
         }
 
@@ -277,14 +276,14 @@ private extension ConfigurationLoader {
 
         let result = try runProcess(
             process,
-            timeoutSeconds: configurationCommandTimeoutSeconds,
+            timeoutSeconds: configurationBuildTimeoutSeconds,
             outputLimitBytes: configurationCommandOutputLimitBytes
         )
 
         if result.timedOut {
             throw BumperError.configurationExecutionTimedOut(
                 "BumperConfigurationRunner build",
-                Int(configurationCommandTimeoutSeconds)
+                Int(configurationBuildTimeoutSeconds)
             )
         }
 
@@ -479,64 +478,19 @@ private extension ConfigurationLoader {
     static var runnerSource: String {
         """
         import BumperBowlingCore
-        import Dispatch
         import Foundation
 
-        func writePayload(_ payload: String) {
-            let output = "\(outputBeginMarker)\\n" + payload + "\\n\(outputEndMarker)\\n"
-            FileHandle.standardOutput.write(Data(output.utf8))
-        }
-
-        func encodedReport(_ report: LintReport) throws -> String {
+        do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
-            return String(data: try encoder.encode(report), encoding: .utf8) ?? "{}"
+            let resolvedConfiguration = configuration.architectureConfiguration
+            let payload = String(data: try encoder.encode(resolvedConfiguration), encoding: .utf8) ?? "{}"
+            let output = "\(outputBeginMarker)\\n" + payload + "\\n\(outputEndMarker)\\n"
+            FileHandle.standardOutput.write(Data(output.utf8))
+        } catch {
+            FileHandle.standardError.write(Data((String(describing: error) + "\\n").utf8))
+            exit(1)
         }
-
-        Task {
-            do {
-                let arguments = CommandLine.arguments.dropFirst()
-                guard arguments.count >= 2 else {
-                    throw BumperError.configurationOutputMalformed("Expected root path and command.")
-                }
-
-                let root = URL(fileURLWithPath: arguments[arguments.startIndex])
-                let command = arguments[arguments.index(after: arguments.startIndex)]
-                let commandArguments = arguments.dropFirst(2)
-                let resolvedConfiguration = configuration.architectureConfiguration
-
-                switch command {
-                case "lint":
-                    let report = try await BumperCommands.lint(root: root, configuration: resolvedConfiguration)
-                    writePayload(try encodedReport(report))
-                case "scan":
-                    let output = try await BumperCommands.scan(root: root, configuration: resolvedConfiguration)
-                    writePayload(output)
-                case "snapshot":
-                    let output = try BumperCommands.snapshot(configuration: resolvedConfiguration)
-                    writePayload(output)
-                case "explain":
-                    guard let path = commandArguments.first else {
-                        throw BumperError.configurationOutputMalformed("Expected path for explain command.")
-                    }
-                    let output = try await BumperCommands.explain(
-                        path: URL(fileURLWithPath: path),
-                        root: root,
-                        configuration: resolvedConfiguration
-                    )
-                    writePayload(output)
-                default:
-                    throw BumperError.configurationOutputMalformed("Unknown command \\(command).")
-                }
-
-                Foundation.exit(0)
-            } catch {
-                FileHandle.standardError.write(Data((String(describing: error) + "\\n").utf8))
-                Foundation.exit(1)
-            }
-        }
-
-        dispatchMain()
         """
     }
 

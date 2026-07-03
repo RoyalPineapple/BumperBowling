@@ -109,7 +109,7 @@ struct BumperConfigurationDSLTests {
         #expect(rules.ruleConfiguration.syntaxKinds.severity == .error)
         #expect(rules.ruleConfiguration.syntaxKinds.paths == ["Sources/Core"])
         #expect(rules.ruleConfiguration.syntaxKinds.requiredKinds.isEmpty)
-        #expect(rules.ruleConfiguration.syntaxKinds.disallowedKinds == [.forceUnwrapExpr])
+        #expect(rules.ruleConfiguration.syntaxKinds.disallowedKinds == [SyntaxKindName(.forceUnwrapExpr)])
     }
 
     @Test

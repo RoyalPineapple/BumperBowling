@@ -209,6 +209,7 @@ public struct RelativePathPrefix: Hashable, Sendable, CustomStringConvertible {
 public enum ConfigurationError: Error, Equatable, CustomStringConvertible, Sendable {
     case emptySubsystemName
     case emptyModuleName
+    case emptySyntaxKindName
     case emptyPath
     case emptyDeclarationName
     case emptyAttributeName
@@ -226,6 +227,8 @@ public enum ConfigurationError: Error, Equatable, CustomStringConvertible, Senda
             "Subsystem names cannot be empty."
         case .emptyModuleName:
             "Module names cannot be empty."
+        case .emptySyntaxKindName:
+            "SwiftSyntax node kind names cannot be empty."
         case .emptyPath:
             "Subsystem paths cannot be empty."
         case .emptyDeclarationName:

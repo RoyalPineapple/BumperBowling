@@ -17,11 +17,8 @@ swift run bumper init /tmp/BumperExample
 swift run bumper lint /tmp/BumperExample
 ```
 
-`bumper init` writes `BumperBowling.swift`. `bumper lint` executes that Swift
-file through SwiftPM, scans the repo, and exits nonzero for `error` findings.
-
-Only run the CLI in repositories whose `BumperBowling.swift` you trust. It is
-real Swift code.
+`bumper init` writes `BumperBowling.swift`. `bumper lint` loads that
+configuration, scans the repo, and exits nonzero for `error` findings.
 
 ## Configuration
 
@@ -102,6 +99,28 @@ bumper explain <path>
 - `public_declarations`: require or disallow public declarations by name.
 - `enum_state_machine`: require parser-like files to declare an enum whose name
   ends in `State`.
+
+## Security Model
+
+`BumperBowling.swift` is Swift, but loading it is not running it.
+
+- Configurations that stay inside the declarative DSL subset — one
+  `let configuration = BumperConfiguration { ... }` built from known
+  constructors, string literals, and leading-dot shorthands — are statically
+  interpreted with SwiftSyntax. No configuration code is compiled or executed,
+  and interpreted values are value-equal to executed ones.
+- Configurations that use Swift beyond that subset fall back to the
+  configuration runner: the file is compiled through SwiftPM and evaluated in
+  a subprocess that runs under a deny-default Darwin sandbox (the same
+  mechanism SwiftPM uses for `Package.swift`) with an empty environment, no
+  network, and no writable paths. Only the encoded configuration value crosses
+  back, on stdout.
+- Scanning and linting always run in the `bumper` process itself, never in
+  configuration code.
+
+Compiling a hostile configuration is still running its build, so prefer
+trusted repositories for executable configurations — or keep configurations
+declarative and they will never be executed at all.
 
 ## Fact Surface
 

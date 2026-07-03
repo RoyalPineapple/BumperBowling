@@ -5,12 +5,16 @@ public struct BumperConfiguration: Equatable, Sendable {
     public let architectureConfiguration: ArchitectureConfiguration
 
     public init(@BumperConfigurationBuilder _ content: () -> [BumperConfigurationElement]) {
+        self.init(elements: content())
+    }
+
+    init(elements: [BumperConfigurationElement]) {
         var includedPaths: [String] = ["Sources"]
         var excludedPaths: [String] = [".build", "DerivedData"]
         var subsystems: [SubsystemConfiguration] = []
         var rules = RuleConfiguration()
 
-        for element in content() {
+        for element in elements {
             switch element {
             case .architecture(let definition):
                 subsystems = definition.subsystems
@@ -102,6 +106,13 @@ public func Component(
     _ id: SubsystemID,
     @ComponentBuilder _ content: () -> [ComponentElement]
 ) -> ComponentConfiguration {
+    makeComponentConfiguration(id, elements: content())
+}
+
+func makeComponentConfiguration(
+    _ id: SubsystemID,
+    elements: [ComponentElement]
+) -> ComponentConfiguration {
     var paths: [String] = []
     var modules: [String] = []
     var dependencies: [String] = []
@@ -111,7 +122,7 @@ public func Component(
     var disallowances: [ImperativeDisallowanceSetting] = []
     var graphAssertions: [ComponentGraphAssertion] = []
 
-    for element in content() {
+    for element in elements {
         switch element {
         case .owns(let values):
             paths.append(contentsOf: values)
@@ -634,7 +645,7 @@ private extension Array where Element == ComponentGraphAssertion {
     }
 }
 
-private extension RuleConfiguration {
+extension RuleConfiguration {
     func merging(_ other: RuleConfiguration) -> RuleConfiguration {
         RuleConfiguration(
             forbiddenImports: forbiddenImports + other.forbiddenImports,

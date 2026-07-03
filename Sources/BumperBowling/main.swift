@@ -71,8 +71,11 @@ struct BumperCLI {
       bumper explain <path>
 
     Security:
-      lint, scan, snapshot, and explain execute BumperBowling.swift as trusted Swift code.
-      Run the CLI only in repositories whose configuration you trust.
+      lint, scan, snapshot, and explain compile BumperBowling.swift, then evaluate it
+      in a sandboxed process with an empty environment, no network, and no writable
+      paths. The evaluated configuration value is the only thing that crosses back.
+      Compiling a hostile configuration is still running its build; prefer trusted
+      repositories.
     """
 }
 
