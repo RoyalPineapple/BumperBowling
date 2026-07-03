@@ -12,9 +12,9 @@ struct SelfLintTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
 
-        let harness = BumperTestHarness(configuration: BumperProjectConfiguration.configuration)
+        let bumperTest = BumperTest(configuration: BumperProjectConfiguration.configuration)
 
-        for message in try await harness.errorMessages(root: root) {
+        for message in try await bumperTest.errorMessages(root: root) {
             Issue.record(Comment(rawValue: message))
         }
     }

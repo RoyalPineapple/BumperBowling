@@ -67,9 +67,9 @@ import Testing
 
 @Test
 func architectureStaysInLane() async throws {
-    let harness = BumperTestHarness(configuration: configuration.architectureConfiguration)
+    let bumperTest = BumperTest(configuration: configuration.architectureConfiguration)
 
-    for message in try await harness.errorMessages(root: projectRoot) {
+    for message in try await bumperTest.errorMessages(root: projectRoot) {
         Issue.record(Comment(rawValue: message))
     }
 }
