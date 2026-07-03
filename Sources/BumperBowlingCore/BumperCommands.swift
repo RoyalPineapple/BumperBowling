@@ -48,6 +48,29 @@ public enum BumperCommands {
         return ArchitectureLinter(rules: rules).lint(model)
     }
 
+    public static func checkConfiguration(root: URL) throws -> ConfigurationReport {
+        switch try ConfigurationLoader.interpretation(root: root) {
+        case .configuration(let configuration):
+            return ConfigurationReport(lane: .declarative, problem: problem(validating: configuration))
+        case .requiresExecution(let reason):
+            do {
+                let configuration = try ConfigurationLoader.executeConfiguration(root: root)
+                return ConfigurationReport(lane: .executable(reason), problem: problem(validating: configuration))
+            } catch {
+                return ConfigurationReport(lane: .executable(reason), problem: String(describing: error))
+            }
+        }
+    }
+
+    private static func problem(validating configuration: ArchitectureConfiguration) -> String? {
+        do {
+            _ = try ArchitectureRules(configuration: configuration)
+            return nil
+        } catch {
+            return String(describing: error)
+        }
+    }
+
     public static func explain(path: URL, root: URL) async throws -> String {
         try await explain(
             path: path,
@@ -80,6 +103,41 @@ public enum BumperCommands {
         return lines.joined(separator: "\n")
     }
 
+}
+
+public struct ConfigurationReport: Equatable, Sendable {
+    public enum Lane: Equatable, Sendable {
+        case declarative
+        case executable(String)
+    }
+
+    public let lane: Lane
+    public let problem: String?
+
+    public var isValid: Bool {
+        problem == nil
+    }
+
+    public var summary: String {
+        var lines: [String] = []
+
+        switch lane {
+        case .declarative:
+            lines.append("This configuration is plain, familiar Swift.")
+            lines.append("Bumper read it as text and understood it. Nothing was compiled. Nothing was run.")
+        case .executable(let reason):
+            lines.append("This configuration goes beyond plain, familiar Swift — \(reason).")
+            lines.append("Bumper compiled it and ran it in a sealed-off process.")
+        }
+
+        if let problem {
+            lines.append("The configuration is not valid: \(problem)")
+        } else {
+            lines.append("The configuration is valid.")
+        }
+
+        return lines.joined(separator: "\n")
+    }
 }
 
 private func dependencyEdgeSortKey(_ lhs: DependencyEdge, _ rhs: DependencyEdge) -> Bool {

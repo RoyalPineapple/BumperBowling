@@ -5,9 +5,9 @@
 Bumper Bowling is a Swift architecture linter.
 
 It parses Swift source with SwiftSyntax, projects source facts into an
-`ArchitectureGraph`, then checks those facts against a Swift DSL configuration.
-Use it next to SwiftLint: SwiftLint owns local style; Bumper Bowling owns repo
-shape.
+`ArchitectureGraph`, then checks those facts against a configuration written
+in familiar Swift syntax. Use it next to SwiftLint: SwiftLint owns local
+style; Bumper Bowling owns repo shape.
 
 ## Quick Start
 
@@ -82,8 +82,13 @@ bumper init [root]
 bumper lint [root]
 bumper scan [root]
 bumper snapshot [root]
+bumper config [root]
 bumper explain <path>
 ```
+
+`bumper config` tells you whether your configuration is read as text or must
+be compiled and run, why, and whether it is valid. It exits nonzero when the
+configuration is not valid.
 
 ## Rules
 
@@ -104,23 +109,26 @@ bumper explain <path>
 
 `BumperBowling.swift` is Swift, but loading it is not running it.
 
-- Configurations that stay inside the declarative DSL subset — one
-  `let configuration = BumperConfiguration { ... }` built from known
-  constructors, string literals, and leading-dot shorthands — are statically
-  interpreted with SwiftSyntax. No configuration code is compiled or executed,
-  and interpreted values are value-equal to executed ones.
-- Configurations that use Swift beyond that subset fall back to the
-  configuration runner: the file is compiled through SwiftPM and evaluated in
-  a subprocess that runs under a deny-default Darwin sandbox (the same
-  mechanism SwiftPM uses for `Package.swift`) with an empty environment, no
-  network, and no writable paths. Only the encoded configuration value crosses
-  back, on stdout.
-- Scanning and linting always run in the `bumper` process itself, never in
-  configuration code.
+Write your configuration in plain, familiar Swift — one
+`let configuration = BumperConfiguration { ... }` made of known constructors,
+string literals, and leading-dot shorthands — and Bumper Bowling reads it the
+way you do: as text. Nothing is compiled. Nothing is run. The value it reads
+is the same value the compiler would have produced.
 
-Compiling a hostile configuration is still running its build, so prefer
-trusted repositories for executable configurations — or keep configurations
-declarative and they will never be executed at all.
+Write something fancier and Bumper Bowling compiles it and runs it in a
+sealed-off process, the same way SwiftPM treats `Package.swift`: no network,
+nowhere to write, an empty environment. The configuration value comes back
+over stdout, and that is all that comes back.
+
+Scanning and linting always run in the `bumper` process itself, never in
+configuration code.
+
+`bumper config` tells you which kind of configuration you have, why, and
+whether it is valid.
+
+One honest caveat: compiling a hostile configuration still runs its build.
+Keep configurations plain and they are never run at all. If a configuration
+must be executable, lint repositories you trust.
 
 ## Fact Surface
 

@@ -32,10 +32,10 @@ The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](S
 
 `BumperBowling.swift` loads through two lanes, tried in order:
 
-1. `ConfigurationInterpreter` statically evaluates the declarative DSL subset with SwiftSyntax. Nothing is compiled or executed; the interpreter lowers through the same DSL functions the compiled path uses, so both lanes produce value-equal configurations.
-2. Files outside the subset fall back to the configuration runner: the file is compiled through SwiftPM and evaluated in a deny-default sandboxed subprocess with an empty environment, no network, and no writable paths. The subprocess computes only the configuration value and prints it as JSON; scanning and linting always run in the host process.
+1. `ConfigurationInterpreter` statically evaluates configurations written in familiar Swift syntax — known constructors, string literals, leading-dot shorthands — with SwiftSyntax. Nothing is compiled or executed; the interpreter lowers through the same DSL functions the compiled path uses, so both lanes produce value-equal configurations.
+2. Files that go beyond that fall back to the configuration runner: the file is compiled through SwiftPM and evaluated in a deny-default sandboxed subprocess with an empty environment, no network, and no writable paths. The subprocess computes only the configuration value and prints it as JSON; scanning and linting always run in the host process.
 
-The interpreter never guesses. Any construct it does not model falls back to execution instead of being interpreted loosely, so the compiled path stays the semantic authority.
+The interpreter never guesses. Any construct it does not model falls back to execution instead of being interpreted loosely, so the compiled path stays the semantic authority. `bumper config` reports a configuration's lane, the reason, and validity.
 
 The DSL should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 

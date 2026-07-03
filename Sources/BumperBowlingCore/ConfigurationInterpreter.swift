@@ -52,22 +52,22 @@ private extension ConfigurationInterpreter {
         for item in file.statements {
             if let importDecl = item.item.as(ImportDeclSyntax.self) {
                 guard let module = importDecl.bumper.importedModuleName, coreModule.matches(module) else {
-                    throw needsExecution("imports a module other than BumperBowlingCore")
+                    throw needsExecution("it imports something besides BumperBowlingCore")
                 }
                 continue
             }
 
             guard let binding = configurationBinding(from: item) else {
-                throw needsExecution("contains top-level Swift beyond `let configuration = ...`")
+                throw needsExecution("there is top-level Swift besides `let configuration = ...`")
             }
             guard configurationCall == nil else {
-                throw needsExecution("declares more than one configuration value")
+                throw needsExecution("it declares more than one configuration")
             }
             configurationCall = binding
         }
 
         guard let configurationCall else {
-            throw needsExecution("does not declare `let configuration = BumperConfiguration { ... }`")
+            throw needsExecution("it never says `let configuration = BumperConfiguration { ... }`")
         }
 
         return try elements(of: configurationCall)
@@ -97,7 +97,7 @@ private extension ConfigurationInterpreter {
     static func elements(of configurationCall: FunctionCallExprSyntax) throws -> [BumperConfigurationElement] {
         try closureCalls(of: configurationCall, in: "BumperConfiguration").map { call in
             guard let name = calleeName(of: call), let builder = elementBuilders[name] else {
-                throw needsExecution("uses an unrecognized configuration element")
+                throw needsExecution("it uses a configuration element bumper does not recognize")
             }
             return try builder(call)
         }
@@ -124,7 +124,7 @@ private extension ConfigurationInterpreter {
 
     static func component(from call: FunctionCallExprSyntax) throws -> ComponentConfiguration {
         guard let name = calleeName(of: call), StringMatcher.exact("Component").matches(name) else {
-            throw needsExecution("expects only Component entries inside Architecture")
+            throw needsExecution("Architecture holds something besides Component entries")
         }
 
         let arguments = try Arguments(of: call)
@@ -135,7 +135,7 @@ private extension ConfigurationInterpreter {
 
     static func componentElement(from call: FunctionCallExprSyntax) throws -> ComponentElement {
         guard let name = calleeName(of: call), let builder = componentElementBuilders[name] else {
-            throw needsExecution("uses an unrecognized component element")
+            throw needsExecution("it uses a component element bumper does not recognize")
         }
         return try builder(call)
     }
@@ -180,7 +180,7 @@ private extension ConfigurationInterpreter {
             let arguments = try Arguments(of: call)
             let values = try arguments.unlabeled()
             guard let first = values.first else {
-                throw needsExecution("calls RequiresScoped without a requirement")
+                throw needsExecution("RequiresScoped was called without a requirement")
             }
             return .requires([
                 ComponentRequirementSetting(
@@ -224,7 +224,7 @@ private extension ConfigurationInterpreter {
         guard let inner = predicateCall.as(FunctionCallExprSyntax.self),
               let name = calleeName(of: inner),
               StringMatcher.exact("Declare").matches(name) else {
-            throw needsExecution("uses a graph predicate the interpreter does not model")
+            throw needsExecution("it uses a graph predicate bumper cannot read without running it")
         }
 
         return .graphAssertion([
@@ -239,7 +239,7 @@ private extension ConfigurationInterpreter {
 
     static func assertion(from call: FunctionCallExprSyntax) throws -> RuleConfiguration {
         guard let name = calleeName(of: call), let builder = assertionBuilders[name] else {
-            throw needsExecution("uses an unrecognized assertion")
+            throw needsExecution("it uses an assertion bumper does not recognize")
         }
         return try builder(call)
     }
@@ -286,35 +286,35 @@ private extension ConfigurationInterpreter {
 
     static func subsystemID(of expression: ExprSyntax) throws -> SubsystemID {
         guard let id = subsystemIDs[try memberName(of: expression)] else {
-            throw needsExecution("references a subsystem the interpreter does not know")
+            throw needsExecution("it names a subsystem bumper does not know")
         }
         return id
     }
 
     static func capability(of expression: ExprSyntax) throws -> Capability {
         guard let capability = capabilities[try memberName(of: expression)] else {
-            throw needsExecution("references a capability the interpreter does not know")
+            throw needsExecution("it names a capability bumper does not know")
         }
         return capability
     }
 
     static func componentRequirement(of expression: ExprSyntax) throws -> ComponentRequirement {
         guard let requirement = componentRequirements[try memberName(of: expression)] else {
-            throw needsExecution("references a requirement the interpreter does not know")
+            throw needsExecution("it names a requirement bumper does not know")
         }
         return requirement
     }
 
     static func imperativeConstruct(of expression: ExprSyntax) throws -> ImperativeConstruct {
         guard let construct = ImperativeConstruct(rawValue: try memberName(of: expression)) else {
-            throw needsExecution("references an imperative construct the interpreter does not know")
+            throw needsExecution("it names an imperative construct bumper does not know")
         }
         return construct
     }
 
     static func severity(of expression: ExprSyntax) throws -> Severity {
         guard let severity = Severity(rawValue: try memberName(of: expression)) else {
-            throw needsExecution("references a severity the interpreter does not know")
+            throw needsExecution("it names a severity bumper does not know")
         }
         return severity
     }
@@ -338,19 +338,19 @@ private extension ConfigurationInterpreter {
               call.arguments.count == 1,
               let argument = call.arguments.first,
               argument.label == nil else {
-            throw needsExecution("uses a string matcher the interpreter does not model")
+            throw needsExecution("it uses a string matcher bumper cannot read without running it")
         }
 
         let pattern = try plainString(of: argument.expression)
         guard !pattern.isEmpty else {
-            throw needsExecution("uses an empty string matcher pattern")
+            throw needsExecution("a string matcher was given an empty pattern")
         }
         return StringMatcher(mode: mode, pattern: pattern)
     }
 
     static func memberName(of expression: ExprSyntax) throws -> String {
         guard let member = expression.as(MemberAccessExprSyntax.self), member.base == nil else {
-            throw needsExecution("expects leading-dot shorthand values in DSL arguments")
+            throw needsExecution("an argument is not the leading-dot shorthand bumper expects")
         }
         return member.declName.baseName.text
     }
@@ -362,7 +362,7 @@ private extension ConfigurationInterpreter {
     static func plainString(of expression: ExprSyntax) throws -> String {
         guard let literal = expression.as(StringLiteralExprSyntax.self),
               literal.segments.count == literal.segments.compactMap({ $0.as(StringSegmentSyntax.self) }).count else {
-            throw needsExecution("expects plain string literals without interpolation")
+            throw needsExecution("a string is not a plain literal, and interpolation means running code")
         }
 
         return literal.segments
@@ -372,18 +372,18 @@ private extension ConfigurationInterpreter {
 
     static func stringArray(of expression: ExprSyntax) throws -> [String] {
         guard let array = expression.as(ArrayExprSyntax.self) else {
-            throw needsExecution("expects array literals of plain strings")
+            throw needsExecution("an argument is not a plain array of strings")
         }
         return try array.elements.map { try plainString(of: $0.expression) }
     }
 
     static func stringList(of call: FunctionCallExprSyntax, in context: String) throws -> [String] {
         guard call.arguments.isEmpty else {
-            throw needsExecution("passes arguments to \(context)")
+            throw needsExecution("arguments were passed to \(context), which takes none")
         }
         return try closureStatements(of: call, in: context).map { statement in
             guard let expression = statement.item.as(ExprSyntax.self) else {
-                throw needsExecution("uses non-expression statements inside \(context)")
+                throw needsExecution("there are statements inside \(context) bumper cannot read as values")
             }
             return try plainString(of: expression)
         }
@@ -395,7 +395,7 @@ private extension ConfigurationInterpreter {
     ) throws -> [FunctionCallExprSyntax] {
         try closureStatements(of: call, in: context).map { statement in
             guard let inner = statement.item.as(FunctionCallExprSyntax.self) else {
-                throw needsExecution("uses statements the interpreter does not model inside \(context)")
+                throw needsExecution("there are statements inside \(context) bumper does not recognize")
             }
             return inner
         }
@@ -406,10 +406,10 @@ private extension ConfigurationInterpreter {
         in context: String
     ) throws -> [CodeBlockItemSyntax] {
         guard let closure = call.trailingClosure else {
-            throw needsExecution("expects a trailing closure on \(context)")
+            throw needsExecution("the trailing closure on \(context) is missing")
         }
         guard call.additionalTrailingClosures.isEmpty, closure.signature == nil else {
-            throw needsExecution("uses closure forms the interpreter does not model on \(context)")
+            throw needsExecution("the closure on \(context) is fancier than bumper can read")
         }
         return Array(closure.statements)
     }
@@ -439,7 +439,7 @@ private struct Arguments {
     func single() throws -> ExprSyntax {
         let values = try unlabeled()
         guard values.count == 1, entries.count == values.count + labeled().count else {
-            throw needsExecution("passes arguments the interpreter does not model")
+            throw needsExecution("arguments were passed that bumper cannot read without running them")
         }
         return values[0]
     }
@@ -457,14 +457,14 @@ private struct Arguments {
 
     func strings() throws -> [String] {
         guard entries.allSatisfy({ $0.label == nil }) else {
-            throw needsExecution("passes labeled arguments the interpreter does not model")
+            throw needsExecution("labeled arguments were passed that bumper does not expect")
         }
         return try entries.map { try ConfigurationInterpreter.plainString(of: $0.expression) }
     }
 
     func required(_ label: String) throws -> ExprSyntax {
         guard let expression = try optional(label) else {
-            throw needsExecution("is missing the \(label) argument")
+            throw needsExecution("the \(label) argument is missing")
         }
         return expression
     }

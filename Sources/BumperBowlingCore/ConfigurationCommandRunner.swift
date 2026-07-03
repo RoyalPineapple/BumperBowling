@@ -4,8 +4,16 @@ import Foundation
 
 public extension ConfigurationLoader {
     static func loadConfiguration(root: URL) throws -> ArchitectureConfiguration {
-        let root = root.standardizedFileURL
-        let configurationURL = root.appendingPathComponent(fileName)
+        switch try interpretation(root: root) {
+        case .configuration(let configuration):
+            return configuration
+        case .requiresExecution:
+            return try executeConfiguration(root: root)
+        }
+    }
+
+    static func interpretation(root: URL) throws -> ConfigurationInterpretation {
+        let configurationURL = root.standardizedFileURL.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: configurationURL.path) else {
             throw BumperError.configurationMissing(configurationURL.path)
         }
@@ -13,16 +21,15 @@ public extension ConfigurationLoader {
             throw BumperError.unreadableFile(configurationURL.path)
         }
 
-        switch try ConfigurationInterpreter.interpret(source: source) {
-        case .configuration(let configuration):
-            return configuration
-        case .requiresExecution:
-            let output = try evaluateConfiguration(root: root)
-            guard !output.isEmpty else {
-                throw BumperError.configurationOutputMalformed("empty configuration payload")
-            }
-            return try JSONDecoder().decode(ArchitectureConfiguration.self, from: Data(output.utf8))
+        return try ConfigurationInterpreter.interpret(source: source)
+    }
+
+    static func executeConfiguration(root: URL) throws -> ArchitectureConfiguration {
+        let output = try evaluateConfiguration(root: root.standardizedFileURL)
+        guard !output.isEmpty else {
+            throw BumperError.configurationOutputMalformed("empty configuration payload")
         }
+        return try JSONDecoder().decode(ArchitectureConfiguration.self, from: Data(output.utf8))
     }
 }
 
