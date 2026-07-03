@@ -5,7 +5,7 @@ public protocol StringMatchable: Sendable {
 }
 
 public struct StringMatcher: Hashable, Sendable, CustomStringConvertible, ExpressibleByStringLiteral {
-    public enum Mode: String, Hashable, Sendable {
+    public enum Mode: String, Hashable, Sendable, Codable {
         case exact
         case contains
         case prefix
@@ -72,6 +72,33 @@ public struct StringMatcher: Hashable, Sendable, CustomStringConvertible, Expres
         case .suffix:
             ".suffix(\(pattern))"
         }
+    }
+}
+
+extension StringMatcher: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case mode
+        case pattern
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let mode = try container.decode(Mode.self, forKey: .mode)
+        let pattern = try container.decode(String.self, forKey: .pattern)
+        guard !pattern.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .pattern,
+                in: container,
+                debugDescription: "String matchers cannot be empty."
+            )
+        }
+        self.init(mode: mode, pattern: pattern)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(mode, forKey: .mode)
+        try container.encode(pattern, forKey: .pattern)
     }
 }
 

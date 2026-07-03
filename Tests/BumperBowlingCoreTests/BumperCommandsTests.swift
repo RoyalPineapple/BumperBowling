@@ -114,10 +114,14 @@ struct BumperCommandsTests {
     }
 
     private func writeConfiguration(to root: URL, forbiddenModule: String = "XCTest") throws {
+        // The helper function keeps this configuration outside the
+        // declarative subset so these tests cover the sandboxed runner and
+        // its cache instead of the static interpreter.
         let configuration = """
         import BumperBowlingCore
 
-        let configuration = BumperConfiguration {
+        private func makeConfiguration() -> BumperConfiguration {
+            BumperConfiguration {
             Included {
                 "Sources"
             }
@@ -139,7 +143,10 @@ struct BumperCommandsTests {
             Assertions {
                 SingleOwner(.error)
             }
+            }
         }
+
+        let configuration = makeConfiguration()
         """
 
         try configuration.write(

@@ -1,7 +1,7 @@
 import Foundation
 import SwiftSyntax
 
-public struct ArchitectureConfiguration: Equatable, Sendable {
+public struct ArchitectureConfiguration: Equatable, Sendable, Codable {
     public let includedPaths: [String]
     public let excludedPaths: [String]
     public let subsystems: [SubsystemConfiguration]
@@ -21,7 +21,7 @@ public struct ArchitectureConfiguration: Equatable, Sendable {
 
 }
 
-public struct SubsystemConfiguration: Equatable, Sendable {
+public struct SubsystemConfiguration: Equatable, Sendable, Codable {
     public let name: String
     public let modules: [String]
     public let paths: [String]
@@ -43,7 +43,7 @@ public struct SubsystemConfiguration: Equatable, Sendable {
     }
 }
 
-public struct RuleConfiguration: Equatable, Sendable {
+public struct RuleConfiguration: Equatable, Sendable, Codable {
     public let forbiddenImports: [RuleSetting]
     public let subsystemBoundary: Severity
     public let duplicateOwnership: Severity
@@ -99,7 +99,7 @@ public struct RuleConfiguration: Equatable, Sendable {
     }
 }
 
-public struct RuleSetting: Equatable, Sendable {
+public struct RuleSetting: Equatable, Sendable, Codable {
     public let severity: Severity
     public let values: [String]
     public let paths: [String]
@@ -115,7 +115,7 @@ public struct RuleSetting: Equatable, Sendable {
     }
 }
 
-public struct StoredPropertyRuleConfiguration: Equatable, Sendable {
+public struct StoredPropertyRuleConfiguration: Equatable, Sendable, Codable {
     public let severity: Severity
     public let paths: [String]
     public let disallowances: Set<StoredPropertyDisallowance>
@@ -131,7 +131,7 @@ public struct StoredPropertyRuleConfiguration: Equatable, Sendable {
     }
 }
 
-public struct SyntaxConstructRuleConfiguration: Equatable, Sendable {
+public struct SyntaxConstructRuleConfiguration: Equatable, Sendable, Codable {
     public let severity: Severity
     public let paths: [String]
     public let excludedPaths: [String]
@@ -150,17 +150,31 @@ public struct SyntaxConstructRuleConfiguration: Equatable, Sendable {
     }
 }
 
-public struct SyntaxKindRuleConfiguration: Equatable, Sendable {
+public struct SyntaxKindRuleConfiguration: Equatable, Sendable, Codable {
     public let severity: Severity
     public let paths: [String]
-    public let requiredKinds: Set<SyntaxKind>
-    public let disallowedKinds: Set<SyntaxKind>
+    public let requiredKinds: Set<SyntaxKindName>
+    public let disallowedKinds: Set<SyntaxKindName>
 
     public init(
         severity: Severity = .off,
         paths: [String] = [],
         requiredKinds: Set<SyntaxKind> = [],
         disallowedKinds: Set<SyntaxKind> = []
+    ) {
+        self.init(
+            severity: severity,
+            paths: paths,
+            requiredKinds: Set(requiredKinds.map(SyntaxKindName.init)),
+            disallowedKinds: Set(disallowedKinds.map(SyntaxKindName.init))
+        )
+    }
+
+    public init(
+        severity: Severity,
+        paths: [String],
+        requiredKinds: Set<SyntaxKindName>,
+        disallowedKinds: Set<SyntaxKindName>
     ) {
         self.severity = severity
         self.paths = paths
@@ -169,7 +183,36 @@ public struct SyntaxKindRuleConfiguration: Equatable, Sendable {
     }
 }
 
-public struct PublicDeclarationRuleConfiguration: Equatable, Sendable {
+public struct SyntaxKindName: Hashable, Sendable, CustomStringConvertible, Codable {
+    public let rawValue: String
+
+    public init(_ kind: SyntaxKind) {
+        self.rawValue = String(describing: kind)
+    }
+
+    public init(_ rawValue: String) throws {
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw ConfigurationError.emptySyntaxKindName
+        }
+        self.rawValue = normalized
+    }
+
+    public var description: String {
+        rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        try self.init(decoder.singleValueContainer().decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+public struct PublicDeclarationRuleConfiguration: Equatable, Sendable, Codable {
     public let severity: Severity
     public let paths: [String]
     public let requiredNames: Set<StringMatcher>
@@ -188,7 +231,7 @@ public struct PublicDeclarationRuleConfiguration: Equatable, Sendable {
     }
 }
 
-public struct PathRuleConfiguration: Equatable, Sendable {
+public struct PathRuleConfiguration: Equatable, Sendable, Codable {
     public let severity: Severity
     public let paths: [String]
 
@@ -198,7 +241,7 @@ public struct PathRuleConfiguration: Equatable, Sendable {
     }
 }
 
-public enum StoredPropertyDisallowance: String, Equatable, Hashable, Sendable {
+public enum StoredPropertyDisallowance: String, Equatable, Hashable, Sendable, Codable {
     case any
     case broadExistential
     case storedProperty

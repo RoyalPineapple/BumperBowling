@@ -28,6 +28,15 @@ Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe somethi
 
 The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md).
 
+## Configuration Loading
+
+`BumperBowling.swift` loads through two lanes, tried in order:
+
+1. `ConfigurationInterpreter` statically evaluates the declarative DSL subset with SwiftSyntax. Nothing is compiled or executed; the interpreter lowers through the same DSL functions the compiled path uses, so both lanes produce value-equal configurations.
+2. Files outside the subset fall back to the configuration runner: the file is compiled through SwiftPM and evaluated in a deny-default sandboxed subprocess with an empty environment, no network, and no writable paths. The subprocess computes only the configuration value and prints it as JSON; scanning and linting always run in the host process.
+
+The interpreter never guesses. Any construct it does not model falls back to execution instead of being interpreted loosely, so the compiled path stays the semantic authority.
+
 The DSL should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 
 `scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper Bowling fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence for the declared bounds, not a source of generated policy.

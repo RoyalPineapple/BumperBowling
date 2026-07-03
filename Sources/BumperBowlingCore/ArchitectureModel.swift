@@ -473,7 +473,7 @@ public enum AccessLevel: String, Equatable, Sendable {
     case open
 }
 
-public enum ImperativeConstruct: String, Equatable, Hashable, Sendable {
+public enum ImperativeConstruct: String, Equatable, Hashable, Sendable, Codable {
     case assignment
     case directStringMatch
     case loop
