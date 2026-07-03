@@ -617,7 +617,7 @@ public struct LintReport: Equatable, Sendable, Codable {
             return "No architecture violations found."
         }
 
-        var lines = [hasErrors ? "The architecture breaks its rules:" : "The architecture holds. A few nudges:", ""]
+        var lines = [hasErrors ? "The code breaks the architecture's rules:" : "The architecture holds. A few nudges:", ""]
         for violation in violations {
             lines.append(
                 "- [\(violation.severity.rawValue.uppercased())] \(violation.markdownLocation): \(violation.message) (\(violation.ruleID.rawValue))"
