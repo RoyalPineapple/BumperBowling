@@ -54,6 +54,27 @@ struct BumperCommandsTests {
     }
 
     @Test
+    func changedBumperBowlingSwiftInvalidatesConfigurationRunnerCache() async throws {
+        let root = try makeRepository(source: """
+        import Foundation
+
+        public struct Thing {}
+        """)
+        try writeConfiguration(to: root, forbiddenModule: "XCTest")
+
+        let cleanReport = try await BumperCommands.lint(root: root)
+        #expect(!cleanReport.hasErrors)
+
+        try writeConfiguration(to: root, forbiddenModule: "Foundation")
+
+        let failingReport = try await BumperCommands.lint(root: root)
+        #expect(failingReport.hasErrors)
+        #expect(failingReport.violations.contains { violation in
+            violation.message.contains("Foundation")
+        })
+    }
+
+    @Test
     func initWritesRunnableConfiguration() async throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
@@ -92,7 +113,7 @@ struct BumperCommandsTests {
         return root
     }
 
-    private func writeConfiguration(to root: URL) throws {
+    private func writeConfiguration(to root: URL, forbiddenModule: String = "XCTest") throws {
         let configuration = """
         import BumperBowlingCore
 
@@ -111,7 +132,7 @@ struct BumperCommandsTests {
                     Owns("Sources/BumperBowlingCore")
                     Modules("BumperBowlingCore")
                     MayUse(.foundation)
-                    DoesNotUse("XCTest", severity: .error)
+                    DoesNotUse("\(forbiddenModule)", severity: .error)
                 }
             }
 
