@@ -2,7 +2,7 @@
 
 Bumper Bowling is a Swift architectural linter: a Swift 6 assertion engine over SwiftSyntax-observed source facts.
 
-The Swift DSL is specified in [DSL_SPEC.md](DSL_SPEC.md). Bumper Bowling ships one engine and two dumb interfaces over that engine: the `bumper` CLI for shell workflows and `BumperBowlingTesting` for Swift test suites.
+The configuration language is specified in [DSL_SPEC.md](DSL_SPEC.md). Bumper Bowling ships one engine and two dumb interfaces over that engine: the `bumper` CLI for shell workflows and `BumperBowlingTesting` for Swift test suites.
 
 Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, reports, and a primary `bumper lint` command.
 
@@ -10,7 +10,7 @@ It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local
 
 SwiftLint configuration lives in `.swiftlint.yml`.
 
-The tool should stay tiny. Prefer a small SwiftSyntax-first core, simple Swift DSL constructors, and boring CLI behavior over generated accessors, dynamic lookup, plugins, or clever configuration machinery.
+The tool should stay tiny. Prefer a small SwiftSyntax-first core, simple Swift configuration constructors, and boring CLI behavior over generated accessors, dynamic lookup, plugins, or clever configuration machinery.
 
 The interesting part is the assertion model, not the wrapper. Bumper Bowling turns SwiftSyntax-visible source facts into a graph, then evaluates typed Swift declarations against that graph. The CLI and testing target are intentionally thin delivery surfaces for hooks, CI, and product tests.
 
@@ -20,7 +20,7 @@ The interesting part is the assertion model, not the wrapper. Bumper Bowling tur
 SwiftSyntax reads the code
 Bumper Bowling records raw source facts
 Those facts form an ArchitectureGraph
-The Swift DSL encodes typed assertions
+The configuration encodes typed assertions
 Lint runs math over the graph
 ```
 
@@ -32,12 +32,12 @@ The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](S
 
 `BumperBowling.swift` loads through two lanes, tried in order:
 
-1. `ConfigurationInterpreter` statically evaluates configurations written in familiar Swift syntax — known constructors, string literals, leading-dot shorthands — with SwiftSyntax. Nothing is compiled or executed; the interpreter lowers through the same DSL functions the compiled path uses, so both lanes produce value-equal configurations.
+1. `ConfigurationInterpreter` statically evaluates configurations written in familiar Swift syntax — known constructors, string literals, leading-dot shorthands — with SwiftSyntax. Nothing is compiled or executed; the interpreter lowers through the same configuration functions the compiled path uses, so both lanes produce value-equal configurations.
 2. Files that go beyond that fall back to the configuration runner: the file is compiled through SwiftPM and evaluated in a deny-default sandboxed subprocess with an empty environment, no network, and no writable paths. The subprocess computes only the configuration value and prints it as JSON; scanning and linting always run in the host process.
 
 The interpreter never guesses. Any construct it does not model falls back to execution instead of being interpreted loosely, so the compiled path stays the semantic authority. `bumper config` reports a configuration's lane, the reason, and validity.
 
-The DSL should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
+A configuration should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 
 `scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper Bowling fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence for the declared bounds, not a source of generated policy.
 
@@ -45,7 +45,7 @@ SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller pro
 
 Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep scorecards explainable: report the observed graph fact, the declared lane, and why they do not match.
 
-Semantic DSL names are not special engine concepts. `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)` applies scope and severity. Built-in shorthand and user-defined shorthand lower into the same raw graph assertions.
+Semantic shorthand names are not special engine concepts. `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)` applies scope and severity. Built-in shorthand and user-defined shorthand lower into the same raw graph assertions.
 
 ## Product Lane
 

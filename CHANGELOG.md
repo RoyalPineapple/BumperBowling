@@ -2,7 +2,7 @@
 
 ## 0.1.0 - Unreleased
 
-- Added runnable Swift DSL configuration through `BumperBowling.swift`.
+- Added configuration in familiar Swift through `BumperBowling.swift`.
 - Added static interpretation of configurations written in familiar Swift
   syntax: they load through SwiftSyntax without compiling or executing any
   configuration code.
