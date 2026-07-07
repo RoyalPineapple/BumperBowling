@@ -8,6 +8,11 @@ Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities,
 
 It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns the project's architectural rules: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
 
+SwiftPM is the canonical distribution path. Tagged versions of this repository
+publish both the `BumperBowlingCore` library product and the `bumper`
+executable product. Other installers can wrap the CLI later, but they should
+not become the source of truth.
+
 SwiftLint configuration lives in `.swiftlint.yml`.
 
 The tool should stay tiny. Prefer a small SwiftSyntax-first core, simple Swift configuration constructors, and boring CLI behavior over generated accessors, dynamic lookup, plugins, or clever configuration machinery.

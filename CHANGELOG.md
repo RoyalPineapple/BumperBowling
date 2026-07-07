@@ -13,6 +13,7 @@
 - Made `ArchitectureConfiguration` and its rule configurations `Codable`;
   SwiftSyntax node kinds are carried as typed `SyntaxKindName` values.
 - Added the `bumper` CLI workflow for hooks and CI jobs.
+- Made SwiftPM tags the canonical distribution path.
 - Added architecture snapshot tests, rule example tests, and self-lint product tests.
 - Added `StringMatcher` and conservative direct string matching detection.
 - Documented SwiftSyntax limits and future compiler-backed analysis requests.
