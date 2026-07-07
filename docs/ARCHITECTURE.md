@@ -2,7 +2,7 @@
 
 Bumper Bowling is a Swift architectural linter: a Swift 6 assertion engine over SwiftSyntax-observed source facts.
 
-The configuration language is specified in [DSL_SPEC.md](DSL_SPEC.md). Bumper Bowling ships one engine and two dumb interfaces over that engine: the `bumper` CLI for shell workflows and `BumperBowlingTesting` for Swift test suites.
+The configuration language is specified in [DSL_SPEC.md](DSL_SPEC.md). Bumper Bowling ships one engine and one dumb interface over that engine: the `bumper` CLI for shell workflows, CI jobs, and product tests.
 
 Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, reports, and a primary `bumper lint` command.
 
@@ -12,7 +12,7 @@ SwiftLint configuration lives in `.swiftlint.yml`.
 
 The tool should stay tiny. Prefer a small SwiftSyntax-first core, simple Swift configuration constructors, and boring CLI behavior over generated accessors, dynamic lookup, plugins, or clever configuration machinery.
 
-The interesting part is the assertion model, not the wrapper. Bumper Bowling turns SwiftSyntax-visible source facts into a graph, then evaluates typed Swift declarations against that graph. The CLI and testing target are intentionally thin delivery surfaces for hooks, CI, and product tests.
+The interesting part is the assertion model, not the wrapper. Bumper Bowling turns SwiftSyntax-visible source facts into a graph, then evaluates typed Swift declarations against that graph. The CLI target is intentionally a thin delivery surface for hooks, CI, and product tests.
 
 ## Core Model
 
@@ -88,7 +88,6 @@ The rule engine should always know which lane a finding came from. A report with
 
 - `BumperBowlingCore` owns parsing, rule construction, repository scanning, architecture modeling, and linting.
 - `BumperBowling` is the CLI adapter for hooks and CI jobs. It may depend on `BumperBowlingCore`; core must not depend on the CLI.
-- `BumperBowlingTesting` is the test-suite adapter for Swift Testing/XCTest. It may depend on `BumperBowlingCore`; core must not depend on testing harnesses.
 - Tests may import product modules and testing frameworks, but production targets must not import test frameworks.
 - Language parsing is SwiftSyntax-driven. Swift is the only language surface in 0.1.
 

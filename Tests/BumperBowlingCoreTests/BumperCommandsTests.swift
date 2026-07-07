@@ -14,7 +14,7 @@ struct BumperCommandsTests {
 
         let output = try await BumperCommands.scan(
             root: root,
-            configuration: BumperProjectConfiguration.configuration
+            configuration: commandFixtureConfiguration
         )
 
         #expect(output.contains("Files: 1"))
@@ -32,7 +32,7 @@ struct BumperCommandsTests {
 
         let report = try await BumperCommands.lint(
             root: root,
-            configuration: BumperProjectConfiguration.configuration
+            configuration: commandFixtureConfiguration
         )
 
         #expect(report.hasErrors)
@@ -95,10 +95,29 @@ struct BumperCommandsTests {
         )
 
         #expect(
-            checkedInSnapshot == (try BumperCommands.snapshot(
-                configuration: BumperProjectConfiguration.configuration
-            ))
+            checkedInSnapshot == (try BumperCommands.snapshot(root: root))
         )
+    }
+
+    private var commandFixtureConfiguration: ArchitectureConfiguration {
+        BumperConfiguration {
+            Included {
+                "Sources"
+            }
+
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/BumperBowlingCore")
+                    Modules("BumperBowlingCore")
+                    MayUse(.foundation)
+                    DoesNotUse(.testing)
+                }
+            }
+
+            Assertions {
+                SingleOwner(.error)
+            }
+        }.architectureConfiguration
     }
 
     private func makeRepository(source: String) throws -> URL {

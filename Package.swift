@@ -10,7 +10,6 @@ let package = Package(
     ],
     products: [
         .library(name: "BumperBowlingCore", targets: ["BumperBowlingCore"]),
-        .library(name: "BumperBowlingTesting", targets: ["BumperBowlingTesting"]),
         .executable(name: "bumper", targets: ["BumperBowling"]),
     ],
     dependencies: [
@@ -30,16 +29,10 @@ let package = Package(
             dependencies: ["BumperBowlingCore"],
             swiftSettings: strictConcurrencySettings
         ),
-        .target(
-            name: "BumperBowlingTesting",
-            dependencies: ["BumperBowlingCore"],
-            swiftSettings: strictConcurrencySettings
-        ),
         .testTarget(
             name: "BumperBowlingCoreTests",
             dependencies: [
                 "BumperBowlingCore",
-                "BumperBowlingTesting",
                 .product(name: "SwiftParser", package: "swift-syntax"),
             ],
             swiftSettings: strictConcurrencySettings

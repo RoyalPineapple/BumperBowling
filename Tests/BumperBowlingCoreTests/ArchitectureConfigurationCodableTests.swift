@@ -65,16 +65,6 @@ struct ArchitectureConfigurationCodableTests {
     }
 
     @Test
-    func projectConfigurationSurvivesARoundTrip() throws {
-        let configuration = BumperProjectConfiguration.configuration
-
-        let data = try JSONEncoder().encode(configuration)
-        let decoded = try JSONDecoder().decode(ArchitectureConfiguration.self, from: data)
-
-        #expect(decoded == configuration)
-    }
-
-    @Test
     func decodingRejectsEmptyMatcherPatterns() throws {
         let payload = Data(#"{"mode": "prefix", "pattern": ""}"#.utf8)
 
