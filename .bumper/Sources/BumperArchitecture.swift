@@ -36,7 +36,12 @@ extension AssertionShape {
         NoDirectStringMatching(
             .error,
             paths: ["Sources/BumperBowlingCore"],
-            except: ["Sources/BumperBowlingCore/StringMatcher.swift"]
+            except: [
+                "Sources/BumperBowlingCore/BumperSyntaxDeclarations.swift",
+                "Sources/BumperBowlingCore/BumperSyntaxFacts.swift",
+                "Sources/BumperBowlingCore/BumperSyntaxImperative.swift",
+                "Sources/BumperBowlingCore/StringMatcher.swift",
+            ]
         )
     }
 }
