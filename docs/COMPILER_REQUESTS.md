@@ -1,6 +1,6 @@
 # Compiler Requests
 
-Bumper Bowling 0.1 is SwiftSyntax-first. When a rule needs type-checked truth, it belongs on this list instead of being smuggled into syntax-only linting.
+Bumper Bowling is SwiftSyntax-first. When a rule needs type-checked truth, it belongs on this list instead of being smuggled into syntax-only linting.
 
 These are requests for a future compiler-backed analysis lane.
 

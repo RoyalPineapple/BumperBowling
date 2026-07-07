@@ -15,7 +15,7 @@ Every fact in this catalog must satisfy two constraints:
 
 Bumper Bowling does not mirror SwiftSyntax's node types. It stores SwiftSyntax's own `SyntaxKind` values for compact graph checks and adds computed `bumper` views to concrete SwiftSyntax nodes for local facts.
 
-## Current 0.1 Facts
+## Current Facts
 
 ### File Facts
 
@@ -132,7 +132,7 @@ These views do not add stored state to SwiftSyntax nodes. They are pure computat
 
 ## Full SwiftSyntax Fact Vocabulary
 
-These are the fact families Bumper Bowling should be able to grow into. The observed `SyntaxKind` set is recorded in 0.1, but only selected facts are normalized into first-class architecture graph fields.
+These are the fact families Bumper Bowling should be able to grow into. The observed `SyntaxKind` set is recorded, but only selected facts are normalized into first-class architecture graph fields.
 
 ### Source File And Trivia
 
@@ -295,7 +295,7 @@ Syntax can observe concurrency spelling. It cannot prove isolation correctness.
 - macro name
 - macro arguments
 
-Syntax can observe macro use. It cannot know the expanded code in the 0.1 lane.
+Syntax can observe macro use. It cannot know the expanded code in the SwiftSyntax-only lane.
 
 ### Literal Facts
 
