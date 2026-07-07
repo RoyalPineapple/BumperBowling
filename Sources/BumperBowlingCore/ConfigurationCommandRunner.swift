@@ -24,8 +24,10 @@ private extension ConfigurationLoader {
     static let configurationCommandOutputLimitBytes = 4 * 1024 * 1024
     static let swiftToolchainIdentityTimeoutSeconds: TimeInterval = 10
     static let swiftToolchainIdentityOutputLimitBytes = 16 * 1024
+    static let consumerPackageDirectory = ".bumper"
     static let consumerSourceDirectory = ".bumper/Sources"
-    static let packageManifestPath = ".bumper/packages.json"
+    static let consumerRulePackageName = ".bumper"
+    static let consumerRuleProductName = "BumperRules"
 
     /// The configuration runner computes a pure value: it evaluates the
     /// repository's `BumperBowling.swift` into an `ArchitectureConfiguration`
@@ -196,9 +198,9 @@ private extension ConfigurationLoader {
     ) throws -> CachedPackage {
         let configurationData = try Data(contentsOf: configurationURL)
         let repositoryRoot = configurationURL.deletingLastPathComponent()
-        let consumerSources = try consumerConfigurationSources(root: repositoryRoot)
-        let consumerSourcesHash = consumerConfigurationSourcesHash(consumerSources)
         let rulePackages = try rulePackageDependencies(root: repositoryRoot)
+        let consumerSources = try rulePackages.isEmpty ? consumerConfigurationSources(root: repositoryRoot) : []
+        let consumerSourcesHash = consumerConfigurationSourcesHash(consumerSources)
         let rulePackagesHash = try rulePackageDependenciesHash(rulePackages)
         let manifest = packageManifest(bumperPackageRoot: bumperPackageRoot, rulePackages: rulePackages)
         let metadata = CachedPackageMetadata(
@@ -337,48 +339,18 @@ private extension ConfigurationLoader {
     }
 
     static func rulePackageDependencies(root: URL) throws -> [RulePackageDependency] {
-        let manifestURL = root.appendingPathComponent(packageManifestPath)
-        guard FileManager.default.fileExists(atPath: manifestURL.path) else {
+        let packageRoot = root.appendingPathComponent(consumerPackageDirectory).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: packageRoot.appendingPathComponent("Package.swift").path) else {
             return []
         }
 
-        let manifest = try JSONDecoder().decode(RulePackageManifest.self, from: Data(contentsOf: manifestURL))
-        var seenProducts = Set<String>()
-
-        return try manifest.rulePackages.map { package in
-            let rawPath = package.path.trimmingCharacters(in: .whitespacesAndNewlines)
-            let packageName = package.package.trimmingCharacters(in: .whitespacesAndNewlines)
-            let product = package.product.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            guard !rawPath.isEmpty, !packageName.isEmpty, !product.isEmpty else {
-                throw BumperError.configurationOutputMalformed(
-                    "\(packageManifestPath) entries require path, package, and product"
-                )
-            }
-            guard !StringMatcher.contains("://").matches(rawPath),
-                  !StringMatcher.prefix("/").matches(rawPath) else {
-                throw BumperError.configurationOutputMalformed(
-                    "\(packageManifestPath) only supports relative local package paths: \(rawPath)"
-                )
-            }
-            guard !rawPath.split(separator: "/").contains(where: isUnsafeRelativePathComponent) else {
-                throw BumperError.configurationOutputMalformed(
-                    "\(packageManifestPath) contains unsafe package path: \(rawPath)"
-                )
-            }
-            guard seenProducts.insert(product).inserted else {
-                throw BumperError.configurationOutputMalformed(
-                    "\(packageManifestPath) declares duplicate product: \(product)"
-                )
-            }
-
-            let packageRoot = root.appendingPathComponent(rawPath).standardizedFileURL
-            guard FileManager.default.fileExists(atPath: packageRoot.appendingPathComponent("Package.swift").path) else {
-                throw BumperError.configurationPackageUnavailable(packageRoot.path)
-            }
-
-            return RulePackageDependency(path: packageRoot, package: packageName, product: product)
-        }
+        return [
+            RulePackageDependency(
+                path: packageRoot,
+                package: consumerRulePackageName,
+                product: consumerRuleProductName
+            ),
+        ]
     }
 
     static func rulePackageDependenciesHash(_ packages: [RulePackageDependency]) throws -> String {
@@ -686,16 +658,6 @@ private struct CachedPackage {
 private struct ConsumerConfigurationSource {
     let relativePath: String
     let data: Data
-}
-
-private struct RulePackageManifest: Decodable {
-    let rulePackages: [RulePackageEntry]
-}
-
-private struct RulePackageEntry: Decodable {
-    let path: String
-    let package: String
-    let product: String
 }
 
 private struct RulePackageDependency {

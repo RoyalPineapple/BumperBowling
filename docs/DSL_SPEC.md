@@ -85,24 +85,22 @@ component elements such as capabilities, dependencies, and requirements.
 does not add hidden facts; it only gives the consumer a reusable spelling for
 the facts and policies Bumper Bowling can already evaluate.
 
-For shared local Swift packages, declare the package products in
-`.bumper/packages.json` before importing them from `BumperBowling.swift`:
+For shared local Swift packages, put a normal SwiftPM package at
+`.bumper/Package.swift`. Bumper Bowling automatically adds that package to the
+generated configuration runner and expects a `BumperRules` library product:
 
-```json
-{
-  "rulePackages": [
-    {
-      "path": ".bumper/HouseRules",
-      "package": "HouseRules",
-      "product": "HouseRules"
-    }
-  ]
-}
+```text
+.bumper/
+  Package.swift
+  Sources/BumperRules/Rules.swift
 ```
 
-`packages.json` only wires dependencies into the generated configuration
-runner. It does not define rules, and it does not load anything unless the
-configuration imports and uses the exported Swift values.
+The package does not define or apply rules by convention alone. It only makes
+Swift values importable; `BumperBowling.swift` still chooses what to use:
+
+```swift
+import BumperRules
+```
 
 Raw syntax assertions use SwiftSyntax's own `SyntaxKind` values:
 

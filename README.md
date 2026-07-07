@@ -113,20 +113,14 @@ Component(.core) {
 }
 ```
 
-Shared local rule packages are wired through `.bumper/packages.json`, then
-imported from `BumperBowling.swift`. The JSON only declares package
-dependencies; requirements and shapes still live in Swift:
+Shared local rule packages can use SwiftPM directly. If `.bumper/Package.swift`
+exists, Bumper Bowling adds it to the generated runner and expects it to export
+a `BumperRules` library product:
 
-```json
-{
-  "rulePackages": [
-    {
-      "path": ".bumper/HouseRules",
-      "package": "HouseRules",
-      "product": "HouseRules"
-    }
-  ]
-}
+```text
+.bumper/
+  Package.swift
+  Sources/BumperRules/Rules.swift
 ```
 
 ## Commands
