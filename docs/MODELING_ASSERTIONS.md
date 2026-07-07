@@ -1,12 +1,10 @@
 # Modeling Assertions
 
-Bumper Bowling does not overlap with SwiftLint.
+Bumper Bowling's product lane is defined in [ARCHITECTURE.md](ARCHITECTURE.md):
+SwiftLint owns style, the compiler owns semantic truth, and Bumper Bowling owns
+architecture policy visible to SwiftSyntax.
 
-SwiftLint owns Swift style: formatting, naming, whitespace, line length, sorted imports, brace placement, and local code smells.
-
-Bumper Bowling owns architecture and modeling policy when that policy is visible to SwiftSyntax. It starts with raw parsed facts, projects them into a graph, then applies typed Swift assertions as lean graph operations.
-
-That is the useful lane: Bumper Bowling does not ask whether code is pretty, and it does not pretend to be the compiler. It asks whether the source still matches the architecture the repository declared.
+This document focuses on the modeling layer inside that lane.
 
 The composability model is small:
 
