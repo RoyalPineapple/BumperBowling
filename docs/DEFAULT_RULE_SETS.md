@@ -337,6 +337,52 @@ Receipt:
 
 - `Stored property id is mutable`
 
+### `.noOptionalStoredProperties`
+
+Passes:
+
+```swift
+enum LoadState {
+    case idle
+    case failed(Failure)
+}
+```
+
+Fails:
+
+```swift
+struct LoadState {
+    let failure: Failure?
+}
+```
+
+Receipt:
+
+- `Stored property failure uses optional state`
+
+### `.noBoolStoredProperties`
+
+Passes:
+
+```swift
+enum ConnectionState {
+    case disconnected
+    case connected
+}
+```
+
+Fails:
+
+```swift
+struct ConnectionState {
+    let isConnected: Bool
+}
+```
+
+Receipt:
+
+- `Stored property isConnected uses Bool state`
+
 ### `.noStoredProperties`
 
 Passes:
@@ -473,6 +519,8 @@ Semantic rule sets always report raw observed facts. Examples:
 - `.typedIdentity` can report `Stored property id uses raw String`.
 - `.explicitDomainSurfaces` can report `Stored property payload uses Any`.
 - `.immutableStoredState` can report `Stored property state is mutable`.
+- `.noOptionalStoredProperties` can report `Stored property failure uses optional state`.
+- `.noBoolStoredProperties` can report `Stored property isReady uses Bool state`.
 - `.computedState` can report `Stored property fullName is stored`.
 - `.functionalCore` can report `Uses imperative construct assignment`.
 - `.parserStateMachine` can report `Parser file does not declare an enum state machine`.

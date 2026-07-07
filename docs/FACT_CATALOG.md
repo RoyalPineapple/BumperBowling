@@ -66,6 +66,8 @@ Current stored-property fact-rules:
 - stored property is mutable
 - stored property is explicitly typed as `Any`
 - stored property is explicitly typed as `any ...`
+- stored property is explicitly typed as `Bool`
+- stored property is explicitly typed as optional syntax
 - stored property is explicitly typed as `String`
 
 ### Enum Facts

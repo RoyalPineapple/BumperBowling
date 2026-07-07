@@ -191,6 +191,8 @@ struct ArchitectureLinterTests {
                 StoredProperty(owner: try TypeName("Model"), name: try DeclarationName("fullName"), type: try TypeName("String"), isMutable: false),
                 StoredProperty(name: try DeclarationName("payload"), type: try TypeName("Any"), isMutable: true),
                 StoredProperty(name: try DeclarationName("service"), type: try TypeName("any Service"), isMutable: false),
+                StoredProperty(name: try DeclarationName("isReady"), type: try TypeName("Bool"), isMutable: false),
+                StoredProperty(name: try DeclarationName("failure"), type: try TypeName("Failure?"), isMutable: false),
             ]
         )
         let configuration = ArchitectureConfiguration(
@@ -201,7 +203,14 @@ struct ArchitectureLinterTests {
                 storedProperties: StoredPropertyRuleConfiguration(
                     severity: .error,
                     paths: ["Sources/Core/Domain"],
-                    disallowances: [.any, .broadExistential, .storedVar, .rawStringIdentity]
+                    disallowances: [
+                        .any,
+                        .boolState,
+                        .broadExistential,
+                        .optionalState,
+                        .storedVar,
+                        .rawStringIdentity,
+                    ]
                 )
             )
         )
@@ -214,6 +223,8 @@ struct ArchitectureLinterTests {
         #expect(messages.contains("Stored property payload uses Any"))
         #expect(messages.contains("Stored property payload is mutable"))
         #expect(messages.contains("Stored property service uses a broad existential"))
+        #expect(messages.contains("Stored property isReady uses Bool state"))
+        #expect(messages.contains("Stored property failure uses optional state"))
         #expect(!messages.contains("Stored property fullName uses raw String"))
     }
 

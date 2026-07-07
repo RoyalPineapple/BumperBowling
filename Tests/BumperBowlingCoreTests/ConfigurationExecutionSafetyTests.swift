@@ -52,4 +52,145 @@ struct ConfigurationExecutionSafetyTests {
             "sandboxed evaluation must not be able to write files"
         )
     }
+
+    @Test
+    func executedConfigurationCanUseConsumerOwnedShapeSources() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        let consumerSourceRoot = root.appendingPathComponent(".bumper/Sources")
+        try FileManager.default.createDirectory(at: consumerSourceRoot, withIntermediateDirectories: true)
+
+        let houseStyle = """
+        import BumperBowlingCore
+
+        extension ComponentRequirement {
+            static let domainHouseStyle = ComponentRequirement(
+                .explicitDomainSurfaces,
+                .immutableStoredState,
+                .noOptionalStoredProperties
+            )
+        }
+
+        let domainShape = ComponentShape {
+            MayUse(.foundation)
+            Requires(.domainHouseStyle, severity: .error)
+        }
+        """
+        try houseStyle.write(
+            to: consumerSourceRoot.appendingPathComponent("HouseStyle.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let configurationSource = """
+        import BumperBowlingCore
+
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Modules("Core")
+                    Applies(domainShape)
+                }
+            }
+        }
+        """
+        try configurationSource.write(
+            to: root.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let configuration = try ConfigurationLoader.loadConfiguration(root: root)
+        let rules = configuration.rules
+
+        #expect(configuration.subsystems.map(\.name) == ["core"])
+        #expect(rules.storedProperties.severity == .error)
+        #expect(rules.storedProperties.paths == ["Sources/Core"])
+        #expect(
+            rules.storedProperties.disallowances ==
+                Set<StoredPropertyDisallowance>([.any, .broadExistential, .storedVar, .optionalState])
+        )
+    }
+
+    @Test
+    func executedConfigurationCanImportLocalRulePackage() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        let packageRoot = root.appendingPathComponent(".bumper")
+        let packageSources = packageRoot.appendingPathComponent("Sources/BumperRules")
+        try FileManager.default.createDirectory(at: packageSources, withIntermediateDirectories: true)
+
+        let packageManifest = """
+        // swift-tools-version: 6.2
+        import PackageDescription
+
+        let package = Package(
+            name: "BumperRules",
+            platforms: [.macOS(.v15)],
+            products: [
+                .library(name: "BumperRules", targets: ["BumperRules"])
+            ],
+            dependencies: [
+                .package(path: \(repositoryRoot().path.debugDescription))
+            ],
+            targets: [
+                .target(
+                    name: "BumperRules",
+                    dependencies: [
+                        .product(name: "BumperBowlingCore", package: "BumperBowling")
+                    ]
+                )
+            ]
+        )
+        """
+        try packageManifest.write(
+            to: packageRoot.appendingPathComponent("Package.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let rules = """
+        import BumperBowlingCore
+
+        public extension ComponentShape {
+            static let importedDomain = ComponentShape {
+                MayUse(.foundation)
+                Requires(.noBoolStoredProperties, severity: .warning)
+            }
+        }
+        """
+        try rules.write(to: packageSources.appendingPathComponent("Rules.swift"), atomically: true, encoding: .utf8)
+
+        let configurationSource = """
+        import BumperBowlingCore
+        import BumperRules
+
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Applies(.importedDomain)
+                }
+            }
+        }
+        """
+        try configurationSource.write(
+            to: root.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let configuration = try ConfigurationLoader.loadConfiguration(root: root)
+
+        #expect(configuration.rules.storedProperties.severity == .warning)
+        #expect(configuration.rules.storedProperties.disallowances == [.boolState])
+    }
+}
+
+private func repositoryRoot() -> URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
 }

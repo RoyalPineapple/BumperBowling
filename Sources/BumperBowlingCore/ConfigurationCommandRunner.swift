@@ -24,6 +24,10 @@ private extension ConfigurationLoader {
     static let configurationCommandOutputLimitBytes = 4 * 1024 * 1024
     static let swiftToolchainIdentityTimeoutSeconds: TimeInterval = 10
     static let swiftToolchainIdentityOutputLimitBytes = 16 * 1024
+    static let consumerPackageDirectory = ".bumper"
+    static let consumerSourceDirectory = ".bumper/Sources"
+    static let consumerRulePackageName = ".bumper"
+    static let consumerRuleProductName = "BumperRules"
 
     /// The configuration runner computes a pure value: it evaluates the
     /// repository's `BumperBowling.swift` into an `ArchitectureConfiguration`
@@ -193,14 +197,23 @@ private extension ConfigurationLoader {
         bumperPackageRoot: URL
     ) throws -> CachedPackage {
         let configurationData = try Data(contentsOf: configurationURL)
-        let manifest = packageManifest(bumperPackageRoot: bumperPackageRoot)
+        let repositoryRoot = configurationURL.deletingLastPathComponent()
+        let rulePackages = try rulePackageDependencies(root: repositoryRoot)
+        let consumerSources = try rulePackages.isEmpty ? consumerConfigurationSources(root: repositoryRoot) : []
+        let consumerSourcesHash = consumerConfigurationSourcesHash(consumerSources)
+        let rulePackagesHash = try rulePackageDependenciesHash(rulePackages)
+        let manifest = packageManifest(bumperPackageRoot: bumperPackageRoot, rulePackages: rulePackages)
         let metadata = CachedPackageMetadata(
-            configurationContentHash: sha256Hex(configurationData)
+            configurationContentHash: sha256Hex(configurationData),
+            consumerSourcesHash: consumerSourcesHash,
+            rulePackagesHash: rulePackagesHash
         )
         let root = try cachedPackageRoot(
             configurationURL: configurationURL,
             bumperPackageRoot: bumperPackageRoot,
-            manifest: manifest
+            manifest: manifest,
+            consumerSourcesHash: consumerSourcesHash,
+            rulePackagesHash: rulePackagesHash
         )
         let sources = root.appendingPathComponent("Sources/BumperConfigurationRunner")
 
@@ -215,6 +228,7 @@ private extension ConfigurationLoader {
         try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
         try manifest.write(to: root.appendingPathComponent("Package.swift"), atomically: true, encoding: .utf8)
         try configurationData.write(to: sources.appendingPathComponent("UserConfiguration.swift"), options: .atomic)
+        try writeConsumerConfigurationSources(consumerSources, to: sources.appendingPathComponent("ConsumerSources"))
         try runnerSource.write(to: sources.appendingPathComponent("main.swift"), atomically: true, encoding: .utf8)
         try JSONEncoder()
             .encode(metadata)
@@ -230,7 +244,9 @@ private extension ConfigurationLoader {
     static func cachedPackageRoot(
         configurationURL: URL,
         bumperPackageRoot: URL,
-        manifest: String
+        manifest: String,
+        consumerSourcesHash: String,
+        rulePackagesHash: String
     ) throws -> URL {
         let key = [
             "v1",
@@ -240,12 +256,113 @@ private extension ConfigurationLoader {
             try swiftToolchainIdentity(),
             sha256Hex(Data(manifest.utf8)),
             sha256Hex(Data(runnerSource.utf8)),
+            consumerSourcesHash,
+            rulePackagesHash,
         ].joined(separator: "\n")
 
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("BumperConfigurationLoaderCache")
             .appendingPathComponent(sha256Hex(Data(key.utf8)))
         return root
+    }
+
+    static func consumerConfigurationSources(root: URL) throws -> [ConsumerConfigurationSource] {
+        let sourceRoot = root.appendingPathComponent(consumerSourceDirectory)
+        guard FileManager.default.fileExists(atPath: sourceRoot.path) else {
+            return []
+        }
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: sourceRoot,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var sources: [ConsumerConfigurationSource] = []
+        for case let fileURL as URL in enumerator {
+            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true,
+                  StringMatcher.suffix(".swift").matches(fileURL.lastPathComponent) else {
+                continue
+            }
+
+            let relativePath = fileURL.path
+                .replacingOccurrences(of: sourceRoot.path + "/", with: "")
+            guard !relativePath.isEmpty,
+                  !relativePath.split(separator: "/").contains(where: isUnsafeRelativePathComponent) else {
+                throw BumperError.configurationOutputMalformed(
+                    "consumer configuration source has unsafe path: \(relativePath)"
+                )
+            }
+
+            sources.append(
+                ConsumerConfigurationSource(
+                    relativePath: relativePath,
+                    data: try Data(contentsOf: fileURL)
+                )
+            )
+        }
+
+        return sources.sorted { $0.relativePath < $1.relativePath }
+    }
+
+    static func consumerConfigurationSourcesHash(_ sources: [ConsumerConfigurationSource]) -> String {
+        let payload = sources.map { source in
+            source.relativePath + "\n" + sha256Hex(source.data)
+        }.joined(separator: "\n")
+        return sha256Hex(Data(payload.utf8))
+    }
+
+    static func isUnsafeRelativePathComponent(_ component: Substring) -> Bool {
+        let value = String(component)
+        return StringMatcher.exact(".").matches(value) || StringMatcher.exact("..").matches(value)
+    }
+
+    static func writeConsumerConfigurationSources(
+        _ consumerSources: [ConsumerConfigurationSource],
+        to destinationRoot: URL
+    ) throws {
+        guard !consumerSources.isEmpty else {
+            return
+        }
+
+        for source in consumerSources {
+            let destination = destinationRoot.appendingPathComponent(source.relativePath)
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try source.data.write(to: destination, options: .atomic)
+        }
+    }
+
+    static func rulePackageDependencies(root: URL) throws -> [RulePackageDependency] {
+        let packageRoot = root.appendingPathComponent(consumerPackageDirectory).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: packageRoot.appendingPathComponent("Package.swift").path) else {
+            return []
+        }
+
+        return [
+            RulePackageDependency(
+                path: packageRoot,
+                package: consumerRulePackageName,
+                product: consumerRuleProductName
+            ),
+        ]
+    }
+
+    static func rulePackageDependenciesHash(_ packages: [RulePackageDependency]) throws -> String {
+        let payload = try packages.map { package in
+            [
+                package.path.path,
+                package.package,
+                package.product,
+                try packageRootFingerprint(package.path),
+            ].joined(separator: "\n")
+        }.joined(separator: "\n\n")
+        return sha256Hex(Data(payload.utf8))
     }
 
     static func buildCachedPackageIfNeeded(_ package: CachedPackage) throws {
@@ -436,8 +553,19 @@ private extension ConfigurationLoader {
         return root
     }
 
-    static func packageManifest(bumperPackageRoot: URL) -> String {
-        """
+    static func packageManifest(bumperPackageRoot: URL, rulePackages: [RulePackageDependency]) -> String {
+        let dependencyEntries = ([
+            ".package(path: \(swiftStringLiteral(bumperPackageRoot.path)))",
+        ] + rulePackages.map { package in
+            ".package(path: \(swiftStringLiteral(package.path.path)))"
+        }).joined(separator: ",\n                ")
+        let targetDependencies = ([
+            ".product(name: \"BumperBowlingCore\", package: \"BumperBowling\")",
+        ] + rulePackages.map { package in
+            ".product(name: \(swiftStringLiteral(package.product)), package: \(swiftStringLiteral(package.package)))"
+        }).joined(separator: ",\n                        ")
+
+        return """
         // swift-tools-version: 6.2
         import PackageDescription
 
@@ -447,13 +575,13 @@ private extension ConfigurationLoader {
                 .macOS(.v15),
             ],
             dependencies: [
-                .package(path: \(swiftStringLiteral(bumperPackageRoot.path))),
+                \(dependencyEntries),
             ],
             targets: [
                 .executableTarget(
                     name: "BumperConfigurationRunner",
                     dependencies: [
-                        .product(name: "BumperBowlingCore", package: "BumperBowling"),
+                        \(targetDependencies),
                     ],
                     swiftSettings: [
                         .enableUpcomingFeature("StrictConcurrency"),
@@ -517,12 +645,25 @@ private struct CachedPackageMetadata: Codable, Equatable {
     static let fileName = ".bumper-cache.json"
 
     let configurationContentHash: String
+    let consumerSourcesHash: String
+    let rulePackagesHash: String
 }
 
 private struct CachedPackage {
     let root: URL
     let executableURL: URL
     let needsBuild: Bool
+}
+
+private struct ConsumerConfigurationSource {
+    let relativePath: String
+    let data: Data
+}
+
+private struct RulePackageDependency {
+    let path: URL
+    let package: String
+    let product: String
 }
 
 private final class BoundedOutputBuffer: @unchecked Sendable {

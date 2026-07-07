@@ -41,6 +41,7 @@ identifier_name:
     - DoesNotDependOn
     - MayUse
     - DoesNotUse
+    - Applies
     - Declare
     - ContainSyntax
     - Does
@@ -50,6 +51,7 @@ identifier_name:
     - RequiresScoped
     - Disallows
     - NoDirectStringMatching
+    - ApplyAssertions
     - DependencyBoundaries
     - SingleOwner
     - AcyclicDeclaredDependencies

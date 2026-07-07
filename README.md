@@ -77,6 +77,68 @@ The full vocabulary and every shipped rule live in the
 [configuration language spec](docs/DSL_SPEC.md) and
 [default rule sets](docs/DEFAULT_RULE_SETS.md).
 
+## Consumer-Owned Shapes
+
+Repositories can keep their own architecture vocabulary in `.bumper/Sources`.
+Those Swift files compile beside `BumperBowling.swift`, so a project can define
+its own `ComponentRequirement`, `ComponentShape`, and `AssertionShape` values
+without waiting for Bumper Bowling to ship a named preset:
+
+```swift
+// .bumper/Sources/HouseStyle.swift
+import BumperBowlingCore
+
+extension ComponentRequirement {
+    static let domainCore = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState
+    )
+}
+
+extension ComponentShape {
+    static let domain = ComponentShape {
+        MayUse(.foundation)
+        DoesNotUse(.uiKit, .testing)
+        Requires(.domainCore, severity: .error)
+    }
+}
+```
+
+```swift
+// BumperBowling.swift
+Component(.core) {
+    Owns("Sources/Core")
+    Applies(.domain)
+}
+```
+
+Shared local rule packages can use SwiftPM directly. If `.bumper/Package.swift`
+exists, Bumper Bowling adds it to the generated runner and expects it to export
+a `BumperRules` library product:
+
+```text
+.bumper/
+  Package.swift
+  Sources/BumperRules/Rules.swift
+```
+
+## Agent Skill
+
+Bumper Bowling ships a Codex skill for agents composing repo-owned architecture
+vocabulary:
+
+```text
+skills/compose-bumper-rules/
+```
+
+To install it locally:
+
+```bash
+mkdir -p ~/.codex/skills
+cp -R skills/compose-bumper-rules ~/.codex/skills/
+```
+
 ## Commands
 
 ```bash

@@ -246,7 +246,9 @@ public struct PathRuleConfiguration: Equatable, Sendable, Codable {
 
 public enum StoredPropertyDisallowance: String, Equatable, Hashable, Sendable, Codable {
     case any
+    case boolState
     case broadExistential
+    case optionalState
     case storedProperty
     case storedVar
     case rawStringIdentity

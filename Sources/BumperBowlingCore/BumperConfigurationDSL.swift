@@ -102,6 +102,30 @@ public struct ComponentConfiguration: Equatable, Sendable {
     public let derivedRules: RuleConfiguration
 }
 
+public struct ComponentShape: Equatable, Sendable {
+    public let elements: [ComponentElement]
+
+    public init(elements: [ComponentElement]) {
+        self.elements = elements
+    }
+
+    public init(@ComponentBuilder _ content: () -> [ComponentElement]) {
+        self.elements = content()
+    }
+}
+
+public struct AssertionShape: Equatable, Sendable {
+    public let configuration: RuleConfiguration
+
+    public init(configuration: RuleConfiguration) {
+        self.configuration = configuration
+    }
+
+    public init(@AssertionsBuilder _ content: () -> [RuleConfiguration]) {
+        self.configuration = content().combined()
+    }
+}
+
 public func Component(
     _ id: SubsystemID,
     @ComponentBuilder _ content: () -> [ComponentElement]
@@ -122,7 +146,7 @@ func makeComponentConfiguration(
     var disallowances: [ImperativeDisallowanceSetting] = []
     var graphAssertions: [ComponentGraphAssertion] = []
 
-    for element in elements {
+    for element in elements.flattened() {
         switch element {
         case .owns(let values):
             paths.append(contentsOf: values)
@@ -140,6 +164,8 @@ func makeComponentConfiguration(
             disallowances.append(contentsOf: values)
         case .graphAssertion(let values):
             graphAssertions.append(contentsOf: values)
+        case .group:
+            break
         }
     }
 
@@ -186,6 +212,7 @@ public enum ComponentElement: Equatable, Sendable {
     case requires([ComponentRequirementSetting])
     case disallows([ImperativeDisallowanceSetting])
     case graphAssertion([ComponentGraphAssertion])
+    case group([ComponentElement])
 }
 
 public enum ComponentUsePolicy: Equatable, Sendable {
@@ -293,6 +320,10 @@ public func DoesNotUse(_ capabilities: Capability..., severity: Severity = .erro
     .usePolicy([.doesNotUse(modules: capabilities.flatMap(\.modules), severity: severity)])
 }
 
+public func Applies(_ shape: ComponentShape) -> ComponentElement {
+    .group(shape.elements)
+}
+
 public func Declare(_ matchers: StringMatcher...) -> GraphPredicate<DeclarationFact> {
     GraphPredicate(.declare(Set(matchers)))
 }
@@ -393,6 +424,10 @@ public func NoDirectStringMatching(
     )
 }
 
+public func ApplyAssertions(_ shape: AssertionShape) -> RuleConfiguration {
+    shape.configuration
+}
+
 @resultBuilder
 public enum AssertionsBuilder {
     public static func buildBlock(_ components: RuleConfiguration...) -> [RuleConfiguration] {
@@ -432,6 +467,26 @@ private extension Array where Element == RuleConfiguration {
     func combined() -> RuleConfiguration {
         reduce(RuleConfiguration()) { partialResult, configuration in
             partialResult.merging(configuration)
+        }
+    }
+}
+
+private extension Array where Element == ComponentElement {
+    func flattened() -> [ComponentElement] {
+        flatMap { element in
+            switch element {
+            case .group(let elements):
+                elements.flattened()
+            case .owns,
+                 .modules,
+                 .mayDependOn,
+                 .doesNotDependOn,
+                 .usePolicy,
+                 .requires,
+                 .disallows,
+                 .graphAssertion:
+                [element]
+            }
         }
     }
 }
