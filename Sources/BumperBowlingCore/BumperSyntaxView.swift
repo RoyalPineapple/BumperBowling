@@ -32,51 +32,6 @@ public extension SyntaxProtocol {
     }
 }
 
-public struct BumperSyntaxPredicate<Node: SyntaxProtocol>: Sendable {
-    private let matchesNode: @Sendable (Node) -> Bool
-
-    public init(_ matchesNode: @escaping @Sendable (Node) -> Bool) {
-        self.matchesNode = matchesNode
-    }
-
-    public func callAsFunction(_ node: Node) -> Bool {
-        matchesNode(node)
-    }
-
-    public func and(_ other: BumperSyntaxPredicate<Node>) -> BumperSyntaxPredicate<Node> {
-        BumperSyntaxPredicate { node in
-            self(node) && other(node)
-        }
-    }
-
-    public func or(_ other: BumperSyntaxPredicate<Node>) -> BumperSyntaxPredicate<Node> {
-        BumperSyntaxPredicate { node in
-            self(node) || other(node)
-        }
-    }
-}
-
-public struct BumperSyntaxAssertion<Node: SyntaxProtocol>: Sendable {
-    public let nodeType: Node.Type
-    private let predicate: BumperSyntaxPredicate<Node>
-
-    public init(
-        _ nodeType: Node.Type,
-        where predicate: BumperSyntaxPredicate<Node>
-    ) {
-        self.nodeType = nodeType
-        self.predicate = predicate
-    }
-
-    public func evaluate(_ node: some SyntaxProtocol) -> Bool? {
-        guard let typedNode = node.as(Node.self) else {
-            return nil
-        }
-
-        return predicate(typedNode)
-    }
-}
-
 extension BumperSyntaxView {
     func syntaxFact(location: SourcePosition?) -> CollectedSourceFact {
         .syntax(
@@ -87,16 +42,6 @@ extension BumperSyntaxView {
                 location: location
             )
         )
-    }
-}
-
-public extension BumperSyntaxPredicate {
-    static var always: BumperSyntaxPredicate<Node> {
-        BumperSyntaxPredicate { _ in true }
-    }
-
-    static var never: BumperSyntaxPredicate<Node> {
-        BumperSyntaxPredicate { _ in false }
     }
 }
 

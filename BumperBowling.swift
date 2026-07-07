@@ -2,7 +2,7 @@ import BumperBowlingCore
 
 // Bumper Bowling's own architecture, asserted against itself.
 // - core is the engine. It depends on nothing of ours and stays typed and boring.
-// - cli and testing are thin interfaces over core. They forward; they hold no state.
+// - cli is a thin interface over core. It forwards; it holds no state.
 let configuration = BumperConfiguration {
     Included {
         "Sources"
@@ -24,12 +24,6 @@ let configuration = BumperConfiguration {
             Owns("Sources/BumperBowling")
             Modules("BumperBowling")
             Applies(.thinCommandAdapter)
-        }
-
-        Component(.tests) {
-            Owns("Sources/BumperBowlingTesting")
-            Modules("BumperBowlingTesting")
-            Applies(.testSupportBoundary)
         }
     }
 

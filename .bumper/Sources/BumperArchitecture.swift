@@ -3,9 +3,9 @@ import BumperBowlingCore
 extension ComponentShape {
     static let bumperEngine = ComponentShape {
         MayUse(.foundation)
-        DoesNotDependOn(.cli, .tests)
+        DoesNotDependOn(.cli)
         DoesNot(Declare("bumperBowling"), severity: .error)
-        // ponytail: catches `/.../` regex literals only; NSRegularExpression/Regex(...)
+        // This catches `/.../` regex literals only; NSRegularExpression/Regex(...)
         // are plain calls SwiftSyntax can't tell from any other. SwiftSyntax-first is the rule.
         Requires(DisallowSyntax(.regexLiteralExpr), severity: .error)
         Requires(.explicitDomainSurfaces, .typedIdentity, severity: .warning)
@@ -23,14 +23,6 @@ extension ComponentShape {
 
     static let thinCommandAdapter = ComponentShape {
         MayDependOn(.core)
-        DoesNotDependOn(.tests)
-        MayUse(.foundation)
-        Requires(.immutableStoredState, .typedIdentity, severity: .error)
-    }
-
-    static let testSupportBoundary = ComponentShape {
-        MayDependOn(.core)
-        DoesNotDependOn(.cli)
         MayUse(.foundation)
         Requires(.immutableStoredState, .typedIdentity, severity: .error)
     }

@@ -265,7 +265,7 @@ struct BumperConfigurationDSLTests {
     }
 
     @Test
-    func composesGenericPredicatesOverSwiftSyntaxNodes() throws {
+    func exposesComputedViewsOverSwiftSyntaxNodes() throws {
         let source = """
         struct Model {
             var id: String
@@ -278,18 +278,12 @@ struct BumperConfigurationDSLTests {
             Issue.record("Expected to find a variable declaration")
             return
         }
-        let assertion = BumperSyntaxAssertion(
-            VariableDeclSyntax.self,
-            where: BumperSyntaxPredicate { node in
-                node.bumper.isMutableBinding && !node.bumper.storedProperties().isEmpty
-            }
-        )
 
         #expect(variable.bumper.kind == SyntaxKind.variableDecl)
         #expect(variable.bumper.bindingNames == ["id"])
         #expect(variable.bumper.explicitTypeNames == ["String"])
-        #expect(assertion.evaluate(variable) == true)
-        #expect(assertion.evaluate(tree) == nil)
+        #expect(variable.bumper.isMutableBinding)
+        #expect(!variable.bumper.storedProperties().isEmpty)
     }
 }
 

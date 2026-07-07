@@ -285,9 +285,8 @@ public enum ConfigurationLoader {
     private static let sampleDSL = """
     import BumperBowlingCore
 
-    // Bumper Bowling exposes this Swift DSL to both shipped interfaces:
-    // - the CLI loads this file for shell hooks and CI jobs
-    // - BumperBowlingTesting can use the same configuration value in tests
+    // Bumper Bowling exposes this Swift DSL to the CLI, which loads this file
+    // for shell hooks, CI jobs, and product tests.
     let configuration = BumperConfiguration {
         Included {
             "Sources"

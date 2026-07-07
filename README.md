@@ -60,14 +60,18 @@ The same value works in your test suite, so architecture failures are just
 test failures:
 
 ```swift
-import BumperBowlingTesting
+import BumperBowlingCore
 import Testing
 
 @Test
 func architectureStaysInLane() async throws {
-    let bumperTest = BumperTest(configuration: configuration.architectureConfiguration)
+    let report = try await BumperCommands.lint(
+        root: projectRoot,
+        configuration: configuration.architectureConfiguration
+    )
 
-    for message in try await bumperTest.errorMessages(root: projectRoot) {
+    for violation in report.violations where violation.severity == .error {
+        let message = "\(violation.path.rawValue): \(violation.message)"
         Issue.record(Comment(rawValue: message))
     }
 }

@@ -2,7 +2,7 @@
 
 Bumper Bowling's assertion surface is Swift. The configuration language is intentionally small and familiar to SwiftLint users, but its center is architecture snapshot testing: components own code, declare dependency edges and import capabilities, and require specific SwiftSyntax-observed facts.
 
-Bumper Bowling exposes the configuration language through two shipped interfaces. The CLI loads `BumperBowling.swift` for shell workflows. `BumperBowlingTesting` accepts the same typed configuration value directly inside Swift Testing or XCTest.
+Bumper Bowling exposes the configuration language through the `bumper` CLI. The CLI loads `BumperBowling.swift` for shell workflows, CI jobs, and product tests.
 
 A configuration declares the shape the repository wants using Swift types. SwiftSyntax supplies what is visible in source. Bumper Bowling checks whether the observed graph facts satisfy the declared shape.
 
@@ -109,18 +109,7 @@ Requires(RequireSyntax(.enumDecl), severity: .error)
 Requires(DisallowSyntax(.forceUnwrapExpr), severity: .warning)
 ```
 
-Bumper Bowling does not maintain a parallel enum of SwiftSyntax nodes. If a rule needs typed access to fields on a syntax node, it composes over SwiftSyntax node types with computed views:
-
-```swift
-BumperSyntaxAssertion(
-    VariableDeclSyntax.self,
-    where: BumperSyntaxPredicate { node in
-        node.bumper.isMutableBinding && !node.bumper.storedProperties.isEmpty
-    }
-)
-```
-
-The graph stores compact facts such as `SyntaxKind`. Typed node predicates are the escape hatch for facts that need the real SwiftSyntax API.
+Bumper Bowling does not maintain a parallel enum of SwiftSyntax nodes. Facts that need typed access to syntax fields are computed from real SwiftSyntax node types through `node.bumper` views.
 
 ```text
 BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner -> ArchitectureGraph -> validator

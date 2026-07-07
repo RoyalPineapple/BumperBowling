@@ -11,8 +11,7 @@
 - Run `swiftlint lint` when SwiftLint is available.
 - Make sure Bumper Bowling's self-lint product test still passes after architectural model or rule changes.
 - Do not make `BumperBowlingCore` depend on the CLI target.
-- Do not make `BumperBowlingCore` depend on `BumperBowlingTesting`.
-- Keep `BumperBowling` and `BumperBowlingTesting` dumb. They are shipped interfaces over the core engine, not separate engines.
+- Keep `BumperBowling` dumb. It is a shipped interface over the core engine, not a separate engine.
 - Preserve strict concurrency settings.
 - Keep parsing SwiftSyntax-first. Use SwiftSyntax/SwiftParser for Swift parsing rather than regular expressions.
 - Parse strings into domain types at boundaries; do not pass raw strings through core architecture logic.
