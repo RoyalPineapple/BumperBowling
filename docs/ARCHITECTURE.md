@@ -94,7 +94,7 @@ The rule engine should always know which lane a finding came from. A report with
 - `BumperBowlingCore` owns parsing, rule construction, repository scanning, architecture modeling, and linting.
 - `BumperBowling` is the CLI adapter for hooks and CI jobs. It may depend on `BumperBowlingCore`; core must not depend on the CLI.
 - Tests may import product modules and testing frameworks, but production targets must not import test frameworks.
-- Language parsing is SwiftSyntax-driven. Swift is the only language surface in 0.1.
+- Language parsing is SwiftSyntax-driven. Swift is the only language surface.
 
 ## Architectural Rules
 

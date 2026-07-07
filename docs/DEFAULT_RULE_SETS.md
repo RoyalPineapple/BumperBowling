@@ -439,7 +439,7 @@ Use it by default. Cycles in the declared graph make component lanes harder to r
 
 ## Capability Defaults
 
-Capabilities lower to import facts. In 0.1, only module-backed capabilities are shipped.
+Capabilities lower to import facts. Only module-backed capabilities are currently shipped.
 
 Recommended component posture:
 

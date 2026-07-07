@@ -124,7 +124,7 @@ BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner
 - Support agentic coding loops by making architecture executable in hooks, CI, and tests.
 - Parse strings into typed values at the boundary.
 - Avoid generated accessors, dynamic lookup, JSON config, plugins, and clever configuration machinery.
-- Keep parsing SwiftSyntax-first and Swift-only in 0.1.
+- Keep parsing SwiftSyntax-first and Swift-only.
 - Do not duplicate SwiftSyntax's syntax model. Extend and compose over SwiftSyntax types instead.
 
 ## Default File Shape
@@ -238,7 +238,7 @@ bumper explain <path>
 - `syntax_kinds`
 - `public_declarations`
 
-Direct string matching is conservative in 0.1. SwiftSyntax can show an operator token or a member-call spelling, but it does not type-check the operands. Bumper Bowling flags obvious string-like comparisons and string matching calls; a compiler-backed analyzer would be needed for perfect `String` certainty.
+Direct string matching is conservative. SwiftSyntax can show an operator token or a member-call spelling, but it does not type-check the operands. Bumper Bowling flags obvious string-like comparisons and string matching calls; a compiler-backed analyzer would be needed for perfect `String` certainty.
 
 Severities are:
 
@@ -251,7 +251,7 @@ error
 
 Only `error` fails `bumper lint`.
 
-`stored_properties` is syntax-first in 0.1. It checks explicit stored-property type annotations exactly enough to catch mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not claim compiler-level type inference or full signature analysis.
+`stored_properties` is syntax-first. It checks explicit stored-property type annotations exactly enough to catch mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not claim compiler-level type inference or full signature analysis.
 
 See [MODELING_ASSERTIONS.md](MODELING_ASSERTIONS.md) for an example of using Bumper Bowling for architecture and SwiftSyntax fact assertions without overlapping SwiftLint style rules.
 
@@ -265,9 +265,9 @@ Bumper Bowling is SwiftSyntax-driven:
 SwiftSyntax -> SourceFileFacts -> RepositoryFacts -> ArchitectureGraph -> RuleRegistry
 ```
 
-Swift is the only language surface in 0.1. The configuration language must not promise facts SwiftSyntax cannot observe, such as symbol resolution, inferred types, or compiler-level dependency truth.
+Swift is the only language surface. The configuration language must not promise facts SwiftSyntax cannot observe, such as symbol resolution, inferred types, or compiler-level dependency truth.
 
-See [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md) for the exact 0.1 fact surface.
+See [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md) for the current fact surface.
 
 ## Testing Pattern
 

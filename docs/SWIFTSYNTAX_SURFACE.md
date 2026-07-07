@@ -110,7 +110,7 @@ The configuration supplies the facts SwiftSyntax cannot know by itself:
 
 ## Graph Projection
 
-`ArchitectureGraph` is the evidence surface rules operate on. In 0.1 it contains:
+`ArchitectureGraph` is the evidence surface rules operate on. It currently contains:
 
 - source files
 - component nodes
@@ -138,7 +138,7 @@ Bumper Bowling does not know:
 - data flow or effect flow
 - business invariants
 
-If a rule needs those facts, it does not belong in the SwiftSyntax-only 0.1 lane.
+If a rule needs those facts, it does not belong in the SwiftSyntax-only lane.
 
 Facts that could become useful with type-checked compiler help are tracked in [COMPILER_REQUESTS.md](COMPILER_REQUESTS.md).
 
