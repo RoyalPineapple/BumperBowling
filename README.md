@@ -123,6 +123,22 @@ a `BumperRules` library product:
   Sources/BumperRules/Rules.swift
 ```
 
+## Agent Skill
+
+Bumper Bowling ships a Codex skill for agents composing repo-owned architecture
+vocabulary:
+
+```text
+skills/compose-bumper-rules/
+```
+
+To install it locally:
+
+```bash
+mkdir -p ~/.codex/skills
+cp -R skills/compose-bumper-rules ~/.codex/skills/
+```
+
 ## Commands
 
 ```bash
