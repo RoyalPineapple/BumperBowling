@@ -28,6 +28,63 @@ extension ComponentRequirement {
 
 `Requires(.valueCore, severity: .error)` still lowers into raw graph checks over stored-property facts, syntax-construct facts, and enum facts.
 
+Consumer-owned shape files can live under `.bumper/Sources`. Bumper Bowling
+compiles those Swift files into the temporary configuration runner beside
+`BumperBowling.swift`, then runs the resulting executable in the same sandboxed
+evaluation path. This lets a repository define its own house vocabulary without
+adding those names to Bumper Bowling itself:
+
+```swift
+// .bumper/Sources/HouseStyle.swift
+import BumperBowlingCore
+
+extension ComponentRequirement {
+    static let domainCore = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState
+    )
+}
+
+extension ComponentShape {
+    static let domain = ComponentShape {
+        MayUse(.foundation)
+        DoesNotUse(.uiKit, .testing)
+        Requires(.domainCore, severity: .error)
+    }
+}
+
+extension AssertionShape {
+    static let global = AssertionShape {
+        DependencyBoundaries(.error)
+        SingleOwner(.error)
+        AcyclicDeclaredDependencies(.error)
+    }
+}
+```
+
+```swift
+// BumperBowling.swift
+let configuration = BumperConfiguration {
+    Architecture {
+        Component(.core) {
+            Owns("Sources/Core")
+            Applies(.domain)
+        }
+    }
+
+    Assertions {
+        Applies(.global)
+    }
+}
+```
+
+Those shapes are still just typed Swift values. `ComponentShape` bundles
+component elements such as capabilities, dependencies, and requirements.
+`AssertionShape` bundles repo-level `RuleConfiguration` values. Loading a shape
+does not add hidden facts; it only gives the consumer a reusable spelling for
+the facts and policies Bumper Bowling can already evaluate.
+
 Raw syntax assertions use SwiftSyntax's own `SyntaxKind` values:
 
 ```swift
@@ -124,6 +181,8 @@ let configuration = BumperConfiguration {
 - `DoesNot`: asserts that a predicate is absent from the component graph.
 - `StringMatcher`: typed matching for name-like facts; string literals are exact matches, with `.contains`, `.prefix`, and `.suffix` available explicitly.
 - `Requires`: positive modeling guarantees that derive syntax-first checks.
+- `ComponentShape`: reusable component policy bundle owned by the consumer.
+- `AssertionShape`: reusable repo-level assertion bundle owned by the consumer.
 - `Disallows`: concrete syntax facts that must not appear in a component.
 - `NoDirectStringMatching`: a syntax-first assertion that keeps direct string matching inside the matcher implementation.
 - `Assertions`: graph-level assertions such as ownership and dependency shape.
@@ -137,6 +196,8 @@ Current modeling requirements include:
 - `.noStoredProperties`: disallow any stored property.
 - `.noAnyStoredProperties`: disallow stored properties explicitly typed as `Any`.
 - `.noBroadExistentialStoredProperties`: disallow stored properties with explicit `any ...` types.
+- `.noBoolStoredProperties`: disallow stored properties explicitly typed as `Bool`.
+- `.noOptionalStoredProperties`: disallow stored properties explicitly typed as optional.
 - `.noRawStringStoredProperties`: disallow stored properties explicitly typed as `String`.
 - `.immutableStoredState`: disallow mutable stored properties where configured.
 - `.enumStateMachine`: require parser/workflow files to declare an enum state machine where configured.

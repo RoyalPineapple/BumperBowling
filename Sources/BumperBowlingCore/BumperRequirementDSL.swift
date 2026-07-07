@@ -65,6 +65,8 @@ public struct ComponentRequirement: Equatable, Sendable {
     public static let noAnyStoredProperties = ComponentRequirement(.disallowStoredProperty(.any))
     public static let noBroadExistentialStoredProperties =
         ComponentRequirement(.disallowStoredProperty(.broadExistential))
+    public static let noBoolStoredProperties = ComponentRequirement(.disallowStoredProperty(.boolState))
+    public static let noOptionalStoredProperties = ComponentRequirement(.disallowStoredProperty(.optionalState))
     public static let noRawStringStoredProperties = ComponentRequirement(.disallowStoredProperty(.rawStringIdentity))
     public static let noStoredProperties = ComponentRequirement(.disallowStoredProperty(.storedProperty))
     public static let immutableStoredState = ComponentRequirement(.disallowStoredProperty(.storedVar))

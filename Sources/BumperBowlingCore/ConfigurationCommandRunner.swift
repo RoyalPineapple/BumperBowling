@@ -24,6 +24,7 @@ private extension ConfigurationLoader {
     static let configurationCommandOutputLimitBytes = 4 * 1024 * 1024
     static let swiftToolchainIdentityTimeoutSeconds: TimeInterval = 10
     static let swiftToolchainIdentityOutputLimitBytes = 16 * 1024
+    static let consumerSourceDirectory = ".bumper/Sources"
 
     /// The configuration runner computes a pure value: it evaluates the
     /// repository's `BumperBowling.swift` into an `ArchitectureConfiguration`
@@ -193,14 +194,18 @@ private extension ConfigurationLoader {
         bumperPackageRoot: URL
     ) throws -> CachedPackage {
         let configurationData = try Data(contentsOf: configurationURL)
+        let consumerSources = try consumerConfigurationSources(root: configurationURL.deletingLastPathComponent())
+        let consumerSourcesHash = consumerConfigurationSourcesHash(consumerSources)
         let manifest = packageManifest(bumperPackageRoot: bumperPackageRoot)
         let metadata = CachedPackageMetadata(
-            configurationContentHash: sha256Hex(configurationData)
+            configurationContentHash: sha256Hex(configurationData),
+            consumerSourcesHash: consumerSourcesHash
         )
         let root = try cachedPackageRoot(
             configurationURL: configurationURL,
             bumperPackageRoot: bumperPackageRoot,
-            manifest: manifest
+            manifest: manifest,
+            consumerSourcesHash: consumerSourcesHash
         )
         let sources = root.appendingPathComponent("Sources/BumperConfigurationRunner")
 
@@ -215,6 +220,7 @@ private extension ConfigurationLoader {
         try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
         try manifest.write(to: root.appendingPathComponent("Package.swift"), atomically: true, encoding: .utf8)
         try configurationData.write(to: sources.appendingPathComponent("UserConfiguration.swift"), options: .atomic)
+        try writeConsumerConfigurationSources(consumerSources, to: sources.appendingPathComponent("ConsumerSources"))
         try runnerSource.write(to: sources.appendingPathComponent("main.swift"), atomically: true, encoding: .utf8)
         try JSONEncoder()
             .encode(metadata)
@@ -230,7 +236,8 @@ private extension ConfigurationLoader {
     static func cachedPackageRoot(
         configurationURL: URL,
         bumperPackageRoot: URL,
-        manifest: String
+        manifest: String,
+        consumerSourcesHash: String
     ) throws -> URL {
         let key = [
             "v1",
@@ -240,12 +247,85 @@ private extension ConfigurationLoader {
             try swiftToolchainIdentity(),
             sha256Hex(Data(manifest.utf8)),
             sha256Hex(Data(runnerSource.utf8)),
+            consumerSourcesHash,
         ].joined(separator: "\n")
 
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("BumperConfigurationLoaderCache")
             .appendingPathComponent(sha256Hex(Data(key.utf8)))
         return root
+    }
+
+    static func consumerConfigurationSources(root: URL) throws -> [ConsumerConfigurationSource] {
+        let sourceRoot = root.appendingPathComponent(consumerSourceDirectory)
+        guard FileManager.default.fileExists(atPath: sourceRoot.path) else {
+            return []
+        }
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: sourceRoot,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var sources: [ConsumerConfigurationSource] = []
+        for case let fileURL as URL in enumerator {
+            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true,
+                  StringMatcher.suffix(".swift").matches(fileURL.lastPathComponent) else {
+                continue
+            }
+
+            let relativePath = fileURL.path
+                .replacingOccurrences(of: sourceRoot.path + "/", with: "")
+            guard !relativePath.isEmpty,
+                  !relativePath.split(separator: "/").contains(where: isUnsafeRelativePathComponent) else {
+                throw BumperError.configurationOutputMalformed(
+                    "consumer configuration source has unsafe path: \(relativePath)"
+                )
+            }
+
+            sources.append(
+                ConsumerConfigurationSource(
+                    relativePath: relativePath,
+                    data: try Data(contentsOf: fileURL)
+                )
+            )
+        }
+
+        return sources.sorted { $0.relativePath < $1.relativePath }
+    }
+
+    static func consumerConfigurationSourcesHash(_ sources: [ConsumerConfigurationSource]) -> String {
+        let payload = sources.map { source in
+            source.relativePath + "\n" + sha256Hex(source.data)
+        }.joined(separator: "\n")
+        return sha256Hex(Data(payload.utf8))
+    }
+
+    static func isUnsafeRelativePathComponent(_ component: Substring) -> Bool {
+        let value = String(component)
+        return StringMatcher.exact(".").matches(value) || StringMatcher.exact("..").matches(value)
+    }
+
+    static func writeConsumerConfigurationSources(
+        _ consumerSources: [ConsumerConfigurationSource],
+        to destinationRoot: URL
+    ) throws {
+        guard !consumerSources.isEmpty else {
+            return
+        }
+
+        for source in consumerSources {
+            let destination = destinationRoot.appendingPathComponent(source.relativePath)
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try source.data.write(to: destination, options: .atomic)
+        }
     }
 
     static func buildCachedPackageIfNeeded(_ package: CachedPackage) throws {
@@ -517,12 +597,18 @@ private struct CachedPackageMetadata: Codable, Equatable {
     static let fileName = ".bumper-cache.json"
 
     let configurationContentHash: String
+    let consumerSourcesHash: String
 }
 
 private struct CachedPackage {
     let root: URL
     let executableURL: URL
     let needsBuild: Bool
+}
+
+private struct ConsumerConfigurationSource {
+    let relativePath: String
+    let data: Data
 }
 
 private final class BoundedOutputBuffer: @unchecked Sendable {

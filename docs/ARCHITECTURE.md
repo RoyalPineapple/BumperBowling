@@ -46,6 +46,13 @@ Add graph facts only when they support an assertion Bumper Bowling can explain. 
 
 Semantic shorthand names are not special engine concepts. `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)` applies scope and severity. Built-in shorthand and user-defined shorthand lower into the same raw graph assertions.
 
+Consumer repositories can place Swift files under `.bumper/Sources` to define
+their own `ComponentRequirement`, `ComponentShape`, and `AssertionShape`
+vocabulary. Those files compile into the temporary configuration runner beside
+`BumperBowling.swift`. They do not add a plugin boundary or hidden evaluator;
+they are just consumer-owned Swift values that lower into the same
+`ArchitectureConfiguration` data as inline configuration code.
+
 ## Product Lane
 
 Bumper Bowling lives between linting and compilation.

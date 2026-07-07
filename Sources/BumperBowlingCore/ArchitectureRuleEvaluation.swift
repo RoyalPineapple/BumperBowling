@@ -314,6 +314,36 @@ extension ArchitectureRule {
             )
         }
 
+        if configuration.disallowances.contains(.boolState), StringMatcher.exact("Bool").matches(typeName) {
+            violations.append(
+                violation(
+                    severity: configuration.severity,
+                    path: file.path,
+                    message: "Stored property \(property.name.rawValue) uses Bool state",
+                    location: property.location,
+                    evidence: ViolationEvidence(
+                        observed: "stored property \(property.name.rawValue): \(typeName)",
+                        expectation: "Bool stored state is disallowed"
+                    )
+                )
+            )
+        }
+
+        if configuration.disallowances.contains(.optionalState), isOptionalTypeName(typeName) {
+            violations.append(
+                violation(
+                    severity: configuration.severity,
+                    path: file.path,
+                    message: "Stored property \(property.name.rawValue) uses optional state",
+                    location: property.location,
+                    evidence: ViolationEvidence(
+                        observed: "stored property \(property.name.rawValue): \(typeName)",
+                        expectation: "Optional stored state is disallowed"
+                    )
+                )
+            )
+        }
+
         if configuration.disallowances.contains(.rawStringIdentity),
            StringMatcher.exact("String").matches(typeName),
            isIdentifiableID(property, graph: graph) {
@@ -332,6 +362,10 @@ extension ArchitectureRule {
         }
 
         return violations
+    }
+
+    func isOptionalTypeName(_ typeName: String) -> Bool {
+        StringMatcher.suffix("?").matches(typeName) || StringMatcher.prefix("Optional<").matches(typeName)
     }
 
     func isIdentifiableID(_ property: StoredProperty, graph: ArchitectureGraph) -> Bool {

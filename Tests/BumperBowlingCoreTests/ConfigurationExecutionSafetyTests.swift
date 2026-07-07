@@ -52,4 +52,64 @@ struct ConfigurationExecutionSafetyTests {
             "sandboxed evaluation must not be able to write files"
         )
     }
+
+    @Test
+    func executedConfigurationCanUseConsumerOwnedShapeSources() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        let consumerSourceRoot = root.appendingPathComponent(".bumper/Sources")
+        try FileManager.default.createDirectory(at: consumerSourceRoot, withIntermediateDirectories: true)
+
+        let houseStyle = """
+        import BumperBowlingCore
+
+        extension ComponentRequirement {
+            static let domainHouseStyle = ComponentRequirement(
+                .explicitDomainSurfaces,
+                .immutableStoredState,
+                .noOptionalStoredProperties
+            )
+        }
+
+        let domainShape = ComponentShape {
+            MayUse(.foundation)
+            Requires(.domainHouseStyle, severity: .error)
+        }
+        """
+        try houseStyle.write(
+            to: consumerSourceRoot.appendingPathComponent("HouseStyle.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let configurationSource = """
+        import BumperBowlingCore
+
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Modules("Core")
+                    Applies(domainShape)
+                }
+            }
+        }
+        """
+        try configurationSource.write(
+            to: root.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let configuration = try ConfigurationLoader.loadConfiguration(root: root)
+        let rules = configuration.rules
+
+        #expect(configuration.subsystems.map(\.name) == ["core"])
+        #expect(rules.storedProperties.severity == .error)
+        #expect(rules.storedProperties.paths == ["Sources/Core"])
+        #expect(
+            rules.storedProperties.disallowances ==
+                Set<StoredPropertyDisallowance>([.any, .broadExistential, .storedVar, .optionalState])
+        )
+    }
 }

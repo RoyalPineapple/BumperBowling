@@ -187,6 +187,54 @@ struct BumperConfigurationDSLTests {
     }
 
     @Test
+    func appliesConsumerComponentAndAssertionShapes() throws {
+        let domainShape = ComponentShape {
+            MayUse(.foundation)
+            Requires(.explicitDomainSurfaces, .immutableStoredState, severity: .error)
+            Requires(.noOptionalStoredProperties, .noBoolStoredProperties, severity: .warning)
+        }
+        let globalShape = AssertionShape {
+            DependencyBoundaries(.error)
+            NoDirectStringMatching(.warning, paths: ["Sources/Core"], except: ["Sources/Core/StringMatcher.swift"])
+        }
+
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Modules("Core")
+                    Applies(domainShape)
+                }
+            }
+
+            Assertions {
+                Applies(globalShape)
+            }
+        }.architectureConfiguration
+
+        let rules = try ArchitectureRules(configuration: configuration)
+
+        #expect(rules.ruleConfiguration.subsystemBoundary == .error)
+        #expect(rules.ruleConfiguration.forbiddenImports.first?.values == Capability.allCases
+            .filter { $0 != .foundation }
+            .flatMap(\.modules)
+            .sorted())
+        #expect(
+            rules.ruleConfiguration.storedProperties.disallowances ==
+                Set<StoredPropertyDisallowance>([
+                    .any,
+                    .broadExistential,
+                    .storedVar,
+                    .optionalState,
+                    .boolState,
+                ])
+        )
+        #expect(rules.ruleConfiguration.storedProperties.severity == .error)
+        #expect(rules.ruleConfiguration.syntaxConstructs.disallowedConstructs == [.directStringMatch])
+        #expect(rules.ruleConfiguration.syntaxConstructs.excludedPaths == ["Sources/Core/StringMatcher.swift"])
+    }
+
+    @Test
     func shippedSemanticRuleSetsLowerToFactRules() {
         #expect(
             ComponentRequirement.swiftBasics.factRules ==
