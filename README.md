@@ -84,6 +84,9 @@ Those Swift files compile beside `BumperBowling.swift`, so a project can define
 its own `ComponentRequirement`, `ComponentShape`, and `AssertionShape` values
 without waiting for Bumper Bowling to ship a named preset:
 
+Bumper Bowling uses this pattern for itself in
+`.bumper/Sources/BumperArchitecture.swift`.
+
 ```swift
 // .bumper/Sources/HouseStyle.swift
 import BumperBowlingCore
