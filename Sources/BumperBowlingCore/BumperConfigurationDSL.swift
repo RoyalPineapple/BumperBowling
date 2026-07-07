@@ -105,6 +105,10 @@ public struct ComponentConfiguration: Equatable, Sendable {
 public struct ComponentShape: Equatable, Sendable {
     public let elements: [ComponentElement]
 
+    public init(elements: [ComponentElement]) {
+        self.elements = elements
+    }
+
     public init(@ComponentBuilder _ content: () -> [ComponentElement]) {
         self.elements = content()
     }
@@ -112,6 +116,10 @@ public struct ComponentShape: Equatable, Sendable {
 
 public struct AssertionShape: Equatable, Sendable {
     public let configuration: RuleConfiguration
+
+    public init(configuration: RuleConfiguration) {
+        self.configuration = configuration
+    }
 
     public init(@AssertionsBuilder _ content: () -> [RuleConfiguration]) {
         self.configuration = content().combined()
@@ -416,7 +424,7 @@ public func NoDirectStringMatching(
     )
 }
 
-public func Applies(_ shape: AssertionShape) -> RuleConfiguration {
+public func ApplyAssertions(_ shape: AssertionShape) -> RuleConfiguration {
     shape.configuration
 }
 

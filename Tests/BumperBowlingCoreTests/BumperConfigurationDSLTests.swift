@@ -208,7 +208,7 @@ struct BumperConfigurationDSLTests {
             }
 
             Assertions {
-                Applies(globalShape)
+                ApplyAssertions(globalShape)
             }
         }.architectureConfiguration
 

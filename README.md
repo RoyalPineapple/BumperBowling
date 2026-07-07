@@ -113,6 +113,22 @@ Component(.core) {
 }
 ```
 
+Shared local rule packages are wired through `.bumper/packages.json`, then
+imported from `BumperBowling.swift`. The JSON only declares package
+dependencies; requirements and shapes still live in Swift:
+
+```json
+{
+  "rulePackages": [
+    {
+      "path": ".bumper/HouseRules",
+      "package": "HouseRules",
+      "product": "HouseRules"
+    }
+  ]
+}
+```
+
 ## Commands
 
 ```bash

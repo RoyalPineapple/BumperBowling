@@ -53,6 +53,11 @@ vocabulary. Those files compile into the temporary configuration runner beside
 they are just consumer-owned Swift values that lower into the same
 `ArchitectureConfiguration` data as inline configuration code.
 
+Reusable vocabulary can also live in explicit local Swift packages declared in
+`.bumper/packages.json`. The manifest only wires package products into the
+generated runner so `BumperBowling.swift` can import them; it does not discover,
+download, or apply rules.
+
 ## Product Lane
 
 Bumper Bowling lives between linting and compilation.

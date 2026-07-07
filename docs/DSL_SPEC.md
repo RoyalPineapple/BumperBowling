@@ -74,7 +74,7 @@ let configuration = BumperConfiguration {
     }
 
     Assertions {
-        Applies(.global)
+        ApplyAssertions(.global)
     }
 }
 ```
@@ -84,6 +84,25 @@ component elements such as capabilities, dependencies, and requirements.
 `AssertionShape` bundles repo-level `RuleConfiguration` values. Loading a shape
 does not add hidden facts; it only gives the consumer a reusable spelling for
 the facts and policies Bumper Bowling can already evaluate.
+
+For shared local Swift packages, declare the package products in
+`.bumper/packages.json` before importing them from `BumperBowling.swift`:
+
+```json
+{
+  "rulePackages": [
+    {
+      "path": ".bumper/HouseRules",
+      "package": "HouseRules",
+      "product": "HouseRules"
+    }
+  ]
+}
+```
+
+`packages.json` only wires dependencies into the generated configuration
+runner. It does not define rules, and it does not load anything unless the
+configuration imports and uses the exported Swift values.
 
 Raw syntax assertions use SwiftSyntax's own `SyntaxKind` values:
 
@@ -183,6 +202,7 @@ let configuration = BumperConfiguration {
 - `Requires`: positive modeling guarantees that derive syntax-first checks.
 - `ComponentShape`: reusable component policy bundle owned by the consumer.
 - `AssertionShape`: reusable repo-level assertion bundle owned by the consumer.
+- `ApplyAssertions`: applies an `AssertionShape` inside `Assertions`.
 - `Disallows`: concrete syntax facts that must not appear in a component.
 - `NoDirectStringMatching`: a syntax-first assertion that keeps direct string matching inside the matcher implementation.
 - `Assertions`: graph-level assertions such as ownership and dependency shape.

@@ -112,4 +112,154 @@ struct ConfigurationExecutionSafetyTests {
                 Set<StoredPropertyDisallowance>([.any, .broadExistential, .storedVar, .optionalState])
         )
     }
+
+    @Test
+    func executedConfigurationCanImportLocalRulePackage() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        let packageRoot = root.appendingPathComponent(".bumper/HouseRules")
+        let packageSources = packageRoot.appendingPathComponent("Sources/HouseRules")
+        try FileManager.default.createDirectory(at: packageSources, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent(".bumper"),
+            withIntermediateDirectories: true
+        )
+
+        let manifest = """
+        {
+          "rulePackages": [
+            {
+              "path": ".bumper/HouseRules",
+              "package": "HouseRules",
+              "product": "HouseRules"
+            }
+          ]
+        }
+        """
+        try manifest.write(
+            to: root.appendingPathComponent(".bumper/packages.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let packageManifest = """
+        // swift-tools-version: 6.2
+        import PackageDescription
+
+        let package = Package(
+            name: "HouseRules",
+            platforms: [.macOS(.v15)],
+            products: [
+                .library(name: "HouseRules", targets: ["HouseRules"])
+            ],
+            dependencies: [
+                .package(path: \(repositoryRoot().path.debugDescription))
+            ],
+            targets: [
+                .target(
+                    name: "HouseRules",
+                    dependencies: [
+                        .product(name: "BumperBowlingCore", package: "BumperBowling")
+                    ]
+                )
+            ]
+        )
+        """
+        try packageManifest.write(
+            to: packageRoot.appendingPathComponent("Package.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let rules = """
+        import BumperBowlingCore
+
+        public extension ComponentShape {
+            static let importedDomain = ComponentShape {
+                MayUse(.foundation)
+                Requires(.noBoolStoredProperties, severity: .warning)
+            }
+        }
+        """
+        try rules.write(to: packageSources.appendingPathComponent("Rules.swift"), atomically: true, encoding: .utf8)
+
+        let configurationSource = """
+        import BumperBowlingCore
+        import HouseRules
+
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Applies(.importedDomain)
+                }
+            }
+        }
+        """
+        try configurationSource.write(
+            to: root.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let configuration = try ConfigurationLoader.loadConfiguration(root: root)
+
+        #expect(configuration.rules.storedProperties.severity == .warning)
+        #expect(configuration.rules.storedProperties.disallowances == [.boolState])
+    }
+
+    @Test
+    func rejectsUnsafeRulePackageManifests() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent(".bumper"),
+            withIntermediateDirectories: true
+        )
+        try minimalConfiguration.write(
+            to: root.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let manifest = """
+        {
+          "rulePackages": [
+            {
+              "path": "https://example.com/Rules.git",
+              "package": "Rules",
+              "product": "Rules"
+            }
+          ]
+        }
+        """
+        try manifest.write(
+            to: root.appendingPathComponent(".bumper/packages.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        #expect(throws: BumperError.self) {
+            try ConfigurationLoader.loadConfiguration(root: root)
+        }
+    }
+}
+
+private let minimalConfiguration = """
+import BumperBowlingCore
+
+let configuration = BumperConfiguration {
+    Architecture {
+        Component(.core) {
+            Owns("Sources/Core")
+        }
+    }
+}
+"""
+
+private func repositoryRoot() -> URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
 }

@@ -25,6 +25,7 @@ private extension ConfigurationLoader {
     static let swiftToolchainIdentityTimeoutSeconds: TimeInterval = 10
     static let swiftToolchainIdentityOutputLimitBytes = 16 * 1024
     static let consumerSourceDirectory = ".bumper/Sources"
+    static let packageManifestPath = ".bumper/packages.json"
 
     /// The configuration runner computes a pure value: it evaluates the
     /// repository's `BumperBowling.swift` into an `ArchitectureConfiguration`
@@ -194,18 +195,23 @@ private extension ConfigurationLoader {
         bumperPackageRoot: URL
     ) throws -> CachedPackage {
         let configurationData = try Data(contentsOf: configurationURL)
-        let consumerSources = try consumerConfigurationSources(root: configurationURL.deletingLastPathComponent())
+        let repositoryRoot = configurationURL.deletingLastPathComponent()
+        let consumerSources = try consumerConfigurationSources(root: repositoryRoot)
         let consumerSourcesHash = consumerConfigurationSourcesHash(consumerSources)
-        let manifest = packageManifest(bumperPackageRoot: bumperPackageRoot)
+        let rulePackages = try rulePackageDependencies(root: repositoryRoot)
+        let rulePackagesHash = try rulePackageDependenciesHash(rulePackages)
+        let manifest = packageManifest(bumperPackageRoot: bumperPackageRoot, rulePackages: rulePackages)
         let metadata = CachedPackageMetadata(
             configurationContentHash: sha256Hex(configurationData),
-            consumerSourcesHash: consumerSourcesHash
+            consumerSourcesHash: consumerSourcesHash,
+            rulePackagesHash: rulePackagesHash
         )
         let root = try cachedPackageRoot(
             configurationURL: configurationURL,
             bumperPackageRoot: bumperPackageRoot,
             manifest: manifest,
-            consumerSourcesHash: consumerSourcesHash
+            consumerSourcesHash: consumerSourcesHash,
+            rulePackagesHash: rulePackagesHash
         )
         let sources = root.appendingPathComponent("Sources/BumperConfigurationRunner")
 
@@ -237,7 +243,8 @@ private extension ConfigurationLoader {
         configurationURL: URL,
         bumperPackageRoot: URL,
         manifest: String,
-        consumerSourcesHash: String
+        consumerSourcesHash: String,
+        rulePackagesHash: String
     ) throws -> URL {
         let key = [
             "v1",
@@ -248,6 +255,7 @@ private extension ConfigurationLoader {
             sha256Hex(Data(manifest.utf8)),
             sha256Hex(Data(runnerSource.utf8)),
             consumerSourcesHash,
+            rulePackagesHash,
         ].joined(separator: "\n")
 
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -326,6 +334,63 @@ private extension ConfigurationLoader {
             )
             try source.data.write(to: destination, options: .atomic)
         }
+    }
+
+    static func rulePackageDependencies(root: URL) throws -> [RulePackageDependency] {
+        let manifestURL = root.appendingPathComponent(packageManifestPath)
+        guard FileManager.default.fileExists(atPath: manifestURL.path) else {
+            return []
+        }
+
+        let manifest = try JSONDecoder().decode(RulePackageManifest.self, from: Data(contentsOf: manifestURL))
+        var seenProducts = Set<String>()
+
+        return try manifest.rulePackages.map { package in
+            let rawPath = package.path.trimmingCharacters(in: .whitespacesAndNewlines)
+            let packageName = package.package.trimmingCharacters(in: .whitespacesAndNewlines)
+            let product = package.product.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !rawPath.isEmpty, !packageName.isEmpty, !product.isEmpty else {
+                throw BumperError.configurationOutputMalformed(
+                    "\(packageManifestPath) entries require path, package, and product"
+                )
+            }
+            guard !StringMatcher.contains("://").matches(rawPath),
+                  !StringMatcher.prefix("/").matches(rawPath) else {
+                throw BumperError.configurationOutputMalformed(
+                    "\(packageManifestPath) only supports relative local package paths: \(rawPath)"
+                )
+            }
+            guard !rawPath.split(separator: "/").contains(where: isUnsafeRelativePathComponent) else {
+                throw BumperError.configurationOutputMalformed(
+                    "\(packageManifestPath) contains unsafe package path: \(rawPath)"
+                )
+            }
+            guard seenProducts.insert(product).inserted else {
+                throw BumperError.configurationOutputMalformed(
+                    "\(packageManifestPath) declares duplicate product: \(product)"
+                )
+            }
+
+            let packageRoot = root.appendingPathComponent(rawPath).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: packageRoot.appendingPathComponent("Package.swift").path) else {
+                throw BumperError.configurationPackageUnavailable(packageRoot.path)
+            }
+
+            return RulePackageDependency(path: packageRoot, package: packageName, product: product)
+        }
+    }
+
+    static func rulePackageDependenciesHash(_ packages: [RulePackageDependency]) throws -> String {
+        let payload = try packages.map { package in
+            [
+                package.path.path,
+                package.package,
+                package.product,
+                try packageRootFingerprint(package.path),
+            ].joined(separator: "\n")
+        }.joined(separator: "\n\n")
+        return sha256Hex(Data(payload.utf8))
     }
 
     static func buildCachedPackageIfNeeded(_ package: CachedPackage) throws {
@@ -516,8 +581,19 @@ private extension ConfigurationLoader {
         return root
     }
 
-    static func packageManifest(bumperPackageRoot: URL) -> String {
-        """
+    static func packageManifest(bumperPackageRoot: URL, rulePackages: [RulePackageDependency]) -> String {
+        let dependencyEntries = ([
+            ".package(path: \(swiftStringLiteral(bumperPackageRoot.path)))",
+        ] + rulePackages.map { package in
+            ".package(path: \(swiftStringLiteral(package.path.path)))"
+        }).joined(separator: ",\n                ")
+        let targetDependencies = ([
+            ".product(name: \"BumperBowlingCore\", package: \"BumperBowling\")",
+        ] + rulePackages.map { package in
+            ".product(name: \(swiftStringLiteral(package.product)), package: \(swiftStringLiteral(package.package)))"
+        }).joined(separator: ",\n                        ")
+
+        return """
         // swift-tools-version: 6.2
         import PackageDescription
 
@@ -527,13 +603,13 @@ private extension ConfigurationLoader {
                 .macOS(.v15),
             ],
             dependencies: [
-                .package(path: \(swiftStringLiteral(bumperPackageRoot.path))),
+                \(dependencyEntries),
             ],
             targets: [
                 .executableTarget(
                     name: "BumperConfigurationRunner",
                     dependencies: [
-                        .product(name: "BumperBowlingCore", package: "BumperBowling"),
+                        \(targetDependencies),
                     ],
                     swiftSettings: [
                         .enableUpcomingFeature("StrictConcurrency"),
@@ -598,6 +674,7 @@ private struct CachedPackageMetadata: Codable, Equatable {
 
     let configurationContentHash: String
     let consumerSourcesHash: String
+    let rulePackagesHash: String
 }
 
 private struct CachedPackage {
@@ -609,6 +686,22 @@ private struct CachedPackage {
 private struct ConsumerConfigurationSource {
     let relativePath: String
     let data: Data
+}
+
+private struct RulePackageManifest: Decodable {
+    let rulePackages: [RulePackageEntry]
+}
+
+private struct RulePackageEntry: Decodable {
+    let path: String
+    let package: String
+    let product: String
+}
+
+private struct RulePackageDependency {
+    let path: URL
+    let package: String
+    let product: String
 }
 
 private final class BoundedOutputBuffer: @unchecked Sendable {
