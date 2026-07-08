@@ -12,7 +12,10 @@ The graph is intentionally not a second AST. It is a compact projection of facts
 
 The configuration compiles into typed architecture rules. Validation is deliberately lean math over the parsed graph: path scope, set membership, edge checks, and cycle detection.
 
-Facts become rules when the configuration scopes them. The atom is `SourceFactRule`; a `ComponentRequirement` is a composable set of those atoms. Bumper Bowling ships semantic shorthand, and users can define their own (custom shorthand takes a configuration beyond plain, familiar Swift, so it loads through the sandboxed runner instead of the static interpreter):
+Facts become rules when the configuration scopes them. The atom is
+`SourceFactRule`; a `ComponentRequirement` is a composable set of those atoms.
+Bumper Bowling includes small built-in requirement primitives and conveniences,
+and repositories can define their own vocabulary:
 
 ```swift
 extension ComponentRequirement {
@@ -253,9 +256,8 @@ Only `error` fails `bumper lint`.
 
 `stored_properties` is syntax-first. It checks explicit stored-property type annotations exactly enough to catch mutable stored properties, `Any`, `any ...`, and raw `String` in configured paths. It does not claim compiler-level type inference or full signature analysis.
 
-See [MODELING_ASSERTIONS.md](MODELING_ASSERTIONS.md) for an example of using Bumper Bowling for architecture and SwiftSyntax fact assertions without overlapping SwiftLint style rules.
-
-See [DEFAULT_RULE_SETS.md](DEFAULT_RULE_SETS.md) for the shipped semantic combinations, what each one lowers to, and passing/failing examples.
+See [RULE_AUTHORING.md](RULE_AUTHORING.md) for guidance on composing
+repository-owned requirements, component shapes, assertion shapes, and examples.
 
 ## SwiftSyntax Boundary
 
