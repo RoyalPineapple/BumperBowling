@@ -64,6 +64,38 @@ let configuration = BumperConfiguration {
 }
 ```
 
+## Syntax Node Predicates
+
+Use `ContainSyntax(_:)` when only SwiftSyntax kind membership matters:
+
+```swift
+DoesNot(ContainSyntax(.forceUnwrapExpr), severity: .error)
+```
+
+Use `ContainSyntaxNode(_:)` when the repo needs policy Bumper Bowling does not
+name as a built-in requirement:
+
+```swift
+DoesNot(
+    ContainSyntaxNode(
+        SyntaxNodeMatcher(
+            kind: .attribute,
+            spelling: .exact("available")
+        )
+    ),
+    severity: .warning
+)
+```
+
+`SyntaxNodeMatcher` composes with SwiftSyntax instead of duplicating it:
+
+- `kind`: `SyntaxKind`, such as `.attribute` or `.structDecl`
+- `spelling`: `StringMatcher`, such as `.exact("available")`
+- `parentKind`: immediate parent `SyntaxKind`
+- `ancestorKind`: any recorded ancestor `SyntaxKind`
+
+Do not use or invent `family`, `nodeKind`, `SyntaxFact`, or JSON rule schemas.
+
 ## Guardrails
 
 - Do not promise facts SwiftSyntax cannot observe.

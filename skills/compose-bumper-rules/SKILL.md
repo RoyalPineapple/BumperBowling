@@ -1,6 +1,6 @@
 ---
 name: compose-bumper-rules
-description: Use when composing Bumper Bowling architecture rules, ComponentRequirement values, ComponentShape or AssertionShape bundles, BumperBowling.swift configs, .bumper/Sources rule vocabulary, or .bumper/Package.swift BumperRules packages for repo-owned architecture policy.
+description: Use when composing Bumper Bowling architecture rules, SyntaxNodeMatcher predicates, ComponentRequirement values, ComponentShape or AssertionShape bundles, BumperBowling.swift configs, .bumper/Sources rule vocabulary, or .bumper/Package.swift BumperRules packages for repo-owned architecture policy.
 ---
 
 # Compose Bumper Rules
@@ -24,6 +24,9 @@ Use this skill when adding, reviewing, or refactoring Bumper Bowling rule vocabu
    - Rule: evaluated/scoped policy after `Requires`, `Applies`, or `ApplyAssertions`.
    - Scope: where a rule applies, such as component paths or exclusions. Do not call shapes scopes.
 4. Compose from observable facts only. Bumper Bowling is syntax-first; do not claim type-checking, symbol resolution, semantic macro expansion, or compiler dependency truth.
+   - Use `ContainSyntax(_:)` for raw SwiftSyntax kind membership.
+   - Use `ContainSyntaxNode(SyntaxNodeMatcher(...))` for repo-specific syntax
+     policy over kind, spelling, parent kind, or ancestor kind.
 5. Validate with the repo's checks, normally:
    - `swift test`
    - `swift run bumper lint .`
@@ -46,6 +49,8 @@ Do not introduce JSON, registries, remote package policy, or auto-loaded shared 
 - Prefer `AssertionShape` for repo-level assertions.
 - Use `ContainSyntaxNode(SyntaxNodeMatcher(...))` for repo-specific SwiftSyntax
   facts that Bumper Bowling does not expose as named built-in requirements.
+- Do not invent Bumper-owned syntax taxonomies. Compose with SwiftSyntax
+  `SyntaxKind` values and matcher structure.
 - Use `ApplyAssertions(...)` inside `Assertions`.
 - Keep findings explainable as observed fact plus declared expectation.
 
