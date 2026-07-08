@@ -37,6 +37,12 @@ public extension ArchitectureRule {
                 name: "Syntax Kinds",
                 description: description
             )
+        case .syntaxNodes:
+            RuleDescription(
+                id: id,
+                name: "Syntax Nodes",
+                description: description
+            )
         case .publicDeclarations:
             RuleDescription(
                 id: id,
@@ -49,8 +55,8 @@ public extension ArchitectureRule {
                 name: "Enum State Machine",
                 description: description
             )
-        case .subsystemBoundary:
-            RuleDescription(id: id, name: "Subsystem Boundary", description: description)
+        case .componentBoundary:
+            RuleDescription(id: id, name: "Component Boundary", description: description)
         case .duplicateOwnership:
             RuleDescription(id: id, name: "Duplicate Ownership", description: description)
         case .declaredDependencyCycle:

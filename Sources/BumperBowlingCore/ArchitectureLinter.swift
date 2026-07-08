@@ -11,9 +11,9 @@ public struct ArchitectureLinter: Sendable {
         self.rules = rules
     }
 
-    public func lint(_ facts: RepositoryFacts) -> LintReport {
+    public func lint(_ nodes: RepositoryFacts) -> LintReport {
         let registry = RuleRegistry(configuration: rules.ruleConfiguration)
-        let graph = ArchitectureGraph(facts: facts, rules: rules)
+        let graph = ArchitectureGraph(nodes: nodes, rules: rules)
         let violations = registry.enabledRules.flatMap { rule in
             rule.evaluate(graph: graph, rules: rules)
         }
@@ -28,12 +28,13 @@ public struct RuleRegistry: Sendable {
     public init(configuration: RuleConfiguration) {
         self.enabledRules = [
             .forbiddenImport(configuration.forbiddenImports),
-            .subsystemBoundary(configuration.subsystemBoundary),
+            .componentBoundary(configuration.componentBoundary),
             .duplicateOwnership(configuration.duplicateOwnership),
             .declaredDependencyCycle(configuration.declaredDependencyCycle),
             .storedProperties(configuration.storedProperties),
             .syntaxConstructs(configuration.syntaxConstructs),
             .syntaxKinds(configuration.syntaxKinds),
+            .syntaxNodes(configuration.syntaxNodes),
             .publicDeclarations(configuration.publicDeclarations),
             .enumStateMachine(configuration.enumStateMachine),
         ].filter(\.isEnabled)
@@ -42,12 +43,13 @@ public struct RuleRegistry: Sendable {
 
 public enum ArchitectureRule: Sendable {
     case forbiddenImport([RuleSetting])
-    case subsystemBoundary(Severity)
+    case componentBoundary(Severity)
     case duplicateOwnership(Severity)
     case declaredDependencyCycle(Severity)
     case storedProperties(StoredPropertyRuleConfiguration)
     case syntaxConstructs(SyntaxConstructRuleConfiguration)
     case syntaxKinds(SyntaxKindRuleConfiguration)
+    case syntaxNodes(SyntaxNodeRuleConfiguration)
     case publicDeclarations(PublicDeclarationRuleConfiguration)
     case enumStateMachine(PathRuleConfiguration)
 
@@ -55,8 +57,8 @@ public enum ArchitectureRule: Sendable {
         switch self {
         case .forbiddenImport:
             .forbiddenImport
-        case .subsystemBoundary:
-            .subsystemBoundary
+        case .componentBoundary:
+            .componentBoundary
         case .duplicateOwnership:
             .duplicateOwnership
         case .declaredDependencyCycle:
@@ -67,6 +69,8 @@ public enum ArchitectureRule: Sendable {
             .syntaxConstructs
         case .syntaxKinds:
             .syntaxKinds
+        case .syntaxNodes:
+            .syntaxNodes
         case .publicDeclarations:
             .publicDeclarations
         case .enumStateMachine:
@@ -78,18 +82,20 @@ public enum ArchitectureRule: Sendable {
         switch self {
         case .forbiddenImport:
             "Disallows configured imports in linted source files."
-        case .subsystemBoundary:
-            "Requires subsystem imports to match declared dependencies."
+        case .componentBoundary:
+            "Requires component imports to match declared dependencies."
         case .duplicateOwnership:
-            "Disallows duplicate subsystem path and module ownership."
+            "Disallows duplicate component path and module ownership."
         case .declaredDependencyCycle:
-            "Disallows cycles in declared subsystem dependencies."
+            "Disallows cycles in declared component dependencies."
         case .storedProperties:
             "Applies configured assertions over SwiftSyntax stored property facts."
         case .syntaxConstructs:
             "Applies configured assertions over SwiftSyntax construct facts."
         case .syntaxKinds:
             "Applies configured assertions over observed SwiftSyntax node kinds."
+        case .syntaxNodes:
+            "Applies configured assertions over observed SwiftSyntax nodes."
         case .publicDeclarations:
             "Applies configured assertions over public declaration facts."
         case .enumStateMachine:
@@ -107,7 +113,7 @@ public enum ArchitectureRule: Sendable {
             settings.map(\.severity).reduce(.off) { partialResult, severity in
                 partialResult.merging(severity)
             }
-        case .subsystemBoundary(let severity):
+        case .componentBoundary(let severity):
             severity
         case .duplicateOwnership(let severity):
             severity
@@ -118,6 +124,8 @@ public enum ArchitectureRule: Sendable {
         case .syntaxConstructs(let configuration):
             configuration.severity
         case .syntaxKinds(let configuration):
+            configuration.severity
+        case .syntaxNodes(let configuration):
             configuration.severity
         case .publicDeclarations(let configuration):
             configuration.severity
@@ -130,8 +138,8 @@ public enum ArchitectureRule: Sendable {
         switch self {
         case .forbiddenImport(let settings):
             evaluateForbiddenImports(graph: graph, settings: settings)
-        case .subsystemBoundary(let severity):
-            evaluateSubsystemBoundaries(graph: graph, rules: rules, severity: severity)
+        case .componentBoundary(let severity):
+            evaluateComponentBoundaries(graph: graph, rules: rules, severity: severity)
         case .duplicateOwnership(let severity):
             evaluateDuplicateOwnership(rules: rules, severity: severity)
         case .declaredDependencyCycle(let severity):
@@ -142,6 +150,8 @@ public enum ArchitectureRule: Sendable {
             evaluateSyntaxConstructs(graph: graph, configuration: configuration)
         case .syntaxKinds(let configuration):
             evaluateSyntaxKinds(graph: graph, configuration: configuration)
+        case .syntaxNodes(let configuration):
+            evaluateSyntaxNodes(graph: graph, configuration: configuration)
         case .publicDeclarations(let configuration):
             evaluatePublicDeclarations(graph: graph, configuration: configuration)
         case .enumStateMachine(let configuration):
@@ -231,12 +241,13 @@ public struct ViolationEvidence: Equatable, Sendable, Codable {
 
 public enum RuleID: String, CaseIterable, Equatable, Sendable, Codable {
     case forbiddenImport = "forbidden_import"
-    case subsystemBoundary = "subsystem_boundary"
+    case componentBoundary = "component_boundary"
     case duplicateOwnership = "duplicate_ownership"
     case declaredDependencyCycle = "declared_dependency_cycle"
     case storedProperties = "stored_properties"
     case syntaxConstructs = "syntax_constructs"
     case syntaxKinds = "syntax_kinds"
+    case syntaxNodes = "syntax_nodes"
     case publicDeclarations = "public_declarations"
     case enumStateMachine = "enum_state_machine"
 }

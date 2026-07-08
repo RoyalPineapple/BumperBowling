@@ -67,9 +67,9 @@ func assertRule(
 }
 
 let defaultRuleExampleConfiguration = ArchitectureConfiguration(
-    subsystems: [
-        SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
-        SubsystemConfiguration(name: "ui", modules: ["UI"], paths: ["Sources/UI"]),
+    components: [
+        ComponentConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
+        ComponentConfiguration(name: "ui", modules: ["UI"], paths: ["Sources/UI"]),
     ]
 )
 
@@ -84,8 +84,8 @@ private func violations(
     }
 
     let rules = try ArchitectureRules(configuration: configuration)
-    let facts = try await RepositoryScanner(rules: rules).scan(root: root)
-    let graph = ArchitectureGraph(facts: facts, rules: rules)
+    let nodes = try await RepositoryScanner(rules: rules).scan(root: root)
+    let graph = ArchitectureGraph(nodes: nodes, rules: rules)
     return rule.evaluate(graph: graph, rules: rules)
 }
 

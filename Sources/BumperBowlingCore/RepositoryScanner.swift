@@ -62,7 +62,7 @@ public struct RepositoryScanner: Sendable {
                         try parser.parseFile(
                             at: input.url,
                             relativePath: input.relativePath,
-                            subsystem: input.subsystem
+                            component: input.component
                         )
                     }
                 }
@@ -105,7 +105,7 @@ public struct RepositoryScanner: Sendable {
 
             guard let typedRelativePath = try? RelativeFilePath(relativePath),
                   rules.includes(typedRelativePath),
-                  let subsystem = rules.subsystem(containing: typedRelativePath),
+                  let component = rules.component(containing: typedRelativePath),
                   isSwiftFile(typedRelativePath) else {
                 continue
             }
@@ -144,7 +144,7 @@ public struct RepositoryScanner: Sendable {
                 SwiftSourceFileInput(
                     url: url,
                     relativePath: typedRelativePath,
-                    subsystem: subsystem.id
+                    component: component.id
                 )
             )
         }
@@ -159,8 +159,8 @@ public struct RepositoryScanner: Sendable {
 
         let relativePath = Self.relativePath(for: url, root: root)
         let typedRelativePath = try RelativeFilePath(relativePath)
-        guard let subsystem = rules.subsystem(containing: typedRelativePath) else {
-            throw BumperError.noSubsystemForFile(relativePath)
+        guard let component = rules.component(containing: typedRelativePath) else {
+            throw BumperError.noComponentForFile(relativePath)
         }
 
         guard isSwiftFile(typedRelativePath) else {
@@ -193,7 +193,7 @@ public struct RepositoryScanner: Sendable {
         return try parser.parseFile(
             at: url,
             relativePath: typedRelativePath,
-            subsystem: subsystem.id
+            component: component.id
         )
     }
 
@@ -236,5 +236,5 @@ public struct RepositoryScanner: Sendable {
 private struct SwiftSourceFileInput: Sendable {
     let url: URL
     let relativePath: RelativeFilePath
-    let subsystem: SubsystemID
+    let component: ComponentID
 }

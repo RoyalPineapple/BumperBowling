@@ -26,6 +26,15 @@ extension ComponentShape {
         MayUse(.foundation)
         DoesNotUse(.uiKit, .swiftUI)
         Requires(.domainCore, severity: .error)
+        DoesNot(
+            ContainSyntaxNode(
+                SyntaxNodeMatcher(
+                    kind: .attribute,
+                    spelling: .exact("available")
+                )
+            ),
+            severity: .warning
+        )
     }
 }
 
@@ -61,3 +70,5 @@ let configuration = BumperConfiguration {
 - Do not auto-apply rules from a package. Importing only makes values available.
 - Do not make consumer vocabulary sound canonical for every repo.
 - Prefer one clear shape over many tiny speculative shapes.
+- Prefer generic syntax node predicates over upstreaming repo-specific named
+  rules.

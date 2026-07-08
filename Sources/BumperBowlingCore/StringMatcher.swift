@@ -102,7 +102,7 @@ extension StringMatcher: Codable {
     }
 }
 
-extension SubsystemID: StringMatchable {}
+extension ComponentID: StringMatchable {}
 extension ModuleName: StringMatchable {}
 extension RelativeFilePath: StringMatchable {}
 extension RelativePathPrefix: StringMatchable {}

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- Renamed the public architecture model from subsystem terminology to component
+  terminology so it matches the DSL and documentation. This changes public
+  source names and Codable field names such as `subsystems`,
+  `SubsystemConfiguration`, `SubsystemID`, and `subsystemBoundary` to their
+  component equivalents.
+- Added generic syntax-node predicates over SwiftSyntax `SyntaxKind`, spelling,
+  parent kind, and ancestor kind so repositories can enforce their own syntax
+  policy without Bumper Bowling shipping repo-specific rule taxonomy.
+
 ## 0.2.0 - 2026-07-07
 
 - Added familiar Swift configuration through `BumperBowling.swift`.

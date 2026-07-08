@@ -6,7 +6,7 @@ The configuration language is specified in [DSL_SPEC.md](DSL_SPEC.md). Bumper Bo
 
 Bumper Bowling is designed to feel familiar beside SwiftLint: rules, severities, included/excluded paths, opt-in rules, reports, and a primary `bumper lint` command.
 
-It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns the project's architectural rules: what each component owns, may depend on, may use, and must prove from SwiftSyntax facts.
+It runs alongside SwiftLint; it does not replace SwiftLint. SwiftLint owns local Swift style and code smells. Bumper Bowling owns the project's architectural rules: what each component owns, may depend on, may use, and must prove from SwiftSyntax nodes.
 
 SwiftPM is the canonical distribution path. Tagged versions of this repository
 publish both the `BumperBowlingCore` library product and the `bumper`
@@ -31,7 +31,7 @@ Lint runs math over the graph
 
 Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane; candidate requests are tracked in [COMPILER_REQUESTS.md](COMPILER_REQUESTS.md).
 
-The current SwiftSyntax fact surface is documented in [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md).
+The current SwiftSyntax node surface is documented in [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md).
 
 ## Configuration Loading
 
@@ -43,11 +43,15 @@ The build is cached against the configuration's content hash (plus the toolchain
 
 A configuration should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 
-`scan` and `snapshot` expose the observed graph Bumper Bowling can build from SwiftSyntax and repo shape. The graph holds every normalized Bumper Bowling fact, not every SwiftSyntax node: files, imports, declarations, properties, selected imperative constructs, subsystem nodes, and dependency edges. That graph is evidence for the declared bounds, not a source of generated policy.
+`scan` and `snapshot` expose the observed graph Bumper Bowling can build from
+SwiftSyntax and repo shape. The graph holds the source files, component nodes,
+dependency edges, computed source facts, and a raw SwiftSyntax node catalog.
+That graph is evidence for the declared bounds, not a source of generated
+policy.
 
 SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Bumper Bowling should not duplicate SwiftSyntax node types or maintain a second syntax enum. Raw syntax checks use SwiftSyntax's `SyntaxKind`; richer local checks use computed extensions on real SwiftSyntax nodes through `node.bumper`.
 
-Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep scorecards explainable: report the observed graph fact, the declared lane, and why they do not match.
+Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over nodes: path matching, set membership, graph edges, and cycles. Keep scorecards explainable: report the observed graph fact, the declared lane, and why they do not match.
 
 Semantic shorthand names are not special engine concepts.
 `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)`
@@ -72,7 +76,7 @@ Bumper Bowling lives between linting and compilation.
 
 - SwiftLint owns local style, convention, and code smells.
 - The compiler owns type checking, symbol resolution, macro expansion, and build truth.
-- Bumper Bowling owns architectural rules when they can be checked from SwiftSyntax facts and repo metadata.
+- Bumper Bowling owns architectural rules when they can be checked from SwiftSyntax nodes and repo metadata.
 
 That lane is especially useful for agentic work because it gives an automated editor a formal contract before it touches the repository, then leaves a scorecard after it does.
 
@@ -92,7 +96,7 @@ Some assertions use narrower lanes. `RequiresScoped(...)` and assertion path fil
 
 The rule engine should always know which lane a finding came from. A report without a lane is hard to fix.
 
-## Subsystems
+## Components
 
 - `BumperBowlingCore` owns parsing, rule construction, repository scanning, architecture modeling, and linting.
 - `BumperBowling` is the CLI adapter for hooks and CI jobs. It may depend on `BumperBowlingCore`; core must not depend on the CLI.
@@ -103,9 +107,9 @@ The rule engine should always know which lane a finding came from. A report with
 
 - Core domain rules must be represented as typed values before use.
 - Swift configuration structs are boundary/input shapes only; scanning and validation operate on typed rules.
-- Strings are parsed into domain types at boundaries. Core models should carry `SubsystemID`, `ModuleName`, paths, declaration names, and attributes as types.
-- Empty subsystem names, module names, path prefixes, and unknown dependency references are invalid.
-- Duplicate subsystem IDs, module aliases, and path ownership are invalid.
+- Strings are parsed into domain types at boundaries. Core models should carry `ComponentID`, `ModuleName`, paths, declaration names, and attributes as types.
+- Empty component names, module names, path prefixes, and unknown dependency references are invalid.
+- Duplicate component IDs, module aliases, and path ownership are invalid.
 - SwiftSyntax parsing is syntax-only. Reports must not imply compiler-level symbol resolution.
 - Public API detection is syntactic and covers declarations marked `public` or `open`.
 - Stateful parsers use explicit enum-based state machines. Stateless fact collection should stay as direct functional projection over SwiftSyntax nodes.
@@ -115,7 +119,7 @@ The rule engine should always know which lane a finding came from. A report with
 ## Swift Rules
 
 - Use Swift 6 strict concurrency.
-- Public model types that cross subsystem boundaries should be `Sendable`.
+- Public model types that cross component boundaries should be `Sendable`.
 - Prefer immutable value types for parsed architecture state.
 - Prefer `let` for domain data. Use local mutation only as a scoped builder detail when Swift APIs require callback-style accumulation.
 - Do not add `@unchecked Sendable` without a local explanation.

@@ -3,9 +3,9 @@ import Foundation
 public struct ArchitectureRules: Equatable, Sendable {
     public let includedPaths: Set<RelativePathPrefix>
     public let excludedPaths: Set<RelativePathPrefix>
-    public let subsystems: [SubsystemRule]
-    public let subsystemByID: [SubsystemID: SubsystemRule]
-    public let subsystemByModule: [ModuleName: SubsystemID]
+    public let components: [ComponentRule]
+    public let componentByID: [ComponentID: ComponentRule]
+    public let componentByModule: [ModuleName: ComponentID]
     public let pathOwnershipConflicts: [PathOwnershipConflict]
     public let forbiddenImports: Set<ModuleName>
     public let ruleConfiguration: RuleConfiguration
@@ -15,54 +15,54 @@ public struct ArchitectureRules: Equatable, Sendable {
         self.excludedPaths = Set(try configuration.excludedPaths.map(RelativePathPrefix.init))
         try Self.validateRuleConfiguration(configuration.rules)
 
-        var subsystems: [SubsystemRule] = []
-        var subsystemByID: [SubsystemID: SubsystemRule] = [:]
-        var subsystemByModule: [ModuleName: SubsystemID] = [:]
+        var components: [ComponentRule] = []
+        var componentByID: [ComponentID: ComponentRule] = [:]
+        var componentByModule: [ModuleName: ComponentID] = [:]
         var ownedPaths: [PathOwnership] = []
         var pathOwnershipConflicts: [PathOwnershipConflict] = []
 
-        for subsystemConfiguration in configuration.subsystems {
-            let subsystem = try SubsystemRule(configuration: subsystemConfiguration)
+        for componentConfiguration in configuration.components {
+            let component = try ComponentRule(configuration: componentConfiguration)
 
-            guard subsystemByID[subsystem.id] == nil else {
-                throw ConfigurationError.duplicateSubsystem(subsystem.id.rawValue)
+            guard componentByID[component.id] == nil else {
+                throw ConfigurationError.duplicateComponent(component.id.rawValue)
             }
 
-            for module in subsystem.modules {
-                guard subsystemByModule[module] == nil else {
+            for module in component.modules {
+                guard componentByModule[module] == nil else {
                     throw ConfigurationError.duplicateModule(module.rawValue)
                 }
-                subsystemByModule[module] = subsystem.id
+                componentByModule[module] = component.id
             }
 
-            for path in subsystem.paths.sorted(by: { $0.rawValue < $1.rawValue }) {
+            for path in component.paths.sorted(by: { $0.rawValue < $1.rawValue }) {
                 if let overlappingOwnership = ownedPaths.first(where: { $0.path.overlaps(path) }) {
                     pathOwnershipConflicts.append(
                         PathOwnershipConflict(
                             path: path,
-                            owner: subsystem.id,
+                            owner: component.id,
                             overlappingPath: overlappingOwnership.path,
                             overlappingOwner: overlappingOwnership.owner
                         )
                     )
                 }
-                ownedPaths.append(PathOwnership(path: path, owner: subsystem.id))
+                ownedPaths.append(PathOwnership(path: path, owner: component.id))
             }
 
-            subsystems.append(subsystem)
-            subsystemByID[subsystem.id] = subsystem
+            components.append(component)
+            componentByID[component.id] = component
         }
 
-        let ids = Set(subsystems.map(\.id))
-        for subsystem in subsystems {
-            for dependency in subsystem.allowedDependencies.union(subsystem.forbiddenDependencies) where !ids.contains(dependency) {
-                throw ConfigurationError.unknownDependency(subsystem.id.rawValue, dependency.rawValue)
+        let ids = Set(components.map(\.id))
+        for component in components {
+            for dependency in component.allowedDependencies.union(component.forbiddenDependencies) where !ids.contains(dependency) {
+                throw ConfigurationError.unknownDependency(component.id.rawValue, dependency.rawValue)
             }
         }
 
-        self.subsystems = subsystems
-        self.subsystemByID = subsystemByID
-        self.subsystemByModule = subsystemByModule
+        self.components = components
+        self.componentByID = componentByID
+        self.componentByModule = componentByModule
         self.pathOwnershipConflicts = pathOwnershipConflicts
         self.forbiddenImports = Set(try configuration.rules.forbiddenImports.flatMap(\.values).map(ModuleName.init))
         self.ruleConfiguration = configuration.rules
@@ -78,13 +78,14 @@ public struct ArchitectureRules: Equatable, Sendable {
         _ = try configuration.syntaxConstructs.paths.map(RelativePathPrefix.init)
         _ = try configuration.syntaxConstructs.excludedPaths.map(RelativePathPrefix.init)
         _ = try configuration.syntaxKinds.paths.map(RelativePathPrefix.init)
+        _ = try configuration.syntaxNodes.paths.map(RelativePathPrefix.init)
         _ = try configuration.publicDeclarations.paths.map(RelativePathPrefix.init)
         _ = try configuration.enumStateMachine.paths.map(RelativePathPrefix.init)
     }
 
-    public func subsystem(containing relativePath: RelativeFilePath) -> SubsystemRule? {
-        subsystems.first { subsystem in
-            subsystem.paths.contains { $0.contains(relativePath) }
+    public func component(containing relativePath: RelativeFilePath) -> ComponentRule? {
+        components.first { component in
+            component.paths.contains { $0.contains(relativePath) }
         }
     }
 
@@ -95,49 +96,49 @@ public struct ArchitectureRules: Equatable, Sendable {
     }
 }
 
-public struct SubsystemRule: Equatable, Sendable {
-    public let id: SubsystemID
+public struct ComponentRule: Equatable, Sendable {
+    public let id: ComponentID
     public let modules: Set<ModuleName>
     public let paths: Set<RelativePathPrefix>
-    public let allowedDependencies: Set<SubsystemID>
-    public let forbiddenDependencies: Set<SubsystemID>
+    public let allowedDependencies: Set<ComponentID>
+    public let forbiddenDependencies: Set<ComponentID>
 
-    init(configuration: SubsystemConfiguration) throws {
-        let id = try SubsystemID(configuration.name)
+    init(configuration: ComponentConfiguration) throws {
+        let id = try ComponentID(configuration.name)
         let configuredModules = try configuration.modules.map(ModuleName.init)
         let modules = Set(configuredModules + [try ModuleName(configuration.name)])
 
         self.id = id
         self.modules = modules
         self.paths = Set(try configuration.paths.map(RelativePathPrefix.init))
-        self.allowedDependencies = Set(try configuration.mayDependOn.map(SubsystemID.init))
-        self.forbiddenDependencies = Set(try configuration.mustNotDependOn.map(SubsystemID.init))
+        self.allowedDependencies = Set(try configuration.mayDependOn.map(ComponentID.init))
+        self.forbiddenDependencies = Set(try configuration.mustNotDependOn.map(ComponentID.init))
 
         guard !paths.isEmpty else {
-            throw ConfigurationError.emptySubsystemPaths(id.rawValue)
+            throw ConfigurationError.emptyComponentPaths(id.rawValue)
         }
     }
 }
 
 public struct PathOwnershipConflict: Equatable, Sendable {
     public let path: RelativePathPrefix
-    public let owner: SubsystemID
+    public let owner: ComponentID
     public let overlappingPath: RelativePathPrefix
-    public let overlappingOwner: SubsystemID
+    public let overlappingOwner: ComponentID
 }
 
 private struct PathOwnership {
     let path: RelativePathPrefix
-    let owner: SubsystemID
+    let owner: ComponentID
 }
 
-public struct SubsystemID: Hashable, Sendable, CustomStringConvertible {
+public struct ComponentID: Hashable, Sendable, CustomStringConvertible {
     public let rawValue: String
 
     public init(_ rawValue: String) throws {
         let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else {
-            throw ConfigurationError.emptySubsystemName
+            throw ConfigurationError.emptyComponentName
         }
         self.rawValue = normalized
     }
@@ -207,15 +208,15 @@ public struct RelativePathPrefix: Hashable, Sendable, CustomStringConvertible {
 }
 
 public enum ConfigurationError: Error, Equatable, CustomStringConvertible, Sendable {
-    case emptySubsystemName
+    case emptyComponentName
     case emptyModuleName
     case emptySyntaxKindName
     case emptyPath
     case emptyDeclarationName
     case emptyAttributeName
     case emptyTypeName
-    case emptySubsystemPaths(String)
-    case duplicateSubsystem(String)
+    case emptyComponentPaths(String)
+    case duplicateComponent(String)
     case duplicateModule(String)
     case duplicatePath(String)
     case unsafePath(String)
@@ -223,32 +224,32 @@ public enum ConfigurationError: Error, Equatable, CustomStringConvertible, Senda
 
     public var description: String {
         switch self {
-        case .emptySubsystemName:
-            "Subsystem names cannot be empty."
+        case .emptyComponentName:
+            "Component names cannot be empty."
         case .emptyModuleName:
             "Module names cannot be empty."
         case .emptySyntaxKindName:
             "SwiftSyntax node kind names cannot be empty."
         case .emptyPath:
-            "Subsystem paths cannot be empty."
+            "Component paths cannot be empty."
         case .emptyDeclarationName:
             "Declaration names cannot be empty."
         case .emptyAttributeName:
             "Attribute names cannot be empty."
         case .emptyTypeName:
             "Type names cannot be empty."
-        case .emptySubsystemPaths(let subsystem):
-            "Subsystem \(subsystem) must own at least one path."
-        case .duplicateSubsystem(let subsystem):
-            "Duplicate subsystem: \(subsystem)."
+        case .emptyComponentPaths(let component):
+            "Component \(component) must own at least one path."
+        case .duplicateComponent(let component):
+            "Duplicate component: \(component)."
         case .duplicateModule(let module):
             "Duplicate module alias: \(module)."
         case .duplicatePath(let path):
-            "Duplicate subsystem path: \(path)."
+            "Duplicate component path: \(path)."
         case .unsafePath(let path):
             "Paths must be relative and stay within the repository: \(path)."
-        case .unknownDependency(let subsystem, let dependency):
-            "Subsystem \(subsystem) references unknown dependency \(dependency)."
+        case .unknownDependency(let component, let dependency):
+            "Component \(component) references unknown dependency \(dependency)."
         }
     }
 }

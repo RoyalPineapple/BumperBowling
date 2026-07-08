@@ -185,7 +185,9 @@ let configuration = BumperConfiguration {
 - `DoesNotUse`: component-scoped modules or frameworks that must not appear in imports.
 - `Declare`: a public declaration predicate over parsed declaration facts.
 - `Declares`: sugar for `Does(Declare(...))`.
-- `ContainSyntax`: a SwiftSyntax node-kind predicate over parsed syntax facts.
+- `ContainSyntax`: a SwiftSyntax node-kind predicate over parsed syntax nodes.
+- `ContainSyntaxNode`: a generic predicate over observed SwiftSyntax node
+  family, node kind, and spelling.
 - `Does`: asserts that a predicate is present in the component graph.
 - `DoesNot`: asserts that a predicate is absent from the component graph.
 - `StringMatcher`: typed matching for name-like facts; string literals are exact matches, with `.contains`, `.prefix`, and `.suffix` available explicitly.
@@ -193,7 +195,7 @@ let configuration = BumperConfiguration {
 - `ComponentShape`: reusable component policy bundle owned by the consumer.
 - `AssertionShape`: reusable repo-level assertion bundle owned by the consumer.
 - `ApplyAssertions`: applies an `AssertionShape` inside `Assertions`.
-- `Disallows`: concrete syntax facts that must not appear in a component.
+- `Disallows`: concrete syntax nodes that must not appear in a component.
 - `NoDirectStringMatching`: a syntax-first assertion that keeps direct string matching inside the matcher implementation.
 - `Assertions`: graph-level assertions such as ownership and dependency shape.
 
@@ -232,7 +234,7 @@ bumper explain <path>
 ## Rules
 
 - `forbidden_import`
-- `subsystem_boundary`
+- `component_boundary`
 - `duplicate_ownership`
 - `declared_dependency_cycle`
 - `stored_properties`

@@ -13,40 +13,40 @@ extension ArchitectureRule {
                 return violation(
                     severity: setting.severity,
                     path: importFact.file.path,
-                    message: "\(importFact.file.subsystem) imports forbidden module \(importFact.module)"
+                    message: "\(importFact.file.component) imports forbidden module \(importFact.module)"
                 )
             }
         }
     }
 
-    func evaluateSubsystemBoundaries(
+    func evaluateComponentBoundaries(
         graph: ArchitectureGraph,
         rules: ArchitectureRules,
         severity: Severity
     ) -> [ArchitectureViolation] {
-        let subsystemByName = rules.subsystemByID
+        let componentByName = rules.componentByID
         var violations: [ArchitectureViolation] = []
 
-        for edge in graph.subsystemImportEdges {
-            guard let sourceSubsystem = subsystemByName[edge.sourceSubsystem] else {
+        for edge in graph.componentImportEdges {
+            guard let sourceComponent = componentByName[edge.sourceComponent] else {
                 continue
             }
 
-            if sourceSubsystem.forbiddenDependencies.contains(edge.targetSubsystem) {
+            if sourceComponent.forbiddenDependencies.contains(edge.targetComponent) {
                 violations.append(
                     violation(
                         severity: severity,
                         path: edge.sourcePath,
-                        message: "\(edge.sourceSubsystem) must not depend on \(edge.importedModule) (\(edge.targetSubsystem.rawValue))"
+                        message: "\(edge.sourceComponent) must not depend on \(edge.importedModule) (\(edge.targetComponent.rawValue))"
                     )
                 )
-            } else if !sourceSubsystem.allowedDependencies.contains(edge.targetSubsystem),
-                      edge.targetSubsystem != edge.sourceSubsystem {
+            } else if !sourceComponent.allowedDependencies.contains(edge.targetComponent),
+                      edge.targetComponent != edge.sourceComponent {
                 violations.append(
                     violation(
                         severity: severity,
                         path: edge.sourcePath,
-                        message: "\(edge.sourceSubsystem) imports undeclared subsystem \(edge.importedModule) (\(edge.targetSubsystem.rawValue))"
+                        message: "\(edge.sourceComponent) imports undeclared component \(edge.importedModule) (\(edge.targetComponent.rawValue))"
                     )
                 )
             }
@@ -61,19 +61,19 @@ extension ArchitectureRule {
         severity: Severity
     ) -> [ArchitectureViolation] {
         let graph = Dictionary(
-            uniqueKeysWithValues: rules.subsystems.map { subsystem in
-                (subsystem.id, subsystem.allowedDependencies)
+            uniqueKeysWithValues: rules.components.map { component in
+                (component.id, component.allowedDependencies)
             }
         )
 
-        for subsystem in rules.subsystems {
-            if reaches(subsystem.id, from: subsystem.id, graph: graph, visited: []) {
-                let path = firstPath(for: subsystem.id, graph: architectureGraph, rules: rules)
+        for component in rules.components {
+            if reaches(component.id, from: component.id, graph: graph, visited: []) {
+                let path = firstPath(for: component.id, graph: architectureGraph, rules: rules)
                 return [
                     violation(
                         severity: severity,
                         path: path,
-                        message: "Declared dependency cycle includes subsystem \(subsystem.id.rawValue)"
+                        message: "Declared dependency cycle includes component \(component.id.rawValue)"
                     ),
                 ]
             }
@@ -96,10 +96,10 @@ extension ArchitectureRule {
     }
 
     func reaches(
-        _ target: SubsystemID,
-        from current: SubsystemID,
-        graph: [SubsystemID: Set<SubsystemID>],
-        visited: Set<SubsystemID>
+        _ target: ComponentID,
+        from current: ComponentID,
+        graph: [ComponentID: Set<ComponentID>],
+        visited: Set<ComponentID>
     ) -> Bool {
         let dependencies = graph[current] ?? []
         if dependencies.contains(target), !visited.isEmpty {
@@ -169,7 +169,7 @@ extension ArchitectureRule {
         configuration: SyntaxKindRuleConfiguration
     ) -> [ArchitectureViolation] {
         graph.files(in: scope(paths: configuration.paths)).flatMap { file in
-            let observedKinds = Set(file.syntaxFacts.nodeKinds.map(SyntaxKindName.init))
+            let observedKinds = Set(file.syntaxNodes.nodeKinds.map(SyntaxKindName.init))
             let missingRequiredKinds = configuration.requiredKinds
                 .subtracting(observedKinds)
                 .map { kind in
@@ -183,7 +183,7 @@ extension ArchitectureRule {
             let disallowedKinds = configuration.disallowedKinds
                 .intersection(observedKinds)
                 .map { kind in
-                    let fact = file.syntaxFacts.facts.first { SyntaxKindName($0.nodeKind) == kind }
+                    let node = file.syntaxNodes.nodes.first { SyntaxKindName($0.kind) == kind }
                     let expectedKinds = configuration.disallowedKinds
                         .map(\.rawValue)
                         .sorted()
@@ -192,7 +192,7 @@ extension ArchitectureRule {
                         severity: configuration.severity,
                         path: file.path,
                         message: "Uses disallowed SwiftSyntax node kind \(kind)",
-                        location: fact?.location,
+                        location: node?.location,
                         evidence: ViolationEvidence(
                             observed: "SwiftSyntax node kind \(kind)",
                             expectation: "disallowed SwiftSyntax node kinds: \(expectedKinds)"
@@ -201,6 +201,44 @@ extension ArchitectureRule {
                 }
 
             return missingRequiredKinds + disallowedKinds
+        }
+    }
+
+    func evaluateSyntaxNodes(
+        graph: ArchitectureGraph,
+        configuration: SyntaxNodeRuleConfiguration
+    ) -> [ArchitectureViolation] {
+        graph.files(in: scope(paths: configuration.paths)).flatMap { file in
+            let missingRequiredNodes = configuration.requiredNodes
+                .filter { matcher in
+                    !file.syntaxNodes.nodes.contains { matcher.matches($0) }
+                }
+                .map { matcher in
+                    violation(
+                        severity: configuration.severity,
+                        path: file.path,
+                        message: "Missing required SwiftSyntax node \(matcher)"
+                    )
+            }
+
+            let disallowedNodes = file.syntaxNodes.nodes.compactMap { node -> ArchitectureViolation? in
+                guard let matcher = configuration.disallowedNodes.first(where: { $0.matches(node) }) else {
+                    return nil
+                }
+
+                return violation(
+                    severity: configuration.severity,
+                    path: file.path,
+                    message: "Uses disallowed SwiftSyntax node \(node.description)",
+                    location: node.location,
+                    evidence: ViolationEvidence(
+                        observed: node.description,
+                        expectation: "disallowed SwiftSyntax node matcher: \(matcher)"
+                    )
+                )
+            }
+
+            return missingRequiredNodes + disallowedNodes
         }
     }
 
@@ -434,15 +472,15 @@ extension ArchitectureRule {
     }
 
     func firstPath(
-        for subsystem: SubsystemID,
+        for component: ComponentID,
         graph: ArchitectureGraph,
         rules: ArchitectureRules
     ) -> RelativeFilePath {
-        if let file = graph.sourceFiles.first(where: { $0.subsystem == subsystem }) {
+        if let file = graph.sourceFiles.first(where: { $0.component == component }) {
             return file.path
         }
 
-        if let prefix = rules.subsystemByID[subsystem]?.paths.sorted(by: { $0.rawValue < $1.rawValue }).first,
+        if let prefix = rules.componentByID[component]?.paths.sorted(by: { $0.rawValue < $1.rawValue }).first,
            let path = try? RelativeFilePath(prefix.rawValue) {
             return path
         }

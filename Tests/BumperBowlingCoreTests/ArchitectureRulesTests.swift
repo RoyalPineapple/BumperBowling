@@ -6,8 +6,8 @@ struct ArchitectureRulesTests {
     @Test
     func rejectsUnknownDependencies() {
         let configuration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(
+            components: [
+                ComponentConfiguration(
                     name: "Recording",
                     paths: ["Sources/Recording"],
                     mayDependOn: ["Playback"]
@@ -23,9 +23,9 @@ struct ArchitectureRulesTests {
     @Test
     func rejectsDuplicateModuleAliases() {
         let configuration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "Recording", modules: ["FeatureKit"], paths: ["Sources/Recording"]),
-                SubsystemConfiguration(name: "Playback", modules: ["FeatureKit"], paths: ["Sources/Playback"]),
+            components: [
+                ComponentConfiguration(name: "Recording", modules: ["FeatureKit"], paths: ["Sources/Recording"]),
+                ComponentConfiguration(name: "Playback", modules: ["FeatureKit"], paths: ["Sources/Playback"]),
             ]
         )
 
@@ -37,9 +37,9 @@ struct ArchitectureRulesTests {
     @Test
     func recordsOverlappingPathOwnership() throws {
         let configuration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "Core", paths: ["Sources/Core"]),
-                SubsystemConfiguration(name: "Models", paths: ["Sources/Core/Models"]),
+            components: [
+                ComponentConfiguration(name: "Core", paths: ["Sources/Core"]),
+                ComponentConfiguration(name: "Models", paths: ["Sources/Core/Models"]),
             ]
         )
 
@@ -47,17 +47,17 @@ struct ArchitectureRulesTests {
         let conflict = try #require(rules.pathOwnershipConflicts.first)
 
         #expect(conflict.path == (try RelativePathPrefix("Sources/Core/Models")))
-        #expect(conflict.owner == (try SubsystemID("Models")))
+        #expect(conflict.owner == (try ComponentID("Models")))
         #expect(conflict.overlappingPath == (try RelativePathPrefix("Sources/Core")))
-        #expect(conflict.overlappingOwner == (try SubsystemID("Core")))
+        #expect(conflict.overlappingOwner == (try ComponentID("Core")))
     }
 
     @Test
     func rejectsAbsoluteConfiguredPaths() {
         let configuration = ArchitectureConfiguration(
             includedPaths: ["/Sources"],
-            subsystems: [
-                SubsystemConfiguration(name: "Core", paths: ["Sources/Core"]),
+            components: [
+                ComponentConfiguration(name: "Core", paths: ["Sources/Core"]),
             ]
         )
 
@@ -69,8 +69,8 @@ struct ArchitectureRulesTests {
     @Test
     func rejectsTraversalInRulePaths() {
         let configuration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "Core", paths: ["Sources/Core"]),
+            components: [
+                ComponentConfiguration(name: "Core", paths: ["Sources/Core"]),
             ],
             rules: RuleConfiguration(
                 storedProperties: StoredPropertyRuleConfiguration(

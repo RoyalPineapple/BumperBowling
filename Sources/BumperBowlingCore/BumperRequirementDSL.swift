@@ -20,6 +20,8 @@ public enum DeclarationFact: Sendable {}
 
 public enum SyntaxKindFact: Sendable {}
 
+public enum SyntaxNode: Sendable {}
+
 public struct GraphPredicate<Fact>: Equatable, Sendable {
     public let erased: AnyGraphPredicate
 
@@ -31,6 +33,7 @@ public struct GraphPredicate<Fact>: Equatable, Sendable {
 public enum AnyGraphPredicate: Equatable, Sendable {
     case declare(Set<StringMatcher>)
     case containSyntax(Set<SyntaxKind>)
+    case containSyntaxNode(Set<SyntaxNodeMatcher>)
 }
 
 public struct ComponentRequirement: Equatable, Sendable {

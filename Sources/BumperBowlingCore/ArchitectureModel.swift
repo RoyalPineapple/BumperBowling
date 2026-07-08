@@ -9,7 +9,7 @@ enum CollectedSourceFact: Equatable, Sendable {
     case storedProperty(StoredProperty)
     case enumDeclaration(DeclarationName)
     case imperativeConstruct(ObservedImperativeConstruct)
-    case syntax(ObservedSyntaxFact)
+    case syntax(ObservedSyntaxNode)
 }
 
 struct SourceFactSummary: Sendable {
@@ -20,7 +20,7 @@ struct SourceFactSummary: Sendable {
     let storedProperties: [StoredProperty]
     let enums: [DeclarationName]
     let observedImperativeConstructs: [ObservedImperativeConstruct]
-    let syntaxFacts: SwiftSyntaxFactCatalog
+    let syntaxNodes: SwiftSyntaxNodeCatalog
 
     init(facts: [CollectedSourceFact]) {
         var imports = Set<ModuleName>()
@@ -30,7 +30,7 @@ struct SourceFactSummary: Sendable {
         var storedProperties: [StoredProperty] = []
         var enums: [DeclarationName] = []
         var observedImperativeConstructs: [ObservedImperativeConstruct] = []
-        var syntaxFacts = SwiftSyntaxFactCatalog()
+        var syntaxNodes = SwiftSyntaxNodeCatalog()
 
         for fact in facts {
             switch fact {
@@ -48,8 +48,8 @@ struct SourceFactSummary: Sendable {
                 enums.append(name)
             case .imperativeConstruct(let construct):
                 observedImperativeConstructs.append(construct)
-            case .syntax(let fact):
-                syntaxFacts = syntaxFacts.adding(fact)
+            case .syntax(let node):
+                syntaxNodes = syntaxNodes.adding(node)
             }
         }
 
@@ -60,7 +60,7 @@ struct SourceFactSummary: Sendable {
         self.storedProperties = storedProperties
         self.enums = enums
         self.observedImperativeConstructs = observedImperativeConstructs
-        self.syntaxFacts = syntaxFacts
+        self.syntaxNodes = syntaxNodes
     }
 }
 
@@ -73,7 +73,7 @@ public struct RepositoryFacts: Equatable, Sendable {
         self.dependencyEdges = Set(
             files.flatMap { file in
                 file.imports.map { importedModule in
-                    DependencyEdge(sourceSubsystem: file.subsystem, importedModule: importedModule)
+                    DependencyEdge(sourceComponent: file.component, importedModule: importedModule)
                 }
             }
         )
@@ -100,24 +100,24 @@ public enum GraphScope: Equatable, Sendable {
 
 public struct ArchitectureGraph: Equatable, Sendable {
     public let sourceFiles: [SourceFileFacts]
-    public let subsystemNodes: Set<SubsystemID>
+    public let componentNodes: Set<ComponentID>
     public let moduleImportEdges: Set<DependencyEdge>
-    public let subsystemImportEdges: Set<SubsystemImportEdge>
+    public let componentImportEdges: Set<ComponentImportEdge>
 
-    public init(facts: RepositoryFacts, rules: ArchitectureRules) {
-        self.sourceFiles = facts.files
-        self.subsystemNodes = Set(facts.files.map(\.subsystem))
-        self.moduleImportEdges = facts.dependencyEdges
-        self.subsystemImportEdges = Set(
-            facts.files.flatMap { file in
+    public init(nodes: RepositoryFacts, rules: ArchitectureRules) {
+        self.sourceFiles = nodes.files
+        self.componentNodes = Set(nodes.files.map(\.component))
+        self.moduleImportEdges = nodes.dependencyEdges
+        self.componentImportEdges = Set(
+            nodes.files.flatMap { file in
                 file.imports.compactMap { importedModule in
-                    guard let targetSubsystem = rules.subsystemByModule[importedModule] else {
+                    guard let targetComponent = rules.componentByModule[importedModule] else {
                         return nil
                     }
 
-                    return SubsystemImportEdge(
-                        sourceSubsystem: file.subsystem,
-                        targetSubsystem: targetSubsystem,
+                    return ComponentImportEdge(
+                        sourceComponent: file.component,
+                        targetComponent: targetComponent,
                         importedModule: importedModule,
                         sourcePath: file.path
                     )
@@ -178,10 +178,10 @@ public struct ArchitectureGraph: Equatable, Sendable {
         }
     }
 
-    public func syntaxFacts(in scope: GraphScope) -> [(file: SourceFileFacts, fact: ObservedSyntaxFact)] {
+    public func syntaxNodes(in scope: GraphScope) -> [(file: SourceFileFacts, node: ObservedSyntaxNode)] {
         files(in: scope).flatMap { file in
-            file.syntaxFacts.facts.map { fact in
-                (file: file, fact: fact)
+            file.syntaxNodes.nodes.map { node in
+                (file: file, node: node)
             }
         }
     }
@@ -189,7 +189,7 @@ public struct ArchitectureGraph: Equatable, Sendable {
 
 public struct SourceFileFacts: Equatable, Sendable {
     public let path: RelativeFilePath
-    public let subsystem: SubsystemID
+    public let component: ComponentID
     public let imports: [ModuleName]
     public let nominalTypes: [NominalType]
     public let extensionDeclarations: [ExtensionDeclaration]
@@ -198,11 +198,11 @@ public struct SourceFileFacts: Equatable, Sendable {
     public let enums: [DeclarationName]
     public let imperativeConstructs: [ImperativeConstruct]
     public let observedImperativeConstructs: [ObservedImperativeConstruct]
-    public let syntaxFacts: SwiftSyntaxFactCatalog
+    public let syntaxNodes: SwiftSyntaxNodeCatalog
 
     public init(
         path: RelativeFilePath,
-        subsystem: SubsystemID,
+        component: ComponentID,
         imports: [ModuleName],
         nominalTypes: [NominalType] = [],
         extensionDeclarations: [ExtensionDeclaration] = [],
@@ -211,13 +211,13 @@ public struct SourceFileFacts: Equatable, Sendable {
         enums: [DeclarationName] = [],
         imperativeConstructs: [ImperativeConstruct] = [],
         observedImperativeConstructs: [ObservedImperativeConstruct] = [],
-        syntaxFacts: SwiftSyntaxFactCatalog = SwiftSyntaxFactCatalog()
+        syntaxNodes: SwiftSyntaxNodeCatalog = SwiftSyntaxNodeCatalog()
     ) {
         let observedConstructs = observedImperativeConstructs.isEmpty
             ? imperativeConstructs.map { ObservedImperativeConstruct(construct: $0) }
             : observedImperativeConstructs
         self.path = path
-        self.subsystem = subsystem
+        self.component = component
         self.imports = imports
         self.nominalTypes = nominalTypes
         self.extensionDeclarations = extensionDeclarations
@@ -228,15 +228,15 @@ public struct SourceFileFacts: Equatable, Sendable {
             ? observedConstructs.map(\.construct)
             : imperativeConstructs
         self.observedImperativeConstructs = observedConstructs
-        self.syntaxFacts = syntaxFacts
+        self.syntaxNodes = syntaxNodes
     }
 
-    init(path: RelativeFilePath, subsystem: SubsystemID, facts: [CollectedSourceFact]) {
-        let summary = SourceFactSummary(facts: facts)
+    init(path: RelativeFilePath, component: ComponentID, nodes: [CollectedSourceFact]) {
+        let summary = SourceFactSummary(facts: nodes)
 
         self.init(
             path: path,
-            subsystem: subsystem,
+            component: component,
             imports: summary.imports,
             nominalTypes: summary.nominalTypes,
             extensionDeclarations: summary.extensionDeclarations,
@@ -244,67 +244,60 @@ public struct SourceFileFacts: Equatable, Sendable {
             storedProperties: summary.storedProperties,
             enums: summary.enums,
             observedImperativeConstructs: summary.observedImperativeConstructs,
-            syntaxFacts: summary.syntaxFacts
+            syntaxNodes: summary.syntaxNodes
         )
     }
 }
 
-public struct SwiftSyntaxFactCatalog: Equatable, Sendable {
+public struct SwiftSyntaxNodeCatalog: Equatable, Sendable {
     public let nodeKinds: Set<SyntaxKind>
-    public let facts: Set<ObservedSyntaxFact>
+    public let nodes: Set<ObservedSyntaxNode>
 
     public init(
         nodeKinds: Set<SyntaxKind> = [],
-        facts: Set<ObservedSyntaxFact> = []
+        nodes: Set<ObservedSyntaxNode> = []
     ) {
         self.nodeKinds = nodeKinds
-        self.facts = facts
+        self.nodes = nodes
     }
 
-    public func adding(_ fact: ObservedSyntaxFact) -> SwiftSyntaxFactCatalog {
-        SwiftSyntaxFactCatalog(
-            nodeKinds: nodeKinds.union([fact.nodeKind]),
-            facts: facts.union([fact])
+    public func adding(_ node: ObservedSyntaxNode) -> SwiftSyntaxNodeCatalog {
+        SwiftSyntaxNodeCatalog(
+            nodeKinds: nodeKinds.union([node.kind]),
+            nodes: nodes.union([node])
         )
     }
 }
 
-public struct ObservedSyntaxFact: Hashable, Sendable {
-    public let family: SyntaxFactFamily
-    public let nodeKind: SyntaxKind
+public struct ObservedSyntaxNode: Hashable, Sendable {
+    public let kind: SyntaxKind
     public let spelling: String?
     public let location: SourcePosition?
+    public let parentKind: SyntaxKind?
+    public let ancestorKinds: [SyntaxKind]
 
     public init(
-        family: SyntaxFactFamily,
-        nodeKind: SyntaxKind,
+        kind: SyntaxKind,
         spelling: String? = nil,
-        location: SourcePosition? = nil
+        location: SourcePosition? = nil,
+        parentKind: SyntaxKind? = nil,
+        ancestorKinds: [SyntaxKind] = []
     ) {
-        self.family = family
-        self.nodeKind = nodeKind
+        self.kind = kind
         self.spelling = spelling
         self.location = location
+        self.parentKind = parentKind
+        self.ancestorKinds = ancestorKinds
     }
 }
 
-public enum SyntaxFactFamily: String, Equatable, Hashable, Sendable {
-    case sourceFile
-    case trivia
-    case importSyntax
-    case declaration
-    case typeSyntax
-    case pattern
-    case statement
-    case expression
-    case closure
-    case concurrency
-    case macro
-    case literal
-    case attribute
-    case modifier
-    case token
-    case unknown
+extension ObservedSyntaxNode: CustomStringConvertible {
+    public var description: String {
+        [
+            String(describing: kind),
+            spelling
+        ].compactMap { $0 }.joined(separator: " ")
+    }
 }
 
 public struct NominalType: Equatable, Sendable {
@@ -426,29 +419,29 @@ public struct SourcePosition: Equatable, Hashable, Sendable, Codable, CustomStri
 }
 
 public struct DependencyEdge: Hashable, Sendable {
-    public let sourceSubsystem: SubsystemID
+    public let sourceComponent: ComponentID
     public let importedModule: ModuleName
 
-    public init(sourceSubsystem: SubsystemID, importedModule: ModuleName) {
-        self.sourceSubsystem = sourceSubsystem
+    public init(sourceComponent: ComponentID, importedModule: ModuleName) {
+        self.sourceComponent = sourceComponent
         self.importedModule = importedModule
     }
 }
 
-public struct SubsystemImportEdge: Hashable, Sendable {
-    public let sourceSubsystem: SubsystemID
-    public let targetSubsystem: SubsystemID
+public struct ComponentImportEdge: Hashable, Sendable {
+    public let sourceComponent: ComponentID
+    public let targetComponent: ComponentID
     public let importedModule: ModuleName
     public let sourcePath: RelativeFilePath
 
     public init(
-        sourceSubsystem: SubsystemID,
-        targetSubsystem: SubsystemID,
+        sourceComponent: ComponentID,
+        targetComponent: ComponentID,
         importedModule: ModuleName,
         sourcePath: RelativeFilePath
     ) {
-        self.sourceSubsystem = sourceSubsystem
-        self.targetSubsystem = targetSubsystem
+        self.sourceComponent = sourceComponent
+        self.targetComponent = targetComponent
         self.importedModule = importedModule
         self.sourcePath = sourcePath
     }

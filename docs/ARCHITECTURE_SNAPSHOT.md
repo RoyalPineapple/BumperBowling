@@ -40,26 +40,26 @@ flowchart LR
     Findings --> Report["LintReport"]
 ```
 
-### `subsystem_boundary`
+### `component_boundary`
 
-Requires subsystem imports to match declared dependencies.
+Requires component imports to match declared dependencies.
 
 ```mermaid
 flowchart LR
-    Imports["ArchitectureGraph.subsystemImportEdges"] --> SubsystemBoundary["subsystem_boundary"]
-    Modules["subsystemByModule"] --> SubsystemBoundary
-    Dependencies["allowed + forbidden dependencies"] --> SubsystemBoundary
-    SubsystemBoundary --> Findings["ArchitectureViolation[]"]
+    Imports["ArchitectureGraph.componentImportEdges"] --> ComponentBoundary["component_boundary"]
+    Modules["componentByModule"] --> ComponentBoundary
+    Dependencies["allowed + forbidden dependencies"] --> ComponentBoundary
+    ComponentBoundary --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
 ```
 
 ### `duplicate_ownership`
 
-Disallows duplicate subsystem path and module ownership.
+Disallows duplicate component path and module ownership.
 
 ```mermaid
 flowchart LR
-    Paths["SubsystemRule.paths"] --> Ownership["path ownership conflicts"]
+    Paths["ComponentRule.paths"] --> Ownership["path ownership conflicts"]
     Ownership --> DuplicateOwnership["duplicate_ownership"]
     DuplicateOwnership --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
@@ -67,11 +67,11 @@ flowchart LR
 
 ### `declared_dependency_cycle`
 
-Disallows cycles in declared subsystem dependencies.
+Disallows cycles in declared component dependencies.
 
 ```mermaid
 flowchart LR
-    Dependencies["SubsystemRule.allowedDependencies"] --> Graph["dependency graph"]
+    Dependencies["ComponentRule.allowedDependencies"] --> Graph["dependency graph"]
     Graph --> DeclaredDependencyCycle["declared_dependency_cycle"]
     DeclaredDependencyCycle --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]
@@ -107,7 +107,7 @@ Applies configured assertions over observed SwiftSyntax node kinds.
 
 ```mermaid
 flowchart LR
-    Kinds["ArchitectureGraph.sourceFiles.syntaxFacts.nodeKinds"] --> SyntaxKinds["syntax_kinds"]
+    Kinds["ArchitectureGraph.sourceFiles.syntaxNodes.nodeKinds"] --> SyntaxKinds["syntax_kinds"]
     Policy["SyntaxKindRuleConfiguration"] --> SyntaxKinds
     SyntaxKinds --> Findings["ArchitectureViolation[]"]
     Findings --> Report["LintReport"]

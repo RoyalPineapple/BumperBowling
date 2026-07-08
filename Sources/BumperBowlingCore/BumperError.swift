@@ -8,7 +8,7 @@ public enum BumperError: Error, CustomStringConvertible {
     case configurationOutputTooLarge(String, String, Int)
     case configurationOutputMalformed(String)
     case configurationPackageUnavailable(String)
-    case noSubsystemForFile(String)
+    case noComponentForFile(String)
     case repositoryScanLimitExceeded(String)
     case sourceFileOutsideRoot(String, String)
     case sourceFileTooLarge(String, UInt64, UInt64)
@@ -32,8 +32,8 @@ public enum BumperError: Error, CustomStringConvertible {
             "Configuration runner produced malformed output: \(message)"
         case .configurationPackageUnavailable(let path):
             "Could not locate the BumperBowling package at \(path). Set BUMPER_PACKAGE_PATH to the package root."
-        case .noSubsystemForFile(let path):
-            "No subsystem matches \(path)."
+        case .noComponentForFile(let path):
+            "No component matches \(path)."
         case .repositoryScanLimitExceeded(let message):
             "Repository scan limit exceeded: \(message)"
         case .sourceFileOutsideRoot(let path, let root):

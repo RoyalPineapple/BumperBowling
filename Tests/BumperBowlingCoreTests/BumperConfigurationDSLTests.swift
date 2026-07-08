@@ -113,6 +113,37 @@ struct BumperConfigurationDSLTests {
     }
 
     @Test
+    func exposesGenericSyntaxNodePredicates() throws {
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    DoesNot(
+                        ContainSyntaxNode(
+                            SyntaxNodeMatcher(
+                                kind: .attribute,
+                                spelling: .exact("available")
+                            )
+                        ),
+                        severity: .error
+                    )
+                }
+            }
+        }.architectureConfiguration
+
+        let rules = try ArchitectureRules(configuration: configuration)
+        let matcher = SyntaxNodeMatcher(
+            kind: .attribute,
+            spelling: .exact("available")
+        )
+
+        #expect(rules.ruleConfiguration.syntaxNodes.severity == .error)
+        #expect(rules.ruleConfiguration.syntaxNodes.paths == ["Sources/Core"])
+        #expect(rules.ruleConfiguration.syntaxNodes.requiredNodes.isEmpty)
+        #expect(rules.ruleConfiguration.syntaxNodes.disallowedNodes == [matcher])
+    }
+
+    @Test
     func configuresDirectStringMatchingBoundary() throws {
         let configuration = BumperConfiguration {
             Assertions {
@@ -149,7 +180,7 @@ struct BumperConfigurationDSLTests {
 
         let rules = try ArchitectureRules(configuration: configuration)
 
-        #expect(rules.subsystemByID[try SubsystemID("core")]?.forbiddenDependencies == Set([try SubsystemID("ui")]))
+        #expect(rules.componentByID[try ComponentID("core")]?.forbiddenDependencies == Set([try ComponentID("ui")]))
     }
 
     @Test
@@ -214,7 +245,7 @@ struct BumperConfigurationDSLTests {
 
         let rules = try ArchitectureRules(configuration: configuration)
 
-        #expect(rules.ruleConfiguration.subsystemBoundary == .error)
+        #expect(rules.ruleConfiguration.componentBoundary == .error)
         #expect(rules.ruleConfiguration.forbiddenImports.first?.values == Capability.allCases
             .filter { $0 != .foundation }
             .flatMap(\.modules)
@@ -235,7 +266,7 @@ struct BumperConfigurationDSLTests {
     }
 
     @Test
-    func shippedSemanticRuleSetsLowerToFactRules() {
+    func builtInRequirementConveniencesLowerToFactRules() {
         #expect(
             ComponentRequirement.swiftBasics.factRules ==
                 ComponentRequirement(

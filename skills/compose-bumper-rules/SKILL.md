@@ -44,6 +44,8 @@ Do not introduce JSON, registries, remote package policy, or auto-loaded shared 
 - Prefer `ComponentRequirement` for fact bundles.
 - Prefer `ComponentShape` for component policy bundles.
 - Prefer `AssertionShape` for repo-level assertions.
+- Use `ContainSyntaxNode(SyntaxNodeMatcher(...))` for repo-specific SwiftSyntax
+  facts that Bumper Bowling does not expose as named built-in requirements.
 - Use `ApplyAssertions(...)` inside `Assertions`.
 - Keep findings explainable as observed fact plus declared expectation.
 

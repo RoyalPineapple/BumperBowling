@@ -9,15 +9,15 @@ struct ArchitectureConfigurationCodableTests {
         let configuration = ArchitectureConfiguration(
             includedPaths: ["Sources"],
             excludedPaths: [".build", "DerivedData"],
-            subsystems: [
-                SubsystemConfiguration(
+            components: [
+                ComponentConfiguration(
                     name: "core",
                     modules: ["Core"],
                     paths: ["Sources/Core"],
                     mayDependOn: [],
                     mustNotDependOn: ["cli"]
                 ),
-                SubsystemConfiguration(
+                ComponentConfiguration(
                     name: "cli",
                     modules: ["CLI"],
                     paths: ["Sources/CLI"],
@@ -28,7 +28,7 @@ struct ArchitectureConfigurationCodableTests {
                 forbiddenImports: [
                     RuleSetting(severity: .error, values: ["XCTest"], paths: ["Sources/Core"]),
                 ],
-                subsystemBoundary: .error,
+                componentBoundary: .error,
                 duplicateOwnership: .error,
                 declaredDependencyCycle: .warning,
                 storedProperties: StoredPropertyRuleConfiguration(
@@ -47,6 +47,17 @@ struct ArchitectureConfigurationCodableTests {
                     paths: ["Sources/Core/Parser"],
                     requiredKinds: [.enumDecl],
                     disallowedKinds: [.forceUnwrapExpr]
+                ),
+                syntaxNodes: SyntaxNodeRuleConfiguration(
+                    severity: .warning,
+                    paths: ["Sources/Core"],
+                    requiredNodes: [.kind(.structDecl)],
+                    disallowedNodes: [
+                        SyntaxNodeMatcher(
+                            kind: .attribute,
+                            spelling: .exact("available")
+                        )
+                    ]
                 ),
                 publicDeclarations: PublicDeclarationRuleConfiguration(
                     severity: .error,

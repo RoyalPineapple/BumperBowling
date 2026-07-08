@@ -18,13 +18,13 @@ public enum BumperCommands {
         lines.append("# Architecture Scan")
         lines.append("")
         lines.append("Files: \(model.files.count)")
-        let subsystems = Set(model.files.map(\.subsystem.rawValue)).sorted().joined(separator: ", ")
-        lines.append("Subsystems: \(subsystems)")
+        let components = Set(model.files.map(\.component.rawValue)).sorted().joined(separator: ", ")
+        lines.append("Components: \(components)")
         lines.append("")
         lines.append("## Dependencies")
 
         for edge in model.dependencyEdges.sorted(by: dependencyEdgeSortKey) {
-            lines.append("- \(edge.sourceSubsystem) imports \(edge.importedModule)")
+            lines.append("- \(edge.sourceComponent) imports \(edge.importedModule)")
         }
 
         return lines.joined(separator: "\n")
@@ -73,7 +73,7 @@ public enum BumperCommands {
         var lines: [String] = []
         lines.append("# \(file.path.rawValue)")
         lines.append("")
-        lines.append("Subsystem: \(file.subsystem)")
+        lines.append("Component: \(file.component)")
         let imports = file.imports.map(\.rawValue).joined(separator: ", ")
         lines.append("Imports: \(imports.isEmpty ? "none" : imports)")
         lines.append("")
@@ -108,6 +108,6 @@ public struct ConfigurationReport: Equatable, Sendable {
 }
 
 private func dependencyEdgeSortKey(_ lhs: DependencyEdge, _ rhs: DependencyEdge) -> Bool {
-    "\(lhs.sourceSubsystem.rawValue).\(lhs.importedModule.rawValue)"
-        < "\(rhs.sourceSubsystem.rawValue).\(rhs.importedModule.rawValue)"
+    "\(lhs.sourceComponent.rawValue).\(lhs.importedModule.rawValue)"
+        < "\(rhs.sourceComponent.rawValue).\(rhs.importedModule.rawValue)"
 }
