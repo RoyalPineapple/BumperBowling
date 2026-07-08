@@ -114,6 +114,59 @@ struct ConfigurationExecutionSafetyTests {
     }
 
     @Test
+    func executedConfigurationCanUseRenamedBumperPackageCheckout() throws {
+        let temp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        let renamedPackageRoot = temp.appendingPathComponent("BumperBowling-eval")
+        let consumerRoot = temp.appendingPathComponent("Consumer")
+        let originalPackagePath = ProcessInfo.processInfo.environment["BUMPER_PACKAGE_PATH"]
+        defer {
+            restoreEnvironmentValue(named: "BUMPER_PACKAGE_PATH", to: originalPackagePath)
+            try? FileManager.default.removeItem(at: temp)
+        }
+
+        try copyPackageSource(to: renamedPackageRoot)
+        try FileManager.default.createDirectory(at: consumerRoot, withIntermediateDirectories: true)
+
+        let configurationSource = """
+        import BumperBowlingCore
+
+        let configuration = BumperConfiguration {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                    Modules("Core")
+                    MayUse(.foundation)
+                }
+            }
+        }
+        """
+        try configurationSource.write(
+            to: consumerRoot.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        setenv("BUMPER_PACKAGE_PATH", renamedPackageRoot.path, 1)
+
+        let configuration = try ConfigurationLoader.loadConfiguration(root: consumerRoot)
+
+        #expect(configuration.components.map(\.name) == ["core"])
+    }
+
+    @Test
+    func configurationRunnerCacheDirectoryCanBeCustomized() {
+        let temp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        let cacheRoot = temp.appendingPathComponent("BumperCache")
+        let resolvedRoot = ConfigurationLoader.configurationCacheRoot(
+            environment: ["BUMPER_CACHE_DIR": cacheRoot.path]
+        )
+
+        #expect(resolvedRoot == cacheRoot.standardizedFileURL)
+    }
+
+    @Test
     func executedConfigurationCanImportLocalRulePackage() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
@@ -132,7 +185,7 @@ struct ConfigurationExecutionSafetyTests {
                 .library(name: "BumperRules", targets: ["BumperRules"])
             ],
             dependencies: [
-                .package(path: \(repositoryRoot().path.debugDescription))
+                .package(name: "BumperBowling", path: \(repositoryRoot().path.debugDescription))
             ],
             targets: [
                 .target(
@@ -185,6 +238,25 @@ struct ConfigurationExecutionSafetyTests {
 
         #expect(configuration.rules.storedProperties.severity == .warning)
         #expect(configuration.rules.storedProperties.disallowances == [.boolState])
+    }
+}
+
+private func restoreEnvironmentValue(named name: String, to value: String?) {
+    if let value {
+        setenv(name, value, 1)
+    } else {
+        unsetenv(name)
+    }
+}
+
+private func copyPackageSource(to destination: URL) throws {
+    let source = repositoryRoot()
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    for child in ["Package.swift", "Sources"] {
+        try FileManager.default.copyItem(
+            at: source.appendingPathComponent(child),
+            to: destination.appendingPathComponent(child)
+        )
     }
 }
 

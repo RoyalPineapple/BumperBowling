@@ -23,6 +23,24 @@ struct BumperCommandsTests {
     }
 
     @Test
+    func scanReportCarriesStructuredRepositoryFacts() async throws {
+        let root = try makeRepository(source: """
+        import Foundation
+
+        public struct Thing {}
+        """)
+
+        let report = try await BumperCommands.scanReport(
+            root: root,
+            configuration: commandFixtureConfiguration
+        )
+
+        #expect(report.fileCount == 1)
+        #expect(report.components == ["core"])
+        #expect(report.dependencies == [ScanDependency(sourceComponent: "core", importedModule: "Foundation")])
+    }
+
+    @Test
     func lintReportsErrorsForFailingFixture() async throws {
         let root = try makeRepository(source: """
         import XCTest
@@ -37,6 +55,85 @@ struct BumperCommandsTests {
 
         #expect(report.hasErrors)
         #expect(report.violations.map(\.ruleID).contains(.forbiddenImport))
+    }
+
+    @Test
+    func lintOutputCarriesCIFieldsAndComponents() async throws {
+        let root = try makeRepository(source: """
+        import XCTest
+
+        public struct Thing {}
+        """)
+
+        let run = try await BumperCommands.lintRun(
+            root: root,
+            configuration: commandFixtureConfiguration
+        )
+        let output = run.output()
+        let forbiddenImport = try #require(output.violations.first { violation in
+            violation.ruleID == RuleID.forbiddenImport.rawValue
+        })
+
+        #expect(output.summary.totalViolations == output.violations.count)
+        #expect(output.summary.errorCount == output.violations.filter { $0.severity == Severity.error.rawValue }.count)
+        #expect(forbiddenImport.severity == Severity.error.rawValue)
+        #expect(forbiddenImport.component == "core")
+        #expect(forbiddenImport.path == "Sources/BumperBowlingCore/Thing.swift")
+    }
+
+    @Test
+    func baselineComparisonSuppressesExistingViolationsOnly() async throws {
+        let root = try makeRepository(source: """
+        import XCTest
+        import Foundation
+
+        public struct Thing {}
+        """)
+        var configuration = commandFixtureConfiguration
+        configuration = ArchitectureConfiguration(
+            includedPaths: configuration.includedPaths,
+            excludedPaths: configuration.excludedPaths,
+            components: configuration.components,
+            rules: RuleConfiguration(
+                forbiddenImports: [
+                    RuleSetting(severity: .error, values: ["XCTest"]),
+                    RuleSetting(severity: .error, values: ["Foundation"])
+                ],
+                duplicateOwnership: .error
+            )
+        )
+
+        let run = try await BumperCommands.lintRun(root: root, configuration: configuration)
+        let xctestOnlyBaseline = LintBaseline(
+            violations: run.report.violations
+                .filter { $0.message.contains("XCTest") }
+                .map(LintBaselineViolation.init)
+        )
+        let comparison = LintBaselineComparison(report: run.report, baseline: xctestOnlyBaseline)
+
+        #expect(comparison.existingViolations.count == 1)
+        #expect(comparison.newViolations.count == 1)
+        #expect(comparison.effectiveReport.violations.first?.message.contains("Foundation") == true)
+        #expect(run.output(baseline: xctestOnlyBaseline).summary.baseline?.newViolationCount == 1)
+    }
+
+    @Test
+    func failureThresholdControlsExitIntent() throws {
+        let report = LintReport(
+            violations: [
+                ArchitectureViolation(
+                    ruleID: .forbiddenImport,
+                    severity: .warning,
+                    path: try RelativeFilePath("Sources/Core/Thing.swift"),
+                    message: "warning"
+                )
+            ]
+        )
+
+        #expect(!LintFailureThreshold.none.shouldFail(report))
+        #expect(!LintFailureThreshold.error.shouldFail(report))
+        #expect(LintFailureThreshold.warning.shouldFail(report))
+        #expect(LintFailureThreshold.note.shouldFail(report))
     }
 
     @Test
