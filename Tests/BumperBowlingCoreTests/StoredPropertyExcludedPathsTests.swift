@@ -9,7 +9,7 @@ struct StoredPropertyExcludedPathsTests {
         func file(_ path: String) throws -> SourceFileFacts {
             SourceFileFacts(
                 path: try RelativeFilePath(path),
-                subsystem: try SubsystemID("core"),
+                component: try ComponentID("core"),
                 imports: [],
                 publicDeclarations: [],
                 storedProperties: [
@@ -18,8 +18,8 @@ struct StoredPropertyExcludedPathsTests {
             )
         }
         let configuration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
+            components: [
+                ComponentConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
             ],
             rules: RuleConfiguration(
                 storedProperties: StoredPropertyRuleConfiguration(

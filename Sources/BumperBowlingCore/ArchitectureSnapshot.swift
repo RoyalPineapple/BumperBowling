@@ -81,15 +81,15 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
         case .forbiddenImport:
             lines.append("    Imports[\"ArchitectureGraph.sourceFiles.imports\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Forbidden[\"RuleSetting.values\"] --> \(ruleNode)")
-        case .subsystemBoundary:
-            lines.append("    Imports[\"ArchitectureGraph.subsystemImportEdges\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
-            lines.append("    Modules[\"subsystemByModule\"] --> \(ruleNode)")
+        case .componentBoundary:
+            lines.append("    Imports[\"ArchitectureGraph.componentImportEdges\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Modules[\"componentByModule\"] --> \(ruleNode)")
             lines.append("    Dependencies[\"allowed + forbidden dependencies\"] --> \(ruleNode)")
         case .duplicateOwnership:
-            lines.append("    Paths[\"SubsystemRule.paths\"] --> Ownership[\"path ownership conflicts\"]")
+            lines.append("    Paths[\"ComponentRule.paths\"] --> Ownership[\"path ownership conflicts\"]")
             lines.append("    Ownership --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
         case .declaredDependencyCycle:
-            lines.append("    Dependencies[\"SubsystemRule.allowedDependencies\"] --> Graph[\"dependency graph\"]")
+            lines.append("    Dependencies[\"ComponentRule.allowedDependencies\"] --> Graph[\"dependency graph\"]")
             lines.append("    Graph --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
         case .storedProperties:
             lines.append("    Properties[\"ArchitectureGraph.sourceFiles.storedProperties\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
@@ -98,8 +98,11 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
             lines.append("    Constructs[\"ArchitectureGraph.sourceFiles.imperativeConstructs\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Policy[\"SyntaxConstructRuleConfiguration\"] --> \(ruleNode)")
         case .syntaxKinds:
-            lines.append("    Kinds[\"ArchitectureGraph.sourceFiles.syntaxFacts.nodeKinds\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Kinds[\"ArchitectureGraph.sourceFiles.syntaxNodes.nodeKinds\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Policy[\"SyntaxKindRuleConfiguration\"] --> \(ruleNode)")
+        case .syntaxNodes:
+            lines.append("    Facts[\"ArchitectureGraph.sourceFiles.syntaxNodes.nodes\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
+            lines.append("    Policy[\"SyntaxNodeRuleConfiguration\"] --> \(ruleNode)")
         case .publicDeclarations:
             lines.append("    Declarations[\"ArchitectureGraph.sourceFiles.publicDeclarations\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Policy[\"PublicDeclarationRuleConfiguration\"] --> \(ruleNode)")

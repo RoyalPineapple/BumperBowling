@@ -11,13 +11,13 @@ public struct BumperConfiguration: Equatable, Sendable {
     init(elements: [BumperConfigurationElement]) {
         var includedPaths: [String] = ["Sources"]
         var excludedPaths: [String] = [".build", "DerivedData"]
-        var subsystems: [SubsystemConfiguration] = []
+        var components: [ComponentConfiguration] = []
         var rules = RuleConfiguration()
 
         for element in elements {
             switch element {
             case .architecture(let definition):
-                subsystems = definition.subsystems
+                components = definition.components
                 rules = rules.merging(definition.rules)
             case .included(let paths):
                 includedPaths = paths
@@ -31,7 +31,7 @@ public struct BumperConfiguration: Equatable, Sendable {
         self.architectureConfiguration = ArchitectureConfiguration(
             includedPaths: includedPaths,
             excludedPaths: excludedPaths,
-            subsystems: subsystems,
+            components: components,
             rules: rules
         )
     }
@@ -59,7 +59,7 @@ public func Excluded(@StringListBuilder _ content: () -> [String]) -> BumperConf
     .excluded(content())
 }
 
-public func Architecture(@ArchitectureBuilder _ content: () -> [ComponentConfiguration]) -> BumperConfigurationElement {
+public func Architecture(@ArchitectureBuilder _ content: () -> [ComponentDeclaration]) -> BumperConfigurationElement {
     .architecture(ArchitectureDefinition(components: content()))
 }
 
@@ -79,11 +79,11 @@ public enum StringListBuilder {
 }
 
 public struct ArchitectureDefinition: Equatable, Sendable {
-    public let subsystems: [SubsystemConfiguration]
+    public let components: [ComponentConfiguration]
     public let rules: RuleConfiguration
 
-    public init(components: [ComponentConfiguration]) {
-        self.subsystems = components.map(\.subsystem)
+    public init(components: [ComponentDeclaration]) {
+        self.components = components.map(\.component)
         self.rules = components
             .map(\.derivedRules)
             .combined()
@@ -92,7 +92,7 @@ public struct ArchitectureDefinition: Equatable, Sendable {
 
 @resultBuilder
 public enum ArchitectureBuilder {
-    public static func buildBlock(_ components: ComponentConfiguration...) -> [ComponentConfiguration] {
+    public static func buildBlock(_ components: ComponentDeclaration...) -> [ComponentDeclaration] {
         components
     }
 }

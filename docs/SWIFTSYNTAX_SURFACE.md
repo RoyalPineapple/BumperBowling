@@ -1,8 +1,11 @@
 # SwiftSyntax Surface
 
-Bumper Bowling validates declared codebase shape against selected SwiftSyntax facts.
+Bumper Bowling validates declared codebase shape against selected SwiftSyntax nodes.
 
-SwiftSyntax can represent the full Swift source tree. Bumper Bowling does not copy that tree and does not expose an infinitely configurable query language. It records selected raw facts, projects them into `ArchitectureGraph`, then runs lean mathematical checks over that graph.
+SwiftSyntax can represent the full Swift source tree. Bumper Bowling does not
+copy that tree and does not expose an infinitely configurable query language. It
+records source-accurate syntax nodes plus selected computed facts, projects them
+into `ArchitectureGraph`, then runs lean mathematical checks over that graph.
 
 Bumper Bowling also does not duplicate SwiftSyntax's type universe. The raw syntax vocabulary is SwiftSyntax's own `SyntaxKind`; richer local facts are computed as extensions over concrete SwiftSyntax nodes through `node.bumper`.
 
@@ -41,7 +44,7 @@ No type inference is performed. A stored property without an explicit type annot
 
 ### Imperative Constructs
 
-Bumper Bowling currently records selected syntax facts:
+Bumper Bowling currently computes selected imperative facts from syntax nodes:
 
 - assignment
 - loop
@@ -74,9 +77,30 @@ These remain SwiftSyntax values, not Bumper Bowling copies. A raw syntax-kind as
 ```swift
 RequireSyntax(.enumDecl)
 DisallowSyntax(.forceUnwrapExpr)
+DoesNot(ContainSyntax(.forceUnwrapExpr), severity: .error)
 ```
 
-This is set math over `SourceFileFacts.syntaxFacts.nodeKinds`.
+This is set math over `SourceFileFacts.syntaxNodes.nodeKinds`.
+
+For consumers that need syntax nodes Bumper Bowling does not name as built-in
+rules, `ContainSyntaxNode` exposes matching over recorded SwiftSyntax node kind,
+spelling, parent kind, and ancestor kind:
+
+```swift
+DoesNot(
+    ContainSyntaxNode(
+        SyntaxNodeMatcher(
+            kind: .attribute,
+            spelling: .exact("available")
+        )
+    ),
+    severity: .error
+)
+```
+
+This is still not a general SwiftSyntax query engine. It evaluates observed
+syntax nodes and their immediate recorded context rather than executing arbitrary
+tree queries.
 
 ### Computed SwiftSyntax Views
 

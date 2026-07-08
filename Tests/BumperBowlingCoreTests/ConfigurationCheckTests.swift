@@ -42,6 +42,6 @@ struct ConfigurationCheckTests {
 
         #expect(!report.isValid)
         #expect(report.summary.contains("The configuration is not valid"))
-        #expect(report.problem == ConfigurationError.emptySubsystemPaths("core").description)
+        #expect(report.problem == ConfigurationError.emptyComponentPaths("core").description)
     }
 }

@@ -166,10 +166,42 @@ Current direct syntax helpers:
 
 - `RequireSyntax(_:)`
 - `DisallowSyntax(_:)`
+- `ContainSyntax(_:)`
+- `ContainSyntaxNode(_:)`
 - `Disallows(_:)`
 - `Does(_:)`
 - `DoesNot(_:)`
 - `Declares(_:)`
+
+Use `ContainSyntax(_:)` when the architecture rule only needs SwiftSyntax node
+kind membership:
+
+```swift
+DoesNot(ContainSyntax(.forceUnwrapExpr), severity: .error)
+```
+
+Use `ContainSyntaxNode(_:)` when a repository needs a fact Bumper Bowling does
+not name as a built-in rule. `SyntaxNodeMatcher` can match by SwiftSyntax node
+kind, spelling, parent kind, ancestor kind, or any combination:
+
+```swift
+extension ComponentShape {
+    static let noAvailabilityAnnotations = ComponentShape {
+        DoesNot(
+            ContainSyntaxNode(
+                SyntaxNodeMatcher(
+                    kind: .attribute,
+                    spelling: .exact("available")
+                )
+            ),
+            severity: .error
+        )
+    }
+}
+```
+
+That keeps Bumper Bowling thin: consumers can enforce repo-specific syntax
+facts without Bumper Bowling shipping a named rule or accepting an upstream PR.
 
 ## Boundary
 

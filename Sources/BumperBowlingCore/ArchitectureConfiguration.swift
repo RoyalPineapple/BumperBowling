@@ -4,24 +4,24 @@ import SwiftSyntax
 public struct ArchitectureConfiguration: Equatable, Sendable, Codable {
     public let includedPaths: [String]
     public let excludedPaths: [String]
-    public let subsystems: [SubsystemConfiguration]
+    public let components: [ComponentConfiguration]
     public let rules: RuleConfiguration
 
     public init(
         includedPaths: [String] = ["Sources"],
         excludedPaths: [String] = [".build", "DerivedData"],
-        subsystems: [SubsystemConfiguration],
+        components: [ComponentConfiguration],
         rules: RuleConfiguration = RuleConfiguration()
     ) {
         self.includedPaths = includedPaths
         self.excludedPaths = excludedPaths
-        self.subsystems = subsystems
+        self.components = components
         self.rules = rules
     }
 
 }
 
-public struct SubsystemConfiguration: Equatable, Sendable, Codable {
+public struct ComponentConfiguration: Equatable, Sendable, Codable {
     public let name: String
     public let modules: [String]
     public let paths: [String]
@@ -45,55 +45,60 @@ public struct SubsystemConfiguration: Equatable, Sendable, Codable {
 
 public struct RuleConfiguration: Equatable, Sendable, Codable {
     public let forbiddenImports: [RuleSetting]
-    public let subsystemBoundary: Severity
+    public let componentBoundary: Severity
     public let duplicateOwnership: Severity
     public let declaredDependencyCycle: Severity
     public let storedProperties: StoredPropertyRuleConfiguration
     public let syntaxConstructs: SyntaxConstructRuleConfiguration
     public let syntaxKinds: SyntaxKindRuleConfiguration
+    public let syntaxNodes: SyntaxNodeRuleConfiguration
     public let publicDeclarations: PublicDeclarationRuleConfiguration
     public let enumStateMachine: PathRuleConfiguration
 
     public init(
         forbiddenImports: RuleSetting = RuleSetting(severity: .off, values: []),
-        subsystemBoundary: Severity = .off,
+        componentBoundary: Severity = .off,
         duplicateOwnership: Severity = .off,
         declaredDependencyCycle: Severity = .off,
         storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
         syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
         syntaxKinds: SyntaxKindRuleConfiguration = SyntaxKindRuleConfiguration(),
+        syntaxNodes: SyntaxNodeRuleConfiguration = SyntaxNodeRuleConfiguration(),
         publicDeclarations: PublicDeclarationRuleConfiguration = PublicDeclarationRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
         self.forbiddenImports = forbiddenImports.isConfigured ? [forbiddenImports] : []
-        self.subsystemBoundary = subsystemBoundary
+        self.componentBoundary = componentBoundary
         self.duplicateOwnership = duplicateOwnership
         self.declaredDependencyCycle = declaredDependencyCycle
         self.storedProperties = storedProperties
         self.syntaxConstructs = syntaxConstructs
         self.syntaxKinds = syntaxKinds
+        self.syntaxNodes = syntaxNodes
         self.publicDeclarations = publicDeclarations
         self.enumStateMachine = enumStateMachine
     }
 
     public init(
         forbiddenImports: [RuleSetting],
-        subsystemBoundary: Severity = .off,
+        componentBoundary: Severity = .off,
         duplicateOwnership: Severity = .off,
         declaredDependencyCycle: Severity = .off,
         storedProperties: StoredPropertyRuleConfiguration = StoredPropertyRuleConfiguration(),
         syntaxConstructs: SyntaxConstructRuleConfiguration = SyntaxConstructRuleConfiguration(),
         syntaxKinds: SyntaxKindRuleConfiguration = SyntaxKindRuleConfiguration(),
+        syntaxNodes: SyntaxNodeRuleConfiguration = SyntaxNodeRuleConfiguration(),
         publicDeclarations: PublicDeclarationRuleConfiguration = PublicDeclarationRuleConfiguration(),
         enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
     ) {
         self.forbiddenImports = forbiddenImports.filter(\.isConfigured)
-        self.subsystemBoundary = subsystemBoundary
+        self.componentBoundary = componentBoundary
         self.duplicateOwnership = duplicateOwnership
         self.declaredDependencyCycle = declaredDependencyCycle
         self.storedProperties = storedProperties
         self.syntaxConstructs = syntaxConstructs
         self.syntaxKinds = syntaxKinds
+        self.syntaxNodes = syntaxNodes
         self.publicDeclarations = publicDeclarations
         self.enumStateMachine = enumStateMachine
     }
@@ -212,6 +217,86 @@ public struct SyntaxKindName: Hashable, Sendable, CustomStringConvertible, Codab
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
+    }
+}
+
+public struct SyntaxNodeMatcher: Hashable, Sendable, CustomStringConvertible, Codable {
+    public let kind: SyntaxKindName?
+    public let spelling: StringMatcher?
+    public let parentKind: SyntaxKindName?
+    public let ancestorKind: SyntaxKindName?
+
+    public init(
+        kind: SyntaxKind? = nil,
+        spelling: StringMatcher? = nil,
+        parentKind: SyntaxKind? = nil,
+        ancestorKind: SyntaxKind? = nil
+    ) {
+        self.kind = kind.map(SyntaxKindName.init)
+        self.spelling = spelling
+        self.parentKind = parentKind.map(SyntaxKindName.init)
+        self.ancestorKind = ancestorKind.map(SyntaxKindName.init)
+    }
+
+    public static func kind(_ kind: SyntaxKind) -> SyntaxNodeMatcher {
+        SyntaxNodeMatcher(kind: kind)
+    }
+
+    public static func spelling(_ spelling: StringMatcher) -> SyntaxNodeMatcher {
+        SyntaxNodeMatcher(spelling: spelling)
+    }
+
+    public var description: String {
+        [
+            kind.map { "kind=\($0.rawValue)" },
+            spelling.map { "spelling=\($0.description)" },
+            parentKind.map { "parent=\($0.rawValue)" },
+            ancestorKind.map { "ancestor=\($0.rawValue)" }
+        ].compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
+public struct SyntaxNodeRuleConfiguration: Equatable, Sendable, Codable {
+    public let severity: Severity
+    public let paths: [String]
+    public let requiredNodes: Set<SyntaxNodeMatcher>
+    public let disallowedNodes: Set<SyntaxNodeMatcher>
+
+    public init(
+        severity: Severity = .off,
+        paths: [String] = [],
+        requiredNodes: Set<SyntaxNodeMatcher> = [],
+        disallowedNodes: Set<SyntaxNodeMatcher> = []
+    ) {
+        self.severity = severity
+        self.paths = paths
+        self.requiredNodes = requiredNodes
+        self.disallowedNodes = disallowedNodes
+    }
+}
+
+extension SyntaxNodeMatcher {
+    func matches(_ node: ObservedSyntaxNode) -> Bool {
+        if let kind, kind != SyntaxKindName(node.kind) {
+            return false
+        }
+
+        if let parentKind, parentKind != node.parentKind.map(SyntaxKindName.init) {
+            return false
+        }
+
+        if let ancestorKind,
+           !node.ancestorKinds.map(SyntaxKindName.init).contains(ancestorKind) {
+            return false
+        }
+
+        if let spelling {
+            guard let nodeSpelling = node.spelling, spelling.matches(nodeSpelling) else {
+                return false
+            }
+        }
+
+        return true
     }
 }
 

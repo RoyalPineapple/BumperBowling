@@ -3,7 +3,7 @@
 - Bumper Bowling keeps agents in their lane by validating changes against the declared codebase shape.
 - Treat every violation as a scorecard entry: observed graph fact, declared lane, mismatch.
 - Fix the code first; update the lane only when the intended architecture actually changed.
-- Keep changes scoped to the subsystem named by the task.
+- Keep changes scoped to the component named by the task.
 - Update `BumperBowling.swift` only when the architectural contract intentionally changes.
 - Update `docs/ARCHITECTURE_SNAPSHOT.md` when command flow, core pipeline types, or rule IDs change.
 - Run `swift test` before reporting implementation work complete.

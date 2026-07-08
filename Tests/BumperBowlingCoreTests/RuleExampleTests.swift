@@ -27,9 +27,9 @@ struct RuleExampleTests {
     }
 
     @Test
-    func subsystemBoundaryExamples() async throws {
+    func componentBoundaryExamples() async throws {
         try await assertRule(
-            .subsystemBoundary(.error),
+            .componentBoundary(.error),
             passing: SourceFixture("""
             import Foundation
 
@@ -41,7 +41,7 @@ struct RuleExampleTests {
             public struct CoreFeature {}
             """),
             expectedMessages: [
-                "core imports undeclared subsystem UI (ui)",
+                "core imports undeclared component UI (ui)",
             ]
         )
     }
@@ -49,14 +49,14 @@ struct RuleExampleTests {
     @Test
     func duplicateOwnershipExamples() async throws {
         let passingConfiguration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "core", paths: ["Sources/Core"]),
+            components: [
+                ComponentConfiguration(name: "core", paths: ["Sources/Core"]),
             ]
         )
         let failingConfiguration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "core", paths: ["Sources/Core"]),
-                SubsystemConfiguration(name: "models", paths: ["Sources/Core/Models"]),
+            components: [
+                ComponentConfiguration(name: "core", paths: ["Sources/Core"]),
+                ComponentConfiguration(name: "models", paths: ["Sources/Core/Models"]),
             ]
         )
 
@@ -85,15 +85,15 @@ struct RuleExampleTests {
     @Test
     func declaredDependencyCycleExamples() async throws {
         let passingConfiguration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "core", paths: ["Sources/Core"], mayDependOn: ["ui"]),
-                SubsystemConfiguration(name: "ui", paths: ["Sources/UI"]),
+            components: [
+                ComponentConfiguration(name: "core", paths: ["Sources/Core"], mayDependOn: ["ui"]),
+                ComponentConfiguration(name: "ui", paths: ["Sources/UI"]),
             ]
         )
         let failingConfiguration = ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "core", paths: ["Sources/Core"], mayDependOn: ["ui"]),
-                SubsystemConfiguration(name: "ui", paths: ["Sources/UI"], mayDependOn: ["core"]),
+            components: [
+                ComponentConfiguration(name: "core", paths: ["Sources/Core"], mayDependOn: ["ui"]),
+                ComponentConfiguration(name: "ui", paths: ["Sources/UI"], mayDependOn: ["core"]),
             ]
         )
 
@@ -108,7 +108,7 @@ struct RuleExampleTests {
             passingConfiguration: passingConfiguration,
             failingConfiguration: failingConfiguration,
             expectedMessages: [
-                "Declared dependency cycle includes subsystem core",
+                "Declared dependency cycle includes component core",
             ]
         )
     }

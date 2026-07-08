@@ -104,7 +104,7 @@ struct ConfigurationExecutionSafetyTests {
         let configuration = try ConfigurationLoader.loadConfiguration(root: root)
         let rules = configuration.rules
 
-        #expect(configuration.subsystems.map(\.name) == ["core"])
+        #expect(configuration.components.map(\.name) == ["core"])
         #expect(rules.storedProperties.severity == .error)
         #expect(rules.storedProperties.paths == ["Sources/Core"])
         #expect(

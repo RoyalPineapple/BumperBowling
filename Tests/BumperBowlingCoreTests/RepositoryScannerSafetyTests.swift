@@ -101,8 +101,8 @@ struct RepositoryScannerSafetyTests {
 
     private var configuration: ArchitectureConfiguration {
         ArchitectureConfiguration(
-            subsystems: [
-                SubsystemConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
+            components: [
+                ComponentConfiguration(name: "core", modules: ["Core"], paths: ["Sources/Core"]),
             ]
         )
     }

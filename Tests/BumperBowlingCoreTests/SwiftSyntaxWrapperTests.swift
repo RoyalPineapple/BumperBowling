@@ -19,14 +19,14 @@ struct SwiftSyntaxWrapperTests {
         public struct Thing {}
         """.write(to: file, atomically: true, encoding: .utf8)
 
-        let facts = try SwiftFileParser().parseFile(
+        let nodes = try SwiftFileParser().parseFile(
             at: file,
             relativePath: try RelativeFilePath("Sources/Core/Thing.swift"),
-            subsystem: try SubsystemID("core")
+            component: try ComponentID("core")
         )
 
-        #expect(facts.imports == [try ModuleName("Foundation")])
-        #expect(facts.publicDeclarations.contains {
+        #expect(nodes.imports == [try ModuleName("Foundation")])
+        #expect(nodes.publicDeclarations.contains {
             $0.kind == .struct
                 && $0.name == (try? DeclarationName("Thing"))
                 && $0.location != nil

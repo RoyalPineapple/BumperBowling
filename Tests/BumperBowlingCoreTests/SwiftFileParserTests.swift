@@ -122,7 +122,7 @@ struct SwiftFileParserTests {
     }
 
     @Test
-    func recordsFullSwiftSyntaxFactCatalog() {
+    func recordsFullSwiftSyntaxNodeCatalog() {
         let source = """
         import Foundation
 
@@ -138,15 +138,17 @@ struct SwiftFileParserTests {
 
         let summary = SwiftFileParser().parse(source)
 
-        #expect(summary.syntaxFacts.nodeKinds.contains(.sourceFile))
-        #expect(summary.syntaxFacts.nodeKinds.contains(.importDecl))
-        #expect(summary.syntaxFacts.nodeKinds.contains(.structDecl))
-        #expect(summary.syntaxFacts.nodeKinds.contains(.attribute))
-        #expect(summary.syntaxFacts.nodeKinds.contains(.identifierType))
-        #expect(summary.syntaxFacts.nodeKinds.contains(.stringLiteralExpr))
-        #expect(summary.syntaxFacts.facts.contains { $0.family == .declaration && $0.nodeKind == .structDecl })
-        #expect(summary.syntaxFacts.facts.contains { $0.family == .attribute && $0.nodeKind == .attribute })
-        #expect(summary.syntaxFacts.facts.contains { $0.family == .literal && $0.nodeKind == .stringLiteralExpr })
+        #expect(summary.syntaxNodes.nodeKinds.contains(.sourceFile))
+        #expect(summary.syntaxNodes.nodeKinds.contains(.importDecl))
+        #expect(summary.syntaxNodes.nodeKinds.contains(.structDecl))
+        #expect(summary.syntaxNodes.nodeKinds.contains(.attribute))
+        #expect(summary.syntaxNodes.nodeKinds.contains(.identifierType))
+        #expect(summary.syntaxNodes.nodeKinds.contains(.stringLiteralExpr))
+        #expect(summary.syntaxNodes.nodes.contains { $0.kind == .structDecl })
+        #expect(summary.syntaxNodes.nodes.contains {
+            $0.kind == .attribute && $0.spelling?.contains("MainActor") == true
+        })
+        #expect(summary.syntaxNodes.nodes.contains { $0.kind == .stringLiteralExpr })
     }
 
     @Test
@@ -166,7 +168,7 @@ struct SwiftFileParserTests {
         let summary = SwiftFileParser().parse(source)
         let property = try #require(summary.storedProperties.first { $0.name == (try? DeclarationName("name")) })
         let assignment = try #require(summary.observedImperativeConstructs.first { $0.construct == .assignment })
-        let structFact = try #require(summary.syntaxFacts.facts.first { $0.nodeKind == .structDecl })
+        let structFact = try #require(summary.syntaxNodes.nodes.first { $0.kind == .structDecl })
 
         #expect(property.location == SourcePosition(line: 4, column: 5))
         #expect(assignment.location == SourcePosition(line: 7, column: 14))

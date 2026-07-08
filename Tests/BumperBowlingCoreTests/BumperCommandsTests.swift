@@ -18,7 +18,7 @@ struct BumperCommandsTests {
         )
 
         #expect(output.contains("Files: 1"))
-        #expect(output.contains("Subsystems: core"))
+        #expect(output.contains("Components: core"))
         #expect(output.contains("core imports Foundation"))
     }
 

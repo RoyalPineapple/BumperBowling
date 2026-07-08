@@ -1,7 +1,7 @@
 import SwiftSyntax
 
-public struct ComponentConfiguration: Equatable, Sendable {
-    public let subsystem: SubsystemConfiguration
+public struct ComponentDeclaration: Equatable, Sendable {
+    public let component: ComponentConfiguration
     public let derivedRules: RuleConfiguration
 }
 
@@ -18,16 +18,16 @@ public struct ComponentShape: Equatable, Sendable {
 }
 
 public func Component(
-    _ id: SubsystemID,
+    _ id: ComponentID,
     @ComponentBuilder _ content: () -> [ComponentElement]
-) -> ComponentConfiguration {
+) -> ComponentDeclaration {
     makeComponentConfiguration(id, elements: content())
 }
 
 func makeComponentConfiguration(
-    _ id: SubsystemID,
+    _ id: ComponentID,
     elements: [ComponentElement]
-) -> ComponentConfiguration {
+) -> ComponentDeclaration {
     var paths: [String] = []
     var modules: [String] = []
     var dependencies: [String] = []
@@ -60,8 +60,8 @@ func makeComponentConfiguration(
         }
     }
 
-    return ComponentConfiguration(
-        subsystem: SubsystemConfiguration(
+    return ComponentDeclaration(
+        component: ComponentConfiguration(
             name: id.rawValue,
             modules: modules,
             paths: paths,
@@ -97,8 +97,8 @@ public enum ComponentBuilder {
 public enum ComponentElement: Equatable, Sendable {
     case owns([String])
     case modules([String])
-    case mayDependOn([SubsystemID])
-    case doesNotDependOn([SubsystemID])
+    case mayDependOn([ComponentID])
+    case doesNotDependOn([ComponentID])
     case usePolicy([ComponentUsePolicy])
     case requires([ComponentRequirementSetting])
     case disallows([ImperativeDisallowanceSetting])
@@ -191,11 +191,11 @@ public func Owns(_ paths: String...) -> DSLPathList {
     DSLPathList(values: paths)
 }
 
-public func MayDependOn(_ dependencies: SubsystemID...) -> ComponentElement {
+public func MayDependOn(_ dependencies: ComponentID...) -> ComponentElement {
     .mayDependOn(dependencies)
 }
 
-public func DoesNotDependOn(_ dependencies: SubsystemID...) -> ComponentElement {
+public func DoesNotDependOn(_ dependencies: ComponentID...) -> ComponentElement {
     .doesNotDependOn(dependencies)
 }
 
@@ -225,6 +225,10 @@ public func Declare(_ names: String...) -> GraphPredicate<DeclarationFact> {
 
 public func ContainSyntax(_ kinds: SyntaxKind...) -> GraphPredicate<SyntaxKindFact> {
     GraphPredicate(.containSyntax(Set(kinds)))
+}
+
+public func ContainSyntaxNode(_ matchers: SyntaxNodeMatcher...) -> GraphPredicate<SyntaxNode> {
+    GraphPredicate(.containSyntaxNode(Set(matchers)))
 }
 
 public func Does<Fact>(_ predicate: GraphPredicate<Fact>, severity: Severity = .error) -> ComponentElement {
@@ -529,6 +533,10 @@ private extension Array where Element == ComponentGraphAssertion {
         var syntaxKindPaths: [String] = []
         var requiredKinds = Set<SyntaxKind>()
         var disallowedKinds = Set<SyntaxKind>()
+        var syntaxNodeSeverity = Severity.off
+        var syntaxNodePaths: [String] = []
+        var requiredNodes = Set<SyntaxNodeMatcher>()
+        var disallowedNodes = Set<SyntaxNodeMatcher>()
 
         for assertion in self {
             let scopedPaths = assertion.paths.isEmpty ? defaultPaths : assertion.paths
@@ -554,6 +562,16 @@ private extension Array where Element == ComponentGraphAssertion {
                 syntaxKindSeverity = syntaxKindSeverity.merging(assertion.severity)
                 syntaxKindPaths.append(contentsOf: scopedPaths)
                 disallowedKinds.formUnion(kinds)
+            case (.does, .containSyntaxNode(let matchers)):
+                guard !matchers.isEmpty else { continue }
+                syntaxNodeSeverity = syntaxNodeSeverity.merging(assertion.severity)
+                syntaxNodePaths.append(contentsOf: scopedPaths)
+                requiredNodes.formUnion(matchers)
+            case (.doesNot, .containSyntaxNode(let matchers)):
+                guard !matchers.isEmpty else { continue }
+                syntaxNodeSeverity = syntaxNodeSeverity.merging(assertion.severity)
+                syntaxNodePaths.append(contentsOf: scopedPaths)
+                disallowedNodes.formUnion(matchers)
             }
         }
 
@@ -564,6 +582,12 @@ private extension Array where Element == ComponentGraphAssertion {
                 requiredKinds: requiredKinds,
                 disallowedKinds: disallowedKinds
             ),
+            syntaxNodes: SyntaxNodeRuleConfiguration(
+                severity: syntaxNodeSeverity,
+                paths: Swift.Array(Set(syntaxNodePaths)).sorted(),
+                requiredNodes: requiredNodes,
+                disallowedNodes: disallowedNodes
+            ),
             publicDeclarations: PublicDeclarationRuleConfiguration(
                 severity: declarationSeverity,
                 paths: Swift.Array(Set(declarationPaths)).sorted(),
@@ -573,17 +597,17 @@ private extension Array where Element == ComponentGraphAssertion {
         )
     }
 }
-public extension SubsystemID {
-    static let core = knownSubsystemID("core")
-    static let cli = knownSubsystemID("cli")
-    static let app = knownSubsystemID("app")
-    static let ui = knownSubsystemID("ui")
-    static let tests = knownSubsystemID("tests")
+public extension ComponentID {
+    static let core = knownComponentID("core")
+    static let cli = knownComponentID("cli")
+    static let app = knownComponentID("app")
+    static let ui = knownComponentID("ui")
+    static let tests = knownComponentID("tests")
 }
 
-private func knownSubsystemID(_ rawValue: String) -> SubsystemID {
-    guard let id = try? SubsystemID(rawValue) else {
-        preconditionFailure("Invalid built-in subsystem id: \(rawValue)")
+private func knownComponentID(_ rawValue: String) -> ComponentID {
+    guard let id = try? ComponentID(rawValue) else {
+        preconditionFailure("Invalid built-in component id: \(rawValue)")
     }
 
     return id

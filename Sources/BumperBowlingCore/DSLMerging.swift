@@ -9,7 +9,7 @@ extension RuleConfiguration {
     func merging(_ other: RuleConfiguration) -> RuleConfiguration {
         RuleConfiguration(
             forbiddenImports: forbiddenImports + other.forbiddenImports,
-            subsystemBoundary: other.subsystemBoundary.isConfigured ? other.subsystemBoundary : subsystemBoundary,
+            componentBoundary: other.componentBoundary.isConfigured ? other.componentBoundary : componentBoundary,
             duplicateOwnership: other.duplicateOwnership.isConfigured ? other.duplicateOwnership : duplicateOwnership,
             declaredDependencyCycle: other.declaredDependencyCycle.isConfigured
                 ? other.declaredDependencyCycle
@@ -17,6 +17,7 @@ extension RuleConfiguration {
             storedProperties: storedProperties.merging(other.storedProperties),
             syntaxConstructs: syntaxConstructs.merging(other.syntaxConstructs),
             syntaxKinds: syntaxKinds.merging(other.syntaxKinds),
+            syntaxNodes: syntaxNodes.merging(other.syntaxNodes),
             publicDeclarations: publicDeclarations.merging(other.publicDeclarations),
             enumStateMachine: enumStateMachine.merging(other.enumStateMachine)
         )
@@ -52,6 +53,17 @@ private extension SyntaxKindRuleConfiguration {
             paths: Array(Set(paths + other.paths)).sorted(),
             requiredKinds: requiredKinds.union(other.requiredKinds),
             disallowedKinds: disallowedKinds.union(other.disallowedKinds)
+        )
+    }
+}
+
+private extension SyntaxNodeRuleConfiguration {
+    func merging(_ other: SyntaxNodeRuleConfiguration) -> SyntaxNodeRuleConfiguration {
+        SyntaxNodeRuleConfiguration(
+            severity: severity.merging(other.severity),
+            paths: Array(Set(paths + other.paths)).sorted(),
+            requiredNodes: requiredNodes.union(other.requiredNodes),
+            disallowedNodes: disallowedNodes.union(other.disallowedNodes)
         )
     }
 }
@@ -97,6 +109,12 @@ private extension SyntaxConstructRuleConfiguration {
 private extension SyntaxKindRuleConfiguration {
     var isConfigured: Bool {
         severity != .off || !paths.isEmpty || !requiredKinds.isEmpty || !disallowedKinds.isEmpty
+    }
+}
+
+private extension SyntaxNodeRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !requiredNodes.isEmpty || !disallowedNodes.isEmpty
     }
 }
 

@@ -36,7 +36,7 @@ public enum AssertionsBuilder {
 }
 
 public func DependencyBoundaries(_ severity: Severity) -> RuleConfiguration {
-    RuleConfiguration(subsystemBoundary: severity)
+    RuleConfiguration(componentBoundary: severity)
 }
 
 public func SingleOwner(_ severity: Severity) -> RuleConfiguration {
