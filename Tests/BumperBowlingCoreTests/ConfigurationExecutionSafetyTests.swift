@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import BumperBowlingCore
 
-@Suite("Configuration Execution Safety")
+@Suite("Configuration Execution Safety", .serialized)
 struct ConfigurationExecutionSafetyTests {
     /// Configurations are compiled and run to produce their value. That
     /// execution must not observe the caller's environment, must not be able
