@@ -6,7 +6,6 @@ SwiftSyntax can represent the full Swift source tree. Bumper Bowling does not co
 
 Bumper Bowling also does not duplicate SwiftSyntax's type universe. The raw syntax vocabulary is SwiftSyntax's own `SyntaxKind`; richer local facts are computed as extensions over concrete SwiftSyntax nodes through `node.bumper`.
 
-See [FACT_CATALOG.md](FACT_CATALOG.md) for the broader SwiftSyntax fact vocabulary Bumper Bowling can grow into.
 ## Current Facts
 
 ### Files

@@ -49,7 +49,10 @@ SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller pro
 
 Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over facts: path matching, set membership, graph edges, and cycles. Keep scorecards explainable: report the observed graph fact, the declared lane, and why they do not match.
 
-Semantic shorthand names are not special engine concepts. `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)` applies scope and severity. Built-in shorthand and user-defined shorthand lower into the same raw graph assertions.
+Semantic shorthand names are not special engine concepts.
+`ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)`
+applies scope and severity. Built-in requirement conveniences and
+repository-owned requirements lower into the same raw graph assertions.
 
 Consumer repositories can place Swift files under `.bumper/Sources` to define
 their own `ComponentRequirement`, `ComponentShape`, and `AssertionShape`
