@@ -13,6 +13,23 @@
   parent kind, and ancestor kind so repositories can enforce their own syntax
   policy without Bumper Bowling shipping repo-specific rule taxonomy.
 
+### Added
+
+- Added JSON output for `bumper lint` and `bumper scan` with `--format json`.
+- Added `bumper lint --fail-on none|note|warning|error` for advisory CI rollout.
+- Added `bumper baseline create` and `bumper lint --baseline` for incremental
+  adoption in repos with existing architecture violations.
+- Added `bumper lint --progress` and `bumper scan --progress` for large-repo
+  visibility.
+- Added `BUMPER_CACHE_DIR` so CI can control where compiled configuration
+  runners are cached.
+
+### Fixed
+
+- Fixed generated configuration-runner manifests to use an explicit
+  `BumperBowling` package identity, so path-based checkouts work even when the
+  checkout directory has a different name.
+
 ## 0.2.0 - 2026-07-07
 
 - Added familiar Swift configuration through `BumperBowling.swift`.

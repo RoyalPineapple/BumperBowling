@@ -12,22 +12,32 @@ public enum BumperCommands {
     }
 
     public static func scan(root: URL, configuration: ArchitectureConfiguration) async throws -> String {
-        let model = try await RepositoryScanner(configuration: configuration).scan(root: root)
+        try await scanReport(root: root, configuration: configuration).markdownSummary
+    }
 
-        var lines: [String] = []
-        lines.append("# Architecture Scan")
-        lines.append("")
-        lines.append("Files: \(model.files.count)")
-        let components = Set(model.files.map(\.component.rawValue)).sorted().joined(separator: ", ")
-        lines.append("Components: \(components)")
-        lines.append("")
-        lines.append("## Dependencies")
+    public static func scanReport(
+        root: URL,
+        progress: BumperProgressReporter = .disabled
+    ) async throws -> ScanReport {
+        progress.report("Loading configuration")
+        return try await scanReport(
+            root: root,
+            configuration: ConfigurationLoader.loadConfiguration(root: root),
+            progress: progress
+        )
+    }
 
-        for edge in model.dependencyEdges.sorted(by: dependencyEdgeSortKey) {
-            lines.append("- \(edge.sourceComponent) imports \(edge.importedModule)")
-        }
-
-        return lines.joined(separator: "\n")
+    public static func scanReport(
+        root: URL,
+        configuration: ArchitectureConfiguration,
+        progress: BumperProgressReporter = .disabled
+    ) async throws -> ScanReport {
+        progress.report("Preparing architecture rules")
+        let scanner = try RepositoryScanner(configuration: configuration)
+        progress.report("Scanning Swift source files")
+        let model = try await scanner.scan(root: root)
+        progress.report("Parsed \(model.files.count) Swift source file(s)")
+        return ScanReport(repository: model)
     }
 
     public static func snapshot(root: URL) throws -> String {
@@ -39,13 +49,40 @@ public enum BumperCommands {
     }
 
     public static func lint(root: URL) async throws -> LintReport {
-        try await lint(root: root, configuration: ConfigurationLoader.loadConfiguration(root: root))
+        try await lintRun(root: root).report
     }
 
     public static func lint(root: URL, configuration: ArchitectureConfiguration) async throws -> LintReport {
+        try await lintRun(root: root, configuration: configuration).report
+    }
+
+    public static func lintRun(
+        root: URL,
+        progress: BumperProgressReporter = .disabled
+    ) async throws -> LintRunResult {
+        progress.report("Loading configuration")
+        return try await lintRun(
+            root: root,
+            configuration: ConfigurationLoader.loadConfiguration(root: root),
+            progress: progress
+        )
+    }
+
+    public static func lintRun(
+        root: URL,
+        configuration: ArchitectureConfiguration,
+        progress: BumperProgressReporter = .disabled
+    ) async throws -> LintRunResult {
+        progress.report("Preparing architecture rules")
         let rules = try ArchitectureRules(configuration: configuration)
+        progress.report("Scanning Swift source files")
         let model = try await RepositoryScanner(rules: rules).scan(root: root)
-        return ArchitectureLinter(rules: rules).lint(model)
+        progress.report("Parsed \(model.files.count) Swift source file(s)")
+        let enabledRuleCount = RuleRegistry(configuration: rules.ruleConfiguration).enabledRules.count
+        progress.report("Evaluating \(enabledRuleCount) architecture rule(s)")
+        let report = ArchitectureLinter(rules: rules).lint(model)
+        progress.report("Found \(report.violations.count) architecture violation(s)")
+        return LintRunResult(rules: rules, repository: model, report: report)
     }
 
     public static func checkConfiguration(root: URL) throws -> ConfigurationReport {
@@ -105,9 +142,4 @@ public struct ConfigurationReport: Equatable, Sendable {
         }
         return "The configuration is valid."
     }
-}
-
-private func dependencyEdgeSortKey(_ lhs: DependencyEdge, _ rhs: DependencyEdge) -> Bool {
-    "\(lhs.sourceComponent.rawValue).\(lhs.importedModule.rawValue)"
-        < "\(rhs.sourceComponent.rawValue).\(rhs.importedModule.rawValue)"
 }

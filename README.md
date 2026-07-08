@@ -37,6 +37,15 @@ swift run bumper lint .
 `bumper init` writes a starter `BumperBowling.swift`. `bumper lint` loads it,
 scans the repo, and exits nonzero for `error` findings.
 
+For CI rollouts, Bumper Bowling can emit JSON, run advisory, and compare against
+a checked-in baseline:
+
+```bash
+swift run bumper lint . --format json --fail-on none
+swift run bumper baseline create . --output .bumper-baseline.json
+swift run bumper lint . --baseline .bumper-baseline.json --fail-on error
+```
+
 ## Configuration
 
 ```swift
@@ -164,13 +173,19 @@ cp -R skills/compose-bumper-rules ~/.codex/skills/
 ## Commands
 
 ```bash
-bumper init [root]      # write a starter configuration
-bumper lint [root]      # check the repo against it
-bumper scan [root]      # show the architecture graph the code expresses
-bumper snapshot [root]  # render the configured architecture
-bumper config [root]    # how your configuration loads, and whether it is valid
-bumper explain <path>   # what bumper sees in one file
+bumper init [root]             # write a starter configuration
+bumper lint [root]             # check the repo against it
+bumper scan [root]             # show the architecture graph the code expresses
+bumper baseline create [root]  # write a JSON baseline for current violations
+bumper snapshot [root]         # render the configured architecture
+bumper config [root]           # how your configuration loads, and whether it is valid
+bumper explain <path>          # what bumper sees in one file
 ```
+
+`lint` and `scan` accept `--format markdown|json`. `lint` also accepts
+`--fail-on none|note|warning|error`, `--baseline <path>`, and `--progress`.
+Use `BUMPER_CACHE_DIR` to put compiled configuration runners in a stable CI
+cache location.
 
 ## How The Configuration Loads
 
@@ -187,6 +202,13 @@ never in configuration code.
 The compile is cached against the file's contents, so it happens once per
 change to `BumperBowling.swift`, not once per lint. An unchanged
 configuration loads from cache with no build at all.
+
+By default that cache lives under the system temporary directory. Set
+`BUMPER_CACHE_DIR` when CI should persist it between runs:
+
+```bash
+BUMPER_CACHE_DIR=.build/bumper-cache swift run bumper lint .
+```
 
 `bumper config` loads your configuration and tells you whether it is valid.
 

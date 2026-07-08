@@ -28,6 +28,7 @@ private extension ConfigurationLoader {
     static let consumerSourceDirectory = ".bumper/Sources"
     static let consumerRulePackageName = ".bumper"
     static let consumerRuleProductName = "BumperRules"
+    static let configurationCacheEnvironmentKey = "BUMPER_CACHE_DIR"
 
     /// The configuration runner computes a pure value: it evaluates the
     /// repository's `BumperBowling.swift` into an `ArchitectureConfiguration`
@@ -260,8 +261,7 @@ private extension ConfigurationLoader {
             rulePackagesHash,
         ].joined(separator: "\n")
 
-        let root = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("BumperConfigurationLoaderCache")
+        let root = configurationCacheRoot()
             .appendingPathComponent(sha256Hex(Data(key.utf8)))
         return root
     }
@@ -555,7 +555,7 @@ private extension ConfigurationLoader {
 
     static func packageManifest(bumperPackageRoot: URL, rulePackages: [RulePackageDependency]) -> String {
         let dependencyEntries = ([
-            ".package(path: \(swiftStringLiteral(bumperPackageRoot.path)))",
+            ".package(name: \"BumperBowling\", path: \(swiftStringLiteral(bumperPackageRoot.path)))",
         ] + rulePackages.map { package in
             ".package(path: \(swiftStringLiteral(package.path.path)))"
         }).joined(separator: ",\n                ")
@@ -630,6 +630,21 @@ private extension ConfigurationLoader {
             payload.removeLast()
         }
         return payload
+    }
+}
+
+extension ConfigurationLoader {
+    static func configurationCacheRoot(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL {
+        if let environmentPath = environment[configurationCacheEnvironmentKey],
+           !environmentPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return URL(fileURLWithPath: environmentPath).standardizedFileURL
+        }
+
+        return URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("BumperConfigurationLoaderCache")
+            .standardizedFileURL
     }
 }
 
