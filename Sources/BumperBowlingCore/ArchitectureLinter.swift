@@ -26,18 +26,18 @@ public struct RuleRegistry: Sendable {
     public let enabledRules: [ArchitectureRule]
 
     public init(configuration: RuleConfiguration) {
-        self.enabledRules = [
+        self.enabledRules = ([
             .forbiddenImport(configuration.forbiddenImports),
             .componentBoundary(configuration.componentBoundary),
             .duplicateOwnership(configuration.duplicateOwnership),
             .declaredDependencyCycle(configuration.declaredDependencyCycle),
-            .storedProperties(configuration.storedProperties),
-            .syntaxConstructs(configuration.syntaxConstructs),
-            .syntaxKinds(configuration.syntaxKinds),
-            .syntaxNodes(configuration.syntaxNodes),
-            .publicDeclarations(configuration.publicDeclarations),
-            .enumStateMachine(configuration.enumStateMachine),
-        ].filter(\.isEnabled)
+        ] + configuration.storedPropertyRules.map(ArchitectureRule.storedProperties)
+            + configuration.syntaxConstructRules.map(ArchitectureRule.syntaxConstructs)
+            + configuration.syntaxKindRules.map(ArchitectureRule.syntaxKinds)
+            + configuration.syntaxNodeRules.map(ArchitectureRule.syntaxNodes)
+            + configuration.publicDeclarationRules.map(ArchitectureRule.publicDeclarations)
+            + configuration.enumStateMachineRules.map(ArchitectureRule.enumStateMachine))
+            .filter(\.isEnabled)
     }
 }
 

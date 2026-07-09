@@ -25,6 +25,12 @@ AssertionShape -> ApplyAssertions(...) -> repository policy
 
 Shapes are vocabulary. Scopes are where that vocabulary applies.
 
+Each scoped clause remains its own rule setting after composition. A shape can
+make one requirement an error and another requirement a warning, or apply two
+requirements to different paths, without those settings bleeding into each
+other. The compatibility summary on `RuleConfiguration` still shows the merged
+view for diagnostics and tests, but linting evaluates the scoped settings.
+
 ## Where To Define Vocabulary
 
 Use the smallest placement that keeps the configuration readable.

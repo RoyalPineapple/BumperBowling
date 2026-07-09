@@ -340,73 +340,65 @@ private extension Array where Element == ComponentElement {
 
 private extension Array where Element == ComponentRequirementSetting {
     func derivedRules(defaultPaths: [String]) -> RuleConfiguration {
-        var storedPropertySeverity = Severity.off
-        var storedPropertyDisallowances = Set<StoredPropertyDisallowance>()
-        var storedPropertyPaths: [String] = []
-        var storedPropertyExcludedPaths: [String] = []
-        var syntaxConstructSeverity = Severity.off
-        var disallowedSyntaxConstructs = Set<ImperativeConstruct>()
-        var syntaxConstructPaths: [String] = []
-        var syntaxKindSeverity = Severity.off
-        var requiredSyntaxKinds = Set<SyntaxKind>()
-        var disallowedSyntaxKinds = Set<SyntaxKind>()
-        var syntaxKindPaths: [String] = []
-        var enumStateMachine = PathRuleConfiguration()
+        var storedPropertyRules: [StoredPropertyRuleConfiguration] = []
+        var syntaxConstructRules: [SyntaxConstructRuleConfiguration] = []
+        var syntaxKindRules: [SyntaxKindRuleConfiguration] = []
+        var enumStateMachineRules: [PathRuleConfiguration] = []
 
         for setting in self {
             let scopedPaths = setting.paths.isEmpty ? defaultPaths : setting.paths
 
-            let storedPropertyRules = setting.requirement.storedPropertyDisallowances
-            if !storedPropertyRules.isEmpty {
-                storedPropertySeverity = storedPropertySeverity.merging(setting.severity)
-                storedPropertyPaths.append(contentsOf: scopedPaths)
-                storedPropertyExcludedPaths.append(contentsOf: setting.excludedPaths)
-                storedPropertyDisallowances.formUnion(storedPropertyRules)
+            let storedPropertyDisallowances = setting.requirement.storedPropertyDisallowances
+            if !storedPropertyDisallowances.isEmpty {
+                storedPropertyRules.append(
+                    StoredPropertyRuleConfiguration(
+                        severity: setting.severity,
+                        paths: scopedPaths,
+                        excludedPaths: setting.excludedPaths,
+                        disallowances: storedPropertyDisallowances
+                    )
+                )
             }
 
-            let syntaxConstructRules = setting.requirement.disallowedSyntaxConstructs
-            if !syntaxConstructRules.isEmpty {
-                syntaxConstructSeverity = syntaxConstructSeverity.merging(setting.severity)
-                syntaxConstructPaths.append(contentsOf: scopedPaths)
-                disallowedSyntaxConstructs.formUnion(syntaxConstructRules)
+            let disallowedSyntaxConstructs = setting.requirement.disallowedSyntaxConstructs
+            if !disallowedSyntaxConstructs.isEmpty {
+                syntaxConstructRules.append(
+                    SyntaxConstructRuleConfiguration(
+                        severity: setting.severity,
+                        paths: scopedPaths,
+                        disallowedConstructs: disallowedSyntaxConstructs
+                    )
+                )
             }
 
             let requiredKinds = setting.requirement.requiredSyntaxKinds
             let disallowedKinds = setting.requirement.disallowedSyntaxKinds
             if !requiredKinds.isEmpty || !disallowedKinds.isEmpty {
-                syntaxKindSeverity = syntaxKindSeverity.merging(setting.severity)
-                syntaxKindPaths.append(contentsOf: scopedPaths)
-                requiredSyntaxKinds.formUnion(requiredKinds)
-                disallowedSyntaxKinds.formUnion(disallowedKinds)
+                syntaxKindRules.append(
+                    SyntaxKindRuleConfiguration(
+                        severity: setting.severity,
+                        paths: scopedPaths,
+                        requiredKinds: requiredKinds,
+                        disallowedKinds: disallowedKinds
+                    )
+                )
             }
 
             if setting.requirement.requiresEnumStateMachine {
-                enumStateMachine = PathRuleConfiguration(
-                    severity: enumStateMachine.severity.merging(setting.severity),
-                    paths: enumStateMachine.paths + scopedPaths
+                enumStateMachineRules.append(
+                    PathRuleConfiguration(
+                        severity: setting.severity,
+                        paths: scopedPaths
+                    )
                 )
             }
         }
 
         return RuleConfiguration(
-            storedProperties: StoredPropertyRuleConfiguration(
-                severity: storedPropertySeverity,
-                paths: Swift.Array(Set(storedPropertyPaths)).sorted(),
-                excludedPaths: Swift.Array(Set(storedPropertyExcludedPaths)).sorted(),
-                disallowances: storedPropertyDisallowances
-            ),
-            syntaxConstructs: SyntaxConstructRuleConfiguration(
-                severity: syntaxConstructSeverity,
-                paths: Swift.Array(Set(syntaxConstructPaths)).sorted(),
-                disallowedConstructs: disallowedSyntaxConstructs
-            ),
-            syntaxKinds: SyntaxKindRuleConfiguration(
-                severity: syntaxKindSeverity,
-                paths: Swift.Array(Set(syntaxKindPaths)).sorted(),
-                requiredKinds: requiredSyntaxKinds,
-                disallowedKinds: disallowedSyntaxKinds
-            ),
-            enumStateMachine: enumStateMachine
+            storedPropertyRules: storedPropertyRules,
+            syntaxConstructRules: syntaxConstructRules,
+            syntaxKindRules: syntaxKindRules,
+            enumStateMachineRules: enumStateMachineRules
         )
     }
 }
@@ -495,48 +487,29 @@ private extension Array where Element == ComponentUsePolicy {
 
 private extension Array where Element == ImperativeDisallowanceSetting {
     func derivedRules(defaultPaths: [String]) -> RuleConfiguration {
-        var severity = Severity.off
-        var paths: [String] = []
-        var excludedPaths: [String] = []
-        var constructs = Set<ImperativeConstruct>()
+        var syntaxConstructRules: [SyntaxConstructRuleConfiguration] = []
 
         for setting in self {
-            severity = severity.merging(setting.severity)
-            paths.append(contentsOf: setting.paths.isEmpty ? defaultPaths : setting.paths)
-            excludedPaths.append(contentsOf: setting.excludedPaths)
-            constructs.formUnion(setting.constructs)
-        }
-
-        guard !constructs.isEmpty else {
-            return RuleConfiguration()
-        }
-
-        return RuleConfiguration(
-            syntaxConstructs: SyntaxConstructRuleConfiguration(
-                severity: severity,
-                paths: Swift.Array(Set(paths)).sorted(),
-                excludedPaths: Swift.Array(Set(excludedPaths)).sorted(),
-                disallowedConstructs: constructs
+            guard !setting.constructs.isEmpty else { continue }
+            syntaxConstructRules.append(
+                SyntaxConstructRuleConfiguration(
+                    severity: setting.severity,
+                    paths: setting.paths.isEmpty ? defaultPaths : setting.paths,
+                    excludedPaths: setting.excludedPaths,
+                    disallowedConstructs: setting.constructs
+                )
             )
-        )
+        }
+
+        return RuleConfiguration(syntaxConstructRules: syntaxConstructRules)
     }
 }
 
 private extension Array where Element == ComponentGraphAssertion {
     func derivedRules(defaultPaths: [String]) -> RuleConfiguration {
-        var declarationSeverity = Severity.off
-        var declarationPaths: [String] = []
-        var requiredNames = Set<StringMatcher>()
-        var disallowedNames = Set<StringMatcher>()
-
-        var syntaxKindSeverity = Severity.off
-        var syntaxKindPaths: [String] = []
-        var requiredKinds = Set<SyntaxKind>()
-        var disallowedKinds = Set<SyntaxKind>()
-        var syntaxNodeSeverity = Severity.off
-        var syntaxNodePaths: [String] = []
-        var requiredNodes = Set<SyntaxNodeMatcher>()
-        var disallowedNodes = Set<SyntaxNodeMatcher>()
+        var publicDeclarationRules: [PublicDeclarationRuleConfiguration] = []
+        var syntaxKindRules: [SyntaxKindRuleConfiguration] = []
+        var syntaxNodeRules: [SyntaxNodeRuleConfiguration] = []
 
         for assertion in self {
             let scopedPaths = assertion.paths.isEmpty ? defaultPaths : assertion.paths
@@ -544,56 +517,65 @@ private extension Array where Element == ComponentGraphAssertion {
             switch (assertion.expectation, assertion.predicate) {
             case (.does, .declare(let names)):
                 guard !names.isEmpty else { continue }
-                declarationSeverity = declarationSeverity.merging(assertion.severity)
-                declarationPaths.append(contentsOf: scopedPaths)
-                requiredNames.formUnion(names)
+                publicDeclarationRules.append(
+                    PublicDeclarationRuleConfiguration(
+                        severity: assertion.severity,
+                        paths: scopedPaths,
+                        requiredNames: names
+                    )
+                )
             case (.doesNot, .declare(let names)):
                 guard !names.isEmpty else { continue }
-                declarationSeverity = declarationSeverity.merging(assertion.severity)
-                declarationPaths.append(contentsOf: scopedPaths)
-                disallowedNames.formUnion(names)
+                publicDeclarationRules.append(
+                    PublicDeclarationRuleConfiguration(
+                        severity: assertion.severity,
+                        paths: scopedPaths,
+                        disallowedNames: names
+                    )
+                )
             case (.does, .containSyntax(let kinds)):
                 guard !kinds.isEmpty else { continue }
-                syntaxKindSeverity = syntaxKindSeverity.merging(assertion.severity)
-                syntaxKindPaths.append(contentsOf: scopedPaths)
-                requiredKinds.formUnion(kinds)
+                syntaxKindRules.append(
+                    SyntaxKindRuleConfiguration(
+                        severity: assertion.severity,
+                        paths: scopedPaths,
+                        requiredKinds: kinds
+                    )
+                )
             case (.doesNot, .containSyntax(let kinds)):
                 guard !kinds.isEmpty else { continue }
-                syntaxKindSeverity = syntaxKindSeverity.merging(assertion.severity)
-                syntaxKindPaths.append(contentsOf: scopedPaths)
-                disallowedKinds.formUnion(kinds)
+                syntaxKindRules.append(
+                    SyntaxKindRuleConfiguration(
+                        severity: assertion.severity,
+                        paths: scopedPaths,
+                        disallowedKinds: kinds
+                    )
+                )
             case (.does, .containSyntaxNode(let matchers)):
                 guard !matchers.isEmpty else { continue }
-                syntaxNodeSeverity = syntaxNodeSeverity.merging(assertion.severity)
-                syntaxNodePaths.append(contentsOf: scopedPaths)
-                requiredNodes.formUnion(matchers)
+                syntaxNodeRules.append(
+                    SyntaxNodeRuleConfiguration(
+                        severity: assertion.severity,
+                        paths: scopedPaths,
+                        requiredNodes: matchers
+                    )
+                )
             case (.doesNot, .containSyntaxNode(let matchers)):
                 guard !matchers.isEmpty else { continue }
-                syntaxNodeSeverity = syntaxNodeSeverity.merging(assertion.severity)
-                syntaxNodePaths.append(contentsOf: scopedPaths)
-                disallowedNodes.formUnion(matchers)
+                syntaxNodeRules.append(
+                    SyntaxNodeRuleConfiguration(
+                        severity: assertion.severity,
+                        paths: scopedPaths,
+                        disallowedNodes: matchers
+                    )
+                )
             }
         }
 
         return RuleConfiguration(
-            syntaxKinds: SyntaxKindRuleConfiguration(
-                severity: syntaxKindSeverity,
-                paths: Swift.Array(Set(syntaxKindPaths)).sorted(),
-                requiredKinds: requiredKinds,
-                disallowedKinds: disallowedKinds
-            ),
-            syntaxNodes: SyntaxNodeRuleConfiguration(
-                severity: syntaxNodeSeverity,
-                paths: Swift.Array(Set(syntaxNodePaths)).sorted(),
-                requiredNodes: requiredNodes,
-                disallowedNodes: disallowedNodes
-            ),
-            publicDeclarations: PublicDeclarationRuleConfiguration(
-                severity: declarationSeverity,
-                paths: Swift.Array(Set(declarationPaths)).sorted(),
-                requiredNames: requiredNames,
-                disallowedNames: disallowedNames
-            )
+            syntaxKindRules: syntaxKindRules,
+            syntaxNodeRules: syntaxNodeRules,
+            publicDeclarationRules: publicDeclarationRules
         )
     }
 }

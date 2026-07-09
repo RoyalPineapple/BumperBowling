@@ -49,11 +49,17 @@ public struct RuleConfiguration: Equatable, Sendable, Codable {
     public let duplicateOwnership: Severity
     public let declaredDependencyCycle: Severity
     public let storedProperties: StoredPropertyRuleConfiguration
+    public let storedPropertyRules: [StoredPropertyRuleConfiguration]
     public let syntaxConstructs: SyntaxConstructRuleConfiguration
+    public let syntaxConstructRules: [SyntaxConstructRuleConfiguration]
     public let syntaxKinds: SyntaxKindRuleConfiguration
+    public let syntaxKindRules: [SyntaxKindRuleConfiguration]
     public let syntaxNodes: SyntaxNodeRuleConfiguration
+    public let syntaxNodeRules: [SyntaxNodeRuleConfiguration]
     public let publicDeclarations: PublicDeclarationRuleConfiguration
+    public let publicDeclarationRules: [PublicDeclarationRuleConfiguration]
     public let enumStateMachine: PathRuleConfiguration
+    public let enumStateMachineRules: [PathRuleConfiguration]
 
     public init(
         forbiddenImports: RuleSetting = RuleSetting(severity: .off, values: []),
@@ -65,18 +71,32 @@ public struct RuleConfiguration: Equatable, Sendable, Codable {
         syntaxKinds: SyntaxKindRuleConfiguration = SyntaxKindRuleConfiguration(),
         syntaxNodes: SyntaxNodeRuleConfiguration = SyntaxNodeRuleConfiguration(),
         publicDeclarations: PublicDeclarationRuleConfiguration = PublicDeclarationRuleConfiguration(),
-        enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
+        enumStateMachine: PathRuleConfiguration = PathRuleConfiguration(),
+        storedPropertyRules: [StoredPropertyRuleConfiguration] = [],
+        syntaxConstructRules: [SyntaxConstructRuleConfiguration] = [],
+        syntaxKindRules: [SyntaxKindRuleConfiguration] = [],
+        syntaxNodeRules: [SyntaxNodeRuleConfiguration] = [],
+        publicDeclarationRules: [PublicDeclarationRuleConfiguration] = [],
+        enumStateMachineRules: [PathRuleConfiguration] = []
     ) {
-        self.forbiddenImports = forbiddenImports.isConfigured ? [forbiddenImports] : []
-        self.componentBoundary = componentBoundary
-        self.duplicateOwnership = duplicateOwnership
-        self.declaredDependencyCycle = declaredDependencyCycle
-        self.storedProperties = storedProperties
-        self.syntaxConstructs = syntaxConstructs
-        self.syntaxKinds = syntaxKinds
-        self.syntaxNodes = syntaxNodes
-        self.publicDeclarations = publicDeclarations
-        self.enumStateMachine = enumStateMachine
+        self.init(
+            forbiddenImports: forbiddenImports.isConfigured ? [forbiddenImports] : [],
+            componentBoundary: componentBoundary,
+            duplicateOwnership: duplicateOwnership,
+            declaredDependencyCycle: declaredDependencyCycle,
+            storedProperties: storedProperties,
+            syntaxConstructs: syntaxConstructs,
+            syntaxKinds: syntaxKinds,
+            syntaxNodes: syntaxNodes,
+            publicDeclarations: publicDeclarations,
+            enumStateMachine: enumStateMachine,
+            storedPropertyRules: storedPropertyRules,
+            syntaxConstructRules: syntaxConstructRules,
+            syntaxKindRules: syntaxKindRules,
+            syntaxNodeRules: syntaxNodeRules,
+            publicDeclarationRules: publicDeclarationRules,
+            enumStateMachineRules: enumStateMachineRules
+        )
     }
 
     public init(
@@ -89,18 +109,37 @@ public struct RuleConfiguration: Equatable, Sendable, Codable {
         syntaxKinds: SyntaxKindRuleConfiguration = SyntaxKindRuleConfiguration(),
         syntaxNodes: SyntaxNodeRuleConfiguration = SyntaxNodeRuleConfiguration(),
         publicDeclarations: PublicDeclarationRuleConfiguration = PublicDeclarationRuleConfiguration(),
-        enumStateMachine: PathRuleConfiguration = PathRuleConfiguration()
+        enumStateMachine: PathRuleConfiguration = PathRuleConfiguration(),
+        storedPropertyRules: [StoredPropertyRuleConfiguration] = [],
+        syntaxConstructRules: [SyntaxConstructRuleConfiguration] = [],
+        syntaxKindRules: [SyntaxKindRuleConfiguration] = [],
+        syntaxNodeRules: [SyntaxNodeRuleConfiguration] = [],
+        publicDeclarationRules: [PublicDeclarationRuleConfiguration] = [],
+        enumStateMachineRules: [PathRuleConfiguration] = []
     ) {
+        let storedPropertyRules = Self.configured([storedProperties] + storedPropertyRules)
+        let syntaxConstructRules = Self.configured([syntaxConstructs] + syntaxConstructRules)
+        let syntaxKindRules = Self.configured([syntaxKinds] + syntaxKindRules)
+        let syntaxNodeRules = Self.configured([syntaxNodes] + syntaxNodeRules)
+        let publicDeclarationRules = Self.configured([publicDeclarations] + publicDeclarationRules)
+        let enumStateMachineRules = Self.configured([enumStateMachine] + enumStateMachineRules)
+
         self.forbiddenImports = forbiddenImports.filter(\.isConfigured)
         self.componentBoundary = componentBoundary
         self.duplicateOwnership = duplicateOwnership
         self.declaredDependencyCycle = declaredDependencyCycle
-        self.storedProperties = storedProperties
-        self.syntaxConstructs = syntaxConstructs
-        self.syntaxKinds = syntaxKinds
-        self.syntaxNodes = syntaxNodes
-        self.publicDeclarations = publicDeclarations
-        self.enumStateMachine = enumStateMachine
+        self.storedPropertyRules = storedPropertyRules
+        self.storedProperties = Self.combined(storedPropertyRules)
+        self.syntaxConstructRules = syntaxConstructRules
+        self.syntaxConstructs = Self.combined(syntaxConstructRules)
+        self.syntaxKindRules = syntaxKindRules
+        self.syntaxKinds = Self.combined(syntaxKindRules)
+        self.syntaxNodeRules = syntaxNodeRules
+        self.syntaxNodes = Self.combined(syntaxNodeRules)
+        self.publicDeclarationRules = publicDeclarationRules
+        self.publicDeclarations = Self.combined(publicDeclarationRules)
+        self.enumStateMachineRules = enumStateMachineRules
+        self.enumStateMachine = Self.combined(enumStateMachineRules)
     }
 }
 
@@ -326,6 +365,132 @@ public struct PathRuleConfiguration: Equatable, Sendable, Codable {
     public init(severity: Severity = .off, paths: [String] = []) {
         self.severity = severity
         self.paths = paths
+    }
+}
+
+extension StoredPropertyRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !excludedPaths.isEmpty || !disallowances.isEmpty
+    }
+}
+
+extension SyntaxConstructRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !excludedPaths.isEmpty || !disallowedConstructs.isEmpty
+    }
+}
+
+extension SyntaxKindRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !requiredKinds.isEmpty || !disallowedKinds.isEmpty
+    }
+}
+
+extension SyntaxNodeRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !requiredNodes.isEmpty || !disallowedNodes.isEmpty
+    }
+}
+
+extension PublicDeclarationRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty || !requiredNames.isEmpty || !disallowedNames.isEmpty
+    }
+}
+
+extension PathRuleConfiguration {
+    var isConfigured: Bool {
+        severity != .off || !paths.isEmpty
+    }
+}
+
+private extension RuleConfiguration {
+    static func configured(_ configurations: [StoredPropertyRuleConfiguration]) -> [StoredPropertyRuleConfiguration] {
+        configurations.filter(\.isConfigured)
+    }
+
+    static func configured(_ configurations: [SyntaxConstructRuleConfiguration]) -> [SyntaxConstructRuleConfiguration] {
+        configurations.filter(\.isConfigured)
+    }
+
+    static func configured(_ configurations: [SyntaxKindRuleConfiguration]) -> [SyntaxKindRuleConfiguration] {
+        configurations.filter(\.isConfigured)
+    }
+
+    static func configured(_ configurations: [SyntaxNodeRuleConfiguration]) -> [SyntaxNodeRuleConfiguration] {
+        configurations.filter(\.isConfigured)
+    }
+
+    static func configured(_ configurations: [PublicDeclarationRuleConfiguration]) -> [PublicDeclarationRuleConfiguration] {
+        configurations.filter(\.isConfigured)
+    }
+
+    static func configured(_ configurations: [PathRuleConfiguration]) -> [PathRuleConfiguration] {
+        configurations.filter(\.isConfigured)
+    }
+
+    static func combined(_ configurations: [StoredPropertyRuleConfiguration]) -> StoredPropertyRuleConfiguration {
+        configurations.reduce(StoredPropertyRuleConfiguration()) { partialResult, configuration in
+            StoredPropertyRuleConfiguration(
+                severity: partialResult.severity.merging(configuration.severity),
+                paths: Array(Set(partialResult.paths + configuration.paths)).sorted(),
+                excludedPaths: Array(Set(partialResult.excludedPaths + configuration.excludedPaths)).sorted(),
+                disallowances: partialResult.disallowances.union(configuration.disallowances)
+            )
+        }
+    }
+
+    static func combined(_ configurations: [SyntaxConstructRuleConfiguration]) -> SyntaxConstructRuleConfiguration {
+        configurations.reduce(SyntaxConstructRuleConfiguration()) { partialResult, configuration in
+            SyntaxConstructRuleConfiguration(
+                severity: partialResult.severity.merging(configuration.severity),
+                paths: Array(Set(partialResult.paths + configuration.paths)).sorted(),
+                excludedPaths: Array(Set(partialResult.excludedPaths + configuration.excludedPaths)).sorted(),
+                disallowedConstructs: partialResult.disallowedConstructs.union(configuration.disallowedConstructs)
+            )
+        }
+    }
+
+    static func combined(_ configurations: [SyntaxKindRuleConfiguration]) -> SyntaxKindRuleConfiguration {
+        configurations.reduce(SyntaxKindRuleConfiguration()) { partialResult, configuration in
+            SyntaxKindRuleConfiguration(
+                severity: partialResult.severity.merging(configuration.severity),
+                paths: Array(Set(partialResult.paths + configuration.paths)).sorted(),
+                requiredKinds: partialResult.requiredKinds.union(configuration.requiredKinds),
+                disallowedKinds: partialResult.disallowedKinds.union(configuration.disallowedKinds)
+            )
+        }
+    }
+
+    static func combined(_ configurations: [SyntaxNodeRuleConfiguration]) -> SyntaxNodeRuleConfiguration {
+        configurations.reduce(SyntaxNodeRuleConfiguration()) { partialResult, configuration in
+            SyntaxNodeRuleConfiguration(
+                severity: partialResult.severity.merging(configuration.severity),
+                paths: Array(Set(partialResult.paths + configuration.paths)).sorted(),
+                requiredNodes: partialResult.requiredNodes.union(configuration.requiredNodes),
+                disallowedNodes: partialResult.disallowedNodes.union(configuration.disallowedNodes)
+            )
+        }
+    }
+
+    static func combined(_ configurations: [PublicDeclarationRuleConfiguration]) -> PublicDeclarationRuleConfiguration {
+        configurations.reduce(PublicDeclarationRuleConfiguration()) { partialResult, configuration in
+            PublicDeclarationRuleConfiguration(
+                severity: partialResult.severity.merging(configuration.severity),
+                paths: Array(Set(partialResult.paths + configuration.paths)).sorted(),
+                requiredNames: partialResult.requiredNames.union(configuration.requiredNames),
+                disallowedNames: partialResult.disallowedNames.union(configuration.disallowedNames)
+            )
+        }
+    }
+
+    static func combined(_ configurations: [PathRuleConfiguration]) -> PathRuleConfiguration {
+        configurations.reduce(PathRuleConfiguration()) { partialResult, configuration in
+            PathRuleConfiguration(
+                severity: partialResult.severity.merging(configuration.severity),
+                paths: Array(Set(partialResult.paths + configuration.paths)).sorted()
+            )
+        }
     }
 }
 
