@@ -83,6 +83,7 @@ public struct SwiftFileParser: Sendable {
         return SourceFileFacts(
             path: relativePath,
             component: component,
+            source: source,
             nodes: visitor.nodes
         )
     }

@@ -190,6 +190,7 @@ public struct ArchitectureGraph: Equatable, Sendable {
 public struct SourceFileFacts: Equatable, Sendable {
     public let path: RelativeFilePath
     public let component: ComponentID
+    public let source: String?
     public let imports: [ModuleName]
     public let nominalTypes: [NominalType]
     public let extensionDeclarations: [ExtensionDeclaration]
@@ -203,6 +204,7 @@ public struct SourceFileFacts: Equatable, Sendable {
     public init(
         path: RelativeFilePath,
         component: ComponentID,
+        source: String? = nil,
         imports: [ModuleName],
         nominalTypes: [NominalType] = [],
         extensionDeclarations: [ExtensionDeclaration] = [],
@@ -218,6 +220,7 @@ public struct SourceFileFacts: Equatable, Sendable {
             : observedImperativeConstructs
         self.path = path
         self.component = component
+        self.source = source
         self.imports = imports
         self.nominalTypes = nominalTypes
         self.extensionDeclarations = extensionDeclarations
@@ -231,12 +234,13 @@ public struct SourceFileFacts: Equatable, Sendable {
         self.syntaxNodes = syntaxNodes
     }
 
-    init(path: RelativeFilePath, component: ComponentID, nodes: [CollectedSourceFact]) {
+    init(path: RelativeFilePath, component: ComponentID, source: String? = nil, nodes: [CollectedSourceFact]) {
         let summary = SourceFactSummary(facts: nodes)
 
         self.init(
             path: path,
             component: component,
+            source: source,
             imports: summary.imports,
             nominalTypes: summary.nominalTypes,
             extensionDeclarations: summary.extensionDeclarations,

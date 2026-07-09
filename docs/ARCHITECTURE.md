@@ -41,11 +41,12 @@ The configuration runner generates a small package that links `BumperBowlingCore
 
 If `CustomRules()` is enabled, linting runs a second cached executable after the
 host scan completes. The host encodes `CustomRuleInput` from the scanned
-repository facts, feeds it to the custom rule worker on stdin, and decodes
-`CustomRuleOutput` from stdout. The worker can use Swift closures and local
-repository vocabulary, but the process boundary is still Codable facts in and
-Codable findings out; custom rules do not receive filesystem traversal or a
-fresh AST parse lane.
+repository facts and bounded source text, feeds it to the custom rule worker on
+stdin, and decodes `CustomRuleOutput` from stdout. The worker can use Swift
+closures and local repository vocabulary. Fact-based rules evaluate the
+projected snapshot; syntax rules parse the supplied source into SwiftSyntax
+inside the worker. The process boundary remains Codable input and Codable
+findings, and custom rules do not receive filesystem traversal.
 
 The build is cached against the configuration's content hash (plus the toolchain identity and the runner's own hashes), so the compile happens once per change to `BumperBowling.swift`, not once per lint. An unchanged configuration loads from the cached binary with no build. `bumper config` loads the configuration and reports whether it is valid.
 

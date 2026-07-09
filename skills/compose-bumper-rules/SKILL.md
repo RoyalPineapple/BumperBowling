@@ -27,6 +27,8 @@ Use this skill when adding, reviewing, or refactoring Bumper Bowling rule vocabu
    - Use `ContainSyntax(_:)` for raw SwiftSyntax kind membership.
    - Use `ContainSyntaxNode(SyntaxNodeMatcher(...))` for repo-specific syntax
      policy over kind, spelling, parent kind, or ancestor kind.
+   - Use `CustomSyntaxRule` when the policy needs to walk raw SwiftSyntax
+     trees or inspect node fields Bumper Bowling does not project.
 5. Validate with the repo's checks, normally:
    - `swift test`
    - `swift run bumper lint .`
@@ -49,6 +51,8 @@ Do not introduce JSON, registries, remote package policy, or auto-loaded shared 
 - Prefer `AssertionShape` for repo-level assertions.
 - Use `ContainSyntaxNode(SyntaxNodeMatcher(...))` for repo-specific SwiftSyntax
   facts that Bumper Bowling does not expose as named built-in requirements.
+- Use `CustomSyntaxRule` for repo-specific rules over raw `SourceFileSyntax`.
+  Import `SwiftSyntax` in the rule file when naming AST types.
 - Do not invent Bumper-owned syntax taxonomies. Compose with SwiftSyntax
   `SyntaxKind` values and matcher structure.
 - Use `ApplyAssertions(...)` inside `Assertions`.

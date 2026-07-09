@@ -667,11 +667,14 @@ private extension ConfigurationLoader {
     ) -> String {
         let dependencyEntries = ([
             ".package(name: \"BumperBowling\", path: \(swiftStringLiteral(bumperPackageRoot.path)))",
+            ".package(url: \"https://github.com/swiftlang/swift-syntax.git\", from: \"602.0.0\")",
         ] + rulePackages.map { package in
             ".package(path: \(swiftStringLiteral(package.path.path)))"
         }).joined(separator: ",\n                ")
         let targetDependencies = ([
             ".product(name: \"BumperBowlingCore\", package: \"BumperBowling\")",
+            ".product(name: \"SwiftParser\", package: \"swift-syntax\")",
+            ".product(name: \"SwiftSyntax\", package: \"swift-syntax\")",
         ] + rulePackages.map { package in
             ".product(name: \(swiftStringLiteral(package.product)), package: \(swiftStringLiteral(package.package)))"
         }).joined(separator: ",\n                        ")

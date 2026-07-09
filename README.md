@@ -172,7 +172,8 @@ let configuration = BumperConfiguration {
 }
 ```
 
-Then define `customRules` in `.bumper/Sources`:
+Then define `customRules` in `.bumper/Sources`. Fact-based rules can stay at
+the repository snapshot level:
 
 ```swift
 import BumperBowlingCore
@@ -199,9 +200,48 @@ let customRules = CustomRuleSet {
 }
 ```
 
+When projected facts are not enough, write a syntax rule. The worker receives
+bounded source text from the host scan, parses it in-process, and gives each
+rule a `SourceFileContext` with `SourceFileSyntax`, source text, component
+metadata, imports, and location helpers:
+
+```swift
+import BumperBowlingCore
+import SwiftSyntax
+
+let customRules = CustomRuleSet {
+    CustomSyntaxRule("core.no_tuple_api", severity: .error) { file in
+        let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
+        visitor.walk(file.syntax)
+
+        return visitor.tuples.map { tuple in
+            file.failure(
+                at: tuple,
+                message: "Tuple API must use a named type.",
+                evidence: ViolationEvidence(
+                    observed: tuple.trimmedDescription,
+                    expectation: "named type"
+                )
+            )
+        }
+    }
+}
+
+private final class TupleTypeCollector: SyntaxVisitor {
+    private(set) var tuples: [TupleTypeSyntax] = []
+
+    override func visit(_ node: TupleTypeSyntax) -> SyntaxVisitorContinueKind {
+        tuples.append(node)
+        return .skipChildren
+    }
+}
+```
+
 The worker receives a `Codable` `CustomRuleInput` built from the host scan and
 returns a `Codable` `CustomRuleOutput`. Rule code does not rescan the repo or
-walk arbitrary files; it evaluates Bumper Bowling's typed facts.
+walk arbitrary files. Repo-local `.bumper/Sources` files can import
+`SwiftSyntax` directly; packaged `.bumper/Package.swift` rule libraries should
+declare their own SwiftSyntax dependency when they use AST types.
 
 ## Agent Skill
 

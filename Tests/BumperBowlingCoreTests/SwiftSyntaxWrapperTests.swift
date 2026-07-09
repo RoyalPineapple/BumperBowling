@@ -13,11 +13,12 @@ struct SwiftSyntaxWrapperTests {
             at: file.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try """
+        let source = """
         import Foundation
 
         public struct Thing {}
-        """.write(to: file, atomically: true, encoding: .utf8)
+        """
+        try source.write(to: file, atomically: true, encoding: .utf8)
 
         let nodes = try SwiftFileParser().parseFile(
             at: file,
@@ -26,6 +27,7 @@ struct SwiftSyntaxWrapperTests {
         )
 
         #expect(nodes.imports == [try ModuleName("Foundation")])
+        #expect(nodes.source == source)
         #expect(nodes.publicDeclarations.contains {
             $0.kind == .struct
                 && $0.name == (try? DeclarationName("Thing"))

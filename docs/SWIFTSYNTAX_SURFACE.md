@@ -98,9 +98,11 @@ DoesNot(
 )
 ```
 
-This is still not a general SwiftSyntax query engine. It evaluates observed
-syntax nodes and their immediate recorded context rather than executing arbitrary
-tree queries.
+Built-in syntax assertions are still projected-fact checks. They evaluate
+observed syntax nodes and their immediate recorded context rather than executing
+arbitrary tree queries. For repository-specific tree walks, use
+`CustomSyntaxRule`, which receives a `SourceFileContext` with raw
+`SourceFileSyntax`.
 
 ### Computed SwiftSyntax Views
 

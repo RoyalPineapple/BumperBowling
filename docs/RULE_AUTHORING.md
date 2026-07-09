@@ -21,7 +21,7 @@ AssertionShape -> ApplyAssertions(...) -> repository policy
   dependency policy, and requirements.
 - `AssertionShape`: a reusable bundle of repository-level assertions.
 - `CustomRuleSet`: an opt-in Swift closure surface for repository-specific
-  rules over Bumper Bowling's typed fact snapshot.
+  rules over Bumper Bowling's typed fact snapshot or raw SwiftSyntax trees.
 - `RuleConfiguration`: evaluated policy after a configuration scopes it.
 - Scope: the paths, components, or exclusions where policy applies.
 
@@ -186,6 +186,48 @@ let customRules = CustomRuleSet {
 The host process owns scanning. It sends `CustomRuleInput` to the worker and
 expects `CustomRuleOutput` back. Keep custom rule closures pure over that input;
 do not use them as a second filesystem scanner.
+
+When the typed facts are not specific enough, write a syntax rule. Bumper
+Bowling includes the bounded source text from the host scan, and the custom rule
+worker parses it into `SourceFileSyntax` before invoking your rule:
+
+```swift
+import BumperBowlingCore
+import SwiftSyntax
+
+let customRules = CustomRuleSet {
+    CustomSyntaxRule("core.no_tuple_api", severity: .error) { file in
+        let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
+        visitor.walk(file.syntax)
+
+        return visitor.tuples.map { tuple in
+            file.failure(
+                at: tuple,
+                message: "Tuple API must use a named type.",
+                evidence: ViolationEvidence(
+                    observed: tuple.trimmedDescription,
+                    expectation: "named type"
+                )
+            )
+        }
+    }
+}
+
+private final class TupleTypeCollector: SyntaxVisitor {
+    private(set) var tuples: [TupleTypeSyntax] = []
+
+    override func visit(_ node: TupleTypeSyntax) -> SyntaxVisitorContinueKind {
+        tuples.append(node)
+        return .skipChildren
+    }
+}
+```
+
+`SourceFileContext` exposes `path`, `component`, `imports`, `source`, `syntax`,
+and `location(for:)`/`failure(at:)` helpers. Repo-local `.bumper/Sources` files
+can import `SwiftSyntax` directly. If custom rules live in a shared
+`.bumper/Package.swift` package, that package must declare SwiftSyntax when it
+names AST types.
 
 ## Built-In Primitives
 
