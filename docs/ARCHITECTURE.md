@@ -29,6 +29,11 @@ The configuration encodes typed assertions
 Lint runs math over the graph
 ```
 
+The lint run itself is modeled as an explicit reducer-backed state machine:
+prepare rules, scan sources, evaluate rules, collect findings, and report.
+Parallel execution must preserve that single lifecycle and merge findings
+deterministically.
+
 Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane; candidate requests are tracked in [COMPILER_REQUESTS.md](COMPILER_REQUESTS.md).
 
 The current SwiftSyntax node surface is documented in [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md).
@@ -61,6 +66,11 @@ policy.
 SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller projection rules operate on. Bumper Bowling should not duplicate SwiftSyntax node types or maintain a second syntax enum. Raw syntax checks use SwiftSyntax's `SyntaxKind`; richer local checks use computed extensions on real SwiftSyntax nodes through `node.bumper`.
 
 Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over nodes: path matching, set membership, graph edges, and cycles. Keep scorecards explainable: report the observed graph fact, the declared lane, and why they do not match.
+
+The intended fast path for custom rules is documented in
+[PARALLEL_RULE_GRAPH.md](PARALLEL_RULE_GRAPH.md): project one durable graph
+artifact, schedule built-in and custom rule jobs over that graph, execute jobs
+in parallel, and reserve raw SwiftSyntax for an explicit escape hatch.
 
 Semantic shorthand names are not special engine concepts.
 `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)`

@@ -56,6 +56,16 @@ struct BumperConfigurationDSLTests {
     }
 
     @Test
+    func configuresCustomRuleConcurrencyLimit() {
+        let configuration = BumperConfiguration {
+            CustomRules(maxConcurrentRuleJobs: 12)
+        }.architectureConfiguration
+
+        #expect(configuration.customRules.enabled)
+        #expect(configuration.customRules.maxConcurrentRuleJobs == 12)
+    }
+
+    @Test
     func exposesDisallowedPublicDeclarations() throws {
         let configuration = BumperConfiguration {
             Architecture {

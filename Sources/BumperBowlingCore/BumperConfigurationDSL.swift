@@ -76,6 +76,15 @@ public func CustomRules(_ configuration: CustomRuleWorkerConfiguration = .enable
     .customRules(configuration)
 }
 
+public func CustomRules(maxConcurrentRuleJobs: Int?) -> BumperConfigurationElement {
+    .customRules(
+        CustomRuleWorkerConfiguration(
+            enabled: true,
+            maxConcurrentRuleJobs: maxConcurrentRuleJobs
+        )
+    )
+}
+
 @resultBuilder
 public enum StringListBuilder {
     public static func buildBlock(_ components: [String]...) -> [String] {

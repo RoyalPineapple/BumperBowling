@@ -340,7 +340,7 @@ public struct CustomRuleFailure: Equatable, Sendable {
 public struct CustomRule: Sendable {
     public let id: RuleID
     public let severity: Severity
-    private let evaluateBody: @Sendable (CustomRuleContext) -> [CustomRuleFailure]
+    private let evaluateFailures: @Sendable (CustomRuleContext) -> [CustomRuleFailure]
 
     public init(
         _ id: RuleID,
@@ -349,7 +349,7 @@ public struct CustomRule: Sendable {
     ) {
         self.id = id
         self.severity = severity
-        self.evaluateBody = evaluate
+        self.evaluateFailures = evaluate
     }
 
     public init(
@@ -361,7 +361,7 @@ public struct CustomRule: Sendable {
     }
 
     public func evaluate(in context: CustomRuleContext) -> [CustomRuleFinding] {
-        evaluateBody(context).map { failure in
+        evaluateFailures(context).map { failure in
             CustomRuleFinding(
                 ruleID: id,
                 severity: severity,
@@ -430,6 +430,25 @@ public struct CustomRuleSet: Sendable {
             findings: rules.flatMap { rule in
                 rule.evaluate(in: context)
             }
+        )
+    }
+
+    public func evaluateConcurrently(
+        _ input: CustomRuleInput,
+        maxConcurrentRuleJobs: Int? = nil
+    ) async -> CustomRuleOutput {
+        let context = CustomRuleContext(input: input)
+        let ruleFindings = await concurrentMap(
+            rules,
+            maxConcurrentJobs: maxConcurrentRuleJobs
+        ) { rule in
+            rule.evaluate(in: context)
+        }
+
+        return CustomRuleOutput(
+            findings: ruleFindings
+                .flatMap { $0 }
+                .deterministicallySorted()
         )
     }
 }

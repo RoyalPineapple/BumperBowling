@@ -47,9 +47,24 @@ public struct ArchitectureConfiguration: Equatable, Sendable, Codable {
 
 public struct CustomRuleWorkerConfiguration: Equatable, Sendable, Codable {
     public let enabled: Bool
+    public let maxConcurrentRuleJobs: Int?
 
-    public init(enabled: Bool) {
+    public init(enabled: Bool, maxConcurrentRuleJobs: Int? = nil) {
         self.enabled = enabled
+        self.maxConcurrentRuleJobs = maxConcurrentRuleJobs.map { Swift.max(1, $0) }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case maxConcurrentRuleJobs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            enabled: try container.decode(Bool.self, forKey: .enabled),
+            maxConcurrentRuleJobs: try container.decodeIfPresent(Int.self, forKey: .maxConcurrentRuleJobs)
+        )
     }
 
     public static let enabled = CustomRuleWorkerConfiguration(enabled: true)
