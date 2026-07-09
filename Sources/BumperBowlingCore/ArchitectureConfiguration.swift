@@ -6,19 +6,54 @@ public struct ArchitectureConfiguration: Equatable, Sendable, Codable {
     public let excludedPaths: [String]
     public let components: [ComponentConfiguration]
     public let rules: RuleConfiguration
+    public let customRules: CustomRuleWorkerConfiguration
 
     public init(
         includedPaths: [String] = ["Sources"],
         excludedPaths: [String] = [".build", "DerivedData"],
         components: [ComponentConfiguration],
-        rules: RuleConfiguration = RuleConfiguration()
+        rules: RuleConfiguration = RuleConfiguration(),
+        customRules: CustomRuleWorkerConfiguration = .disabled
     ) {
         self.includedPaths = includedPaths
         self.excludedPaths = excludedPaths
         self.components = components
         self.rules = rules
+        self.customRules = customRules
     }
 
+    enum CodingKeys: String, CodingKey {
+        case includedPaths
+        case excludedPaths
+        case components
+        case rules
+        case customRules
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            includedPaths: try container.decode([String].self, forKey: .includedPaths),
+            excludedPaths: try container.decode([String].self, forKey: .excludedPaths),
+            components: try container.decode([ComponentConfiguration].self, forKey: .components),
+            rules: try container.decode(RuleConfiguration.self, forKey: .rules),
+            customRules: try container.decodeIfPresent(
+                CustomRuleWorkerConfiguration.self,
+                forKey: .customRules
+            ) ?? .disabled
+        )
+    }
+}
+
+public struct CustomRuleWorkerConfiguration: Equatable, Sendable, Codable {
+    public let enabled: Bool
+
+    public init(enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    public static let enabled = CustomRuleWorkerConfiguration(enabled: true)
+    public static let disabled = CustomRuleWorkerConfiguration(enabled: false)
 }
 
 public struct ComponentConfiguration: Equatable, Sendable, Codable {

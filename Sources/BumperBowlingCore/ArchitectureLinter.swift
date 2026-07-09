@@ -239,17 +239,41 @@ public struct ViolationEvidence: Equatable, Sendable, Codable {
     }
 }
 
-public enum RuleID: String, CaseIterable, Equatable, Sendable, Codable {
-    case forbiddenImport = "forbidden_import"
-    case componentBoundary = "component_boundary"
-    case duplicateOwnership = "duplicate_ownership"
-    case declaredDependencyCycle = "declared_dependency_cycle"
-    case storedProperties = "stored_properties"
-    case syntaxConstructs = "syntax_constructs"
-    case syntaxKinds = "syntax_kinds"
-    case syntaxNodes = "syntax_nodes"
-    case publicDeclarations = "public_declarations"
-    case enumStateMachine = "enum_state_machine"
+public struct RuleID: Hashable, RawRepresentable, Sendable, Codable, CustomStringConvertible {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public var description: String {
+        rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    public static let forbiddenImport = RuleID("forbidden_import")
+    public static let componentBoundary = RuleID("component_boundary")
+    public static let duplicateOwnership = RuleID("duplicate_ownership")
+    public static let declaredDependencyCycle = RuleID("declared_dependency_cycle")
+    public static let storedProperties = RuleID("stored_properties")
+    public static let syntaxConstructs = RuleID("syntax_constructs")
+    public static let syntaxKinds = RuleID("syntax_kinds")
+    public static let syntaxNodes = RuleID("syntax_nodes")
+    public static let publicDeclarations = RuleID("public_declarations")
+    public static let enumStateMachine = RuleID("enum_state_machine")
 }
 
 public enum Severity: String, Equatable, Sendable, Codable {

@@ -33,6 +33,7 @@ identifier_name:
     - Excluded
     - Architecture
     - Assertions
+    - CustomRules
     - Component
     - RequireSyntax
     - DisallowSyntax

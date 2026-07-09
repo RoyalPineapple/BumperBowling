@@ -80,7 +80,21 @@ public enum BumperCommands {
         progress.report("Parsed \(model.files.count) Swift source file(s)")
         let enabledRuleCount = RuleRegistry(configuration: rules.ruleConfiguration).enabledRules.count
         progress.report("Evaluating \(enabledRuleCount) architecture rule(s)")
-        let report = ArchitectureLinter(rules: rules).lint(model)
+        let builtInReport = ArchitectureLinter(rules: rules).lint(model)
+        let customRuleOutput: CustomRuleOutput
+        if configuration.customRules.enabled {
+            progress.report("Evaluating custom rule worker")
+            customRuleOutput = try ConfigurationLoader.runCustomRules(
+                root: root,
+                configuration: configuration,
+                repository: model
+            )
+        } else {
+            customRuleOutput = .empty
+        }
+        let report = LintReport(
+            violations: builtInReport.violations + customRuleOutput.architectureViolations
+        )
         progress.report("Found \(report.violations.count) architecture violation(s)")
         return LintRunResult(rules: rules, repository: model, report: report)
     }

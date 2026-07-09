@@ -20,6 +20,8 @@ AssertionShape -> ApplyAssertions(...) -> repository policy
 - `ComponentShape`: a reusable bundle of component policy, such as capabilities,
   dependency policy, and requirements.
 - `AssertionShape`: a reusable bundle of repository-level assertions.
+- `CustomRuleSet`: an opt-in Swift closure surface for repository-specific
+  rules over Bumper Bowling's typed fact snapshot.
 - `RuleConfiguration`: evaluated policy after a configuration scopes it.
 - Scope: the paths, components, or exclusions where policy applies.
 
@@ -134,6 +136,56 @@ values available. The repository still opts in explicitly from
 import BumperBowlingCore
 import BumperRules
 ```
+
+### Custom Rule Worker
+
+Use custom rules when the repository needs a rule that is too specific for the
+core DSL, such as an exact import allow-list for one component. Enable the
+worker explicitly:
+
+```swift
+let configuration = BumperConfiguration {
+    Architecture {
+        Component(.score) {
+            Owns("Sources/TheScore")
+            Modules("TheScore")
+        }
+    }
+
+    CustomRules()
+}
+```
+
+Then define a top-level `customRules` value in `.bumper/Sources`:
+
+```swift
+import BumperBowlingCore
+
+let customRules = CustomRuleSet {
+    CustomRule("the_score.import_allow_list", severity: .error) { context in
+        let allowedImports = Set(["Foundation"])
+
+        return context.files(inComponent: "score").flatMap { file in
+            file.imports
+                .filter { !allowedImports.contains($0) }
+                .map { module in
+                    CustomRuleFailure(
+                        path: file.path,
+                        message: "\(file.component) imports non-allowlisted module \(module)",
+                        evidence: ViolationEvidence(
+                            observed: module,
+                            expectation: "allowed imports: Foundation"
+                        )
+                    )
+                }
+        }
+    }
+}
+```
+
+The host process owns scanning. It sends `CustomRuleInput` to the worker and
+expects `CustomRuleOutput` back. Keep custom rule closures pure over that input;
+do not use them as a second filesystem scanner.
 
 ## Built-In Primitives
 
