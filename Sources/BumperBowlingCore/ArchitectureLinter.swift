@@ -26,18 +26,20 @@ public struct RuleRegistry: Sendable {
     public let enabledRules: [ArchitectureRule]
 
     public init(configuration: RuleConfiguration) {
-        self.enabledRules = ([
+        var rules: [ArchitectureRule] = [
             .forbiddenImport(configuration.forbiddenImports),
             .componentBoundary(configuration.componentBoundary),
             .duplicateOwnership(configuration.duplicateOwnership),
             .declaredDependencyCycle(configuration.declaredDependencyCycle),
-        ] + configuration.storedPropertyRules.map(ArchitectureRule.storedProperties)
-            + configuration.syntaxConstructRules.map(ArchitectureRule.syntaxConstructs)
-            + configuration.syntaxKindRules.map(ArchitectureRule.syntaxKinds)
-            + configuration.syntaxNodeRules.map(ArchitectureRule.syntaxNodes)
-            + configuration.publicDeclarationRules.map(ArchitectureRule.publicDeclarations)
-            + configuration.enumStateMachineRules.map(ArchitectureRule.enumStateMachine))
-            .filter(\.isEnabled)
+        ]
+        rules += configuration.storedPropertyRules.map(ArchitectureRule.storedProperties)
+        rules += configuration.syntaxConstructRules.map(ArchitectureRule.syntaxConstructs)
+        rules += configuration.syntaxKindRules.map(ArchitectureRule.syntaxKinds)
+        rules += configuration.syntaxNodeRules.map(ArchitectureRule.syntaxNodes)
+        rules += configuration.publicDeclarationRules.map(ArchitectureRule.publicDeclarations)
+        rules += configuration.enumStateMachineRules.map(ArchitectureRule.enumStateMachine)
+
+        self.enabledRules = rules.filter(\.isEnabled)
     }
 }
 
