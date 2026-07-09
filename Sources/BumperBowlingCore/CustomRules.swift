@@ -1,7 +1,9 @@
 import Foundation
+import SwiftParser
+import SwiftSyntax
 
 public struct CustomRuleInput: Equatable, Sendable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public let schemaVersion: Int
     public let configuration: ArchitectureConfiguration
@@ -28,6 +30,7 @@ public struct CustomRuleInput: Equatable, Sendable, Codable {
 public struct CustomRuleFileFacts: Equatable, Sendable, Codable {
     public let path: RelativeFilePath
     public let component: String
+    public let source: String?
     public let imports: [String]
     public let nominalTypes: [CustomRuleNominalTypeFact]
     public let extensionDeclarations: [CustomRuleExtensionFact]
@@ -39,6 +42,7 @@ public struct CustomRuleFileFacts: Equatable, Sendable, Codable {
     public init(
         path: RelativeFilePath,
         component: String,
+        source: String? = nil,
         imports: [String],
         nominalTypes: [CustomRuleNominalTypeFact] = [],
         extensionDeclarations: [CustomRuleExtensionFact] = [],
@@ -49,6 +53,7 @@ public struct CustomRuleFileFacts: Equatable, Sendable, Codable {
     ) {
         self.path = path
         self.component = component
+        self.source = source
         self.imports = imports
         self.nominalTypes = nominalTypes
         self.extensionDeclarations = extensionDeclarations
@@ -62,6 +67,7 @@ public struct CustomRuleFileFacts: Equatable, Sendable, Codable {
         self.init(
             path: file.path,
             component: file.component.rawValue,
+            source: file.source,
             imports: file.imports.map(\.rawValue),
             nominalTypes: file.nominalTypes.map(CustomRuleNominalTypeFact.init),
             extensionDeclarations: file.extensionDeclarations.map(CustomRuleExtensionFact.init),
@@ -225,17 +231,27 @@ public struct CustomRuleImperativeConstructFact: Equatable, Sendable, Codable {
 
 public struct CustomRuleContext: Sendable {
     public let input: CustomRuleInput
+    private let parsedSourceFiles: [SourceFileContext]
 
     public init(input: CustomRuleInput) {
         self.input = input
+        self.parsedSourceFiles = input.files.compactMap(SourceFileContext.init)
     }
 
     public var files: [CustomRuleFileFacts] {
         input.files
     }
 
+    public var sourceFiles: [SourceFileContext] {
+        parsedSourceFiles
+    }
+
     public func files(inComponent component: String) -> [CustomRuleFileFacts] {
         files.filter { $0.component == component }
+    }
+
+    public func sourceFiles(inComponent component: String) -> [SourceFileContext] {
+        sourceFiles.filter { $0.component == component }
     }
 
     public func files(under prefix: String) -> [CustomRuleFileFacts] {
@@ -243,6 +259,62 @@ public struct CustomRuleContext: Sendable {
             return []
         }
         return files.filter { prefix.contains($0.path) }
+    }
+
+    public func sourceFiles(under prefix: String) -> [SourceFileContext] {
+        guard let prefix = try? RelativePathPrefix(prefix) else {
+            return []
+        }
+        return sourceFiles.filter { prefix.contains($0.path) }
+    }
+}
+
+public struct SourceFileContext: Sendable {
+    public let facts: CustomRuleFileFacts
+    public let source: String
+    public let syntax: SourceFileSyntax
+    public let locationConverter: SourceLocationConverter
+
+    public init?(facts: CustomRuleFileFacts) {
+        guard let source = facts.source else {
+            return nil
+        }
+
+        let syntax = Parser.parse(source: source)
+        self.facts = facts
+        self.source = source
+        self.syntax = syntax
+        self.locationConverter = SourceLocationConverter(fileName: facts.path.rawValue, tree: syntax)
+    }
+
+    public var path: RelativeFilePath {
+        facts.path
+    }
+
+    public var component: String {
+        facts.component
+    }
+
+    public var imports: [String] {
+        facts.imports
+    }
+
+    public func location(for node: some SyntaxProtocol) -> SourcePosition {
+        let sourceLocation = locationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
+        return SourcePosition(line: sourceLocation.line, column: sourceLocation.column)
+    }
+
+    public func failure(
+        at node: some SyntaxProtocol,
+        message: String,
+        evidence: ViolationEvidence? = nil
+    ) -> CustomRuleFailure {
+        CustomRuleFailure(
+            path: path,
+            location: location(for: node),
+            message: message,
+            evidence: evidence
+        )
     }
 }
 
@@ -302,8 +374,38 @@ public struct CustomRule: Sendable {
     }
 }
 
+public struct CustomSyntaxRule: Sendable {
+    fileprivate let rule: CustomRule
+
+    public init(
+        _ id: RuleID,
+        severity: Severity = .error,
+        evaluate: @escaping @Sendable (SourceFileContext) -> [CustomRuleFailure]
+    ) {
+        self.rule = CustomRule(id, severity: severity) { context in
+            context.sourceFiles.flatMap(evaluate)
+        }
+    }
+
+    public init(
+        _ id: String,
+        severity: Severity = .error,
+        evaluate: @escaping @Sendable (SourceFileContext) -> [CustomRuleFailure]
+    ) {
+        self.init(RuleID(id), severity: severity, evaluate: evaluate)
+    }
+}
+
 @resultBuilder
 public enum CustomRuleBuilder {
+    public static func buildExpression(_ expression: CustomRule) -> CustomRule {
+        expression
+    }
+
+    public static func buildExpression(_ expression: CustomSyntaxRule) -> CustomRule {
+        expression.rule
+    }
+
     public static func buildBlock(_ components: CustomRule...) -> [CustomRule] {
         components
     }

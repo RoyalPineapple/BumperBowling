@@ -121,6 +121,8 @@ let configuration = BumperConfiguration {
 }
 ```
 
+Fact-based custom rules evaluate the projected repository snapshot:
+
 ```swift
 // .bumper/Sources/CustomRules.swift
 import BumperBowlingCore
@@ -150,6 +152,34 @@ let customRules = CustomRuleSet {
 Bumper Bowling owns the scan. The custom worker receives `CustomRuleInput` as
 Codable data and returns `CustomRuleOutput` as Codable findings; the closures do
 not cross the process boundary.
+
+Syntax custom rules evaluate `SourceFileContext` values with raw SwiftSyntax:
+
+```swift
+// .bumper/Sources/CustomRules.swift
+import BumperBowlingCore
+import SwiftSyntax
+
+let customRules = CustomRuleSet {
+    CustomSyntaxRule("core.no_tuple_api", severity: .error) { file in
+        let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
+        visitor.walk(file.syntax)
+
+        return visitor.tuples.map { tuple in
+            file.failure(at: tuple, message: "Tuple API must use a named type.")
+        }
+    }
+}
+
+private final class TupleTypeCollector: SyntaxVisitor {
+    private(set) var tuples: [TupleTypeSyntax] = []
+
+    override func visit(_ node: TupleTypeSyntax) -> SyntaxVisitorContinueKind {
+        tuples.append(node)
+        return .skipChildren
+    }
+}
+```
 
 Raw syntax assertions use SwiftSyntax's own `SyntaxKind` values:
 

@@ -194,6 +194,29 @@ struct BumperCommandsTests {
     }
 
     @Test
+    func lintRunsOptedInCustomSyntaxRuleWorker() async throws {
+        let root = try makeRepository(source: """
+        public struct Thing {
+            public func pair() -> (String, Int) {
+                ("id", 1)
+            }
+        }
+        """)
+        try writeCustomRuleConfiguration(to: root)
+        try writeCustomSyntaxRuleSource(to: root)
+
+        let report = try await BumperCommands.lint(root: root)
+        let violation = try #require(report.violations.first { violation in
+            violation.ruleID == RuleID("custom.no_tuple_types")
+        })
+
+        #expect(report.hasErrors)
+        #expect(violation.path.rawValue == "Sources/BumperBowlingCore/Thing.swift")
+        #expect(violation.message == "Tuple types must use named values.")
+        #expect(violation.evidence?.observed == "(String, Int)")
+    }
+
+    @Test
     func initWritesRunnableConfiguration() async throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
@@ -342,6 +365,47 @@ struct BumperCommandsTests {
                             )
                         }
                 }
+            }
+        }
+        """
+
+        let sourceURL = root.appendingPathComponent(".bumper/Sources/CustomRules.swift")
+        try FileManager.default.createDirectory(
+            at: sourceURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try source.write(to: sourceURL, atomically: true, encoding: .utf8)
+    }
+
+    private func writeCustomSyntaxRuleSource(to root: URL) throws {
+        let source = """
+        import BumperBowlingCore
+        import SwiftSyntax
+
+        let customRules = CustomRuleSet {
+            CustomSyntaxRule("custom.no_tuple_types", severity: .error) { file in
+                let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
+                visitor.walk(file.syntax)
+
+                return visitor.tuples.map { tuple in
+                    file.failure(
+                        at: tuple,
+                        message: "Tuple types must use named values.",
+                        evidence: ViolationEvidence(
+                            observed: tuple.trimmedDescription,
+                            expectation: "named type"
+                        )
+                    )
+                }
+            }
+        }
+
+        private final class TupleTypeCollector: SyntaxVisitor {
+            private(set) var tuples: [TupleTypeSyntax] = []
+
+            override func visit(_ node: TupleTypeSyntax) -> SyntaxVisitorContinueKind {
+                tuples.append(node)
+                return .skipChildren
             }
         }
         """
