@@ -261,6 +261,7 @@ struct BumperConfigurationDSLTests {
                 ])
         )
         #expect(rules.ruleConfiguration.storedProperties.severity == .error)
+        #expect(rules.ruleConfiguration.storedPropertyRules.map(\.severity) == [.error, .error, .warning, .warning])
         #expect(rules.ruleConfiguration.syntaxConstructs.disallowedConstructs == [.directStringMatch])
         #expect(rules.ruleConfiguration.syntaxConstructs.excludedPaths == ["Sources/Core/StringMatcher.swift"])
     }

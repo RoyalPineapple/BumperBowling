@@ -29,6 +29,9 @@
 - Fixed generated configuration-runner manifests to use an explicit
   `BumperBowling` package identity, so path-based checkouts work even when the
   checkout directory has a different name.
+- Fixed composed rule settings so shapes preserve each scoped path, exclusion,
+  and severity instead of collapsing compatible rule families into one merged
+  setting before linting.
 
 ## 0.2.0 - 2026-07-07
 

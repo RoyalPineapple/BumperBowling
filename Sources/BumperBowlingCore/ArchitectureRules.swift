@@ -74,13 +74,26 @@ public struct ArchitectureRules: Equatable, Sendable {
             _ = try setting.paths.map(RelativePathPrefix.init)
         }
 
-        _ = try configuration.storedProperties.paths.map(RelativePathPrefix.init)
-        _ = try configuration.syntaxConstructs.paths.map(RelativePathPrefix.init)
-        _ = try configuration.syntaxConstructs.excludedPaths.map(RelativePathPrefix.init)
-        _ = try configuration.syntaxKinds.paths.map(RelativePathPrefix.init)
-        _ = try configuration.syntaxNodes.paths.map(RelativePathPrefix.init)
-        _ = try configuration.publicDeclarations.paths.map(RelativePathPrefix.init)
-        _ = try configuration.enumStateMachine.paths.map(RelativePathPrefix.init)
+        for setting in configuration.storedPropertyRules {
+            _ = try setting.paths.map(RelativePathPrefix.init)
+            _ = try setting.excludedPaths.map(RelativePathPrefix.init)
+        }
+        for setting in configuration.syntaxConstructRules {
+            _ = try setting.paths.map(RelativePathPrefix.init)
+            _ = try setting.excludedPaths.map(RelativePathPrefix.init)
+        }
+        for setting in configuration.syntaxKindRules {
+            _ = try setting.paths.map(RelativePathPrefix.init)
+        }
+        for setting in configuration.syntaxNodeRules {
+            _ = try setting.paths.map(RelativePathPrefix.init)
+        }
+        for setting in configuration.publicDeclarationRules {
+            _ = try setting.paths.map(RelativePathPrefix.init)
+        }
+        for setting in configuration.enumStateMachineRules {
+            _ = try setting.paths.map(RelativePathPrefix.init)
+        }
     }
 
     public func component(containing relativePath: RelativeFilePath) -> ComponentRule? {

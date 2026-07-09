@@ -94,6 +94,11 @@ Most lanes are `Component` values. A component lane has:
 
 Some assertions use narrower lanes. `RequiresScoped(...)` and assertion path filters apply a rule to a specific path scope inside the repository.
 
+Composed shapes preserve those narrower lanes as distinct rule settings. The
+merged `RuleConfiguration` fields remain a compatibility summary, but the
+validator evaluates the scoped settings list so severity, paths, and exclusions
+stay attached to the clause that declared them.
+
 The rule engine should always know which lane a finding came from. A report without a lane is hard to fix.
 
 ## Components

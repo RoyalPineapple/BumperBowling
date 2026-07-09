@@ -18,7 +18,7 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
     }
 
     public func render() -> String {
-        let enabledRules = RuleRegistry(configuration: rules.ruleConfiguration).enabledRules
+        let enabledRules = RuleRegistry(configuration: rules.ruleConfiguration).enabledRules.uniqueRuleFamilies()
         var lines: [String] = []
         lines.append("# Bumper Bowling Architecture Snapshot")
         lines.append("")
@@ -115,5 +115,14 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
         lines.append("    Findings --> Report[\"LintReport\"]")
         lines.append("```")
         return lines
+    }
+}
+
+private extension Array where Element == ArchitectureRule {
+    func uniqueRuleFamilies() -> [ArchitectureRule] {
+        var seenRuleIDs = Set<String>()
+        return filter { rule in
+            seenRuleIDs.insert(rule.id.rawValue).inserted
+        }
     }
 }
