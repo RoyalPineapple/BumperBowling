@@ -13,6 +13,7 @@ public struct BumperConfiguration: Equatable, Sendable {
         var excludedPaths: [String] = [".build", "DerivedData"]
         var components: [ComponentConfiguration] = []
         var rules = RuleConfiguration()
+        var customRules = CustomRuleWorkerConfiguration.disabled
 
         for element in elements {
             switch element {
@@ -25,6 +26,8 @@ public struct BumperConfiguration: Equatable, Sendable {
                 excludedPaths = paths
             case .assertions(let configuredRules):
                 rules = rules.merging(configuredRules)
+            case .customRules(let configuration):
+                customRules = configuration
             }
         }
 
@@ -32,7 +35,8 @@ public struct BumperConfiguration: Equatable, Sendable {
             includedPaths: includedPaths,
             excludedPaths: excludedPaths,
             components: components,
-            rules: rules
+            rules: rules,
+            customRules: customRules
         )
     }
 }
@@ -42,6 +46,7 @@ public enum BumperConfigurationElement: Equatable, Sendable {
     case included([String])
     case excluded([String])
     case assertions(RuleConfiguration)
+    case customRules(CustomRuleWorkerConfiguration)
 }
 
 @resultBuilder
@@ -65,6 +70,10 @@ public func Architecture(@ArchitectureBuilder _ content: () -> [ComponentDeclara
 
 public func Assertions(@AssertionsBuilder _ content: () -> [RuleConfiguration]) -> BumperConfigurationElement {
     .assertions(content().combined())
+}
+
+public func CustomRules(_ configuration: CustomRuleWorkerConfiguration = .enabled) -> BumperConfigurationElement {
+    .customRules(configuration)
 }
 
 @resultBuilder

@@ -172,13 +172,14 @@ struct BumperCLI {
       bumper explain <path>
 
     Environment:
-      BUMPER_CACHE_DIR    Directory for cached configuration runner packages.
+      BUMPER_CACHE_DIR    Directory for cached configuration and custom rule runner packages.
 
     Security:
       BumperBowling.swift is a program, like Package.swift. Bumper compiles it
       and runs it in a sealed-off process: no network, nowhere to write, an
       empty environment, and only the configuration value comes back. The
       build is cached, so it runs once per change, not once per lint.
+      Opt-in custom rules run as a second cached worker over scanned facts.
 
       `bumper config` loads the configuration and tells you whether it is valid.
 

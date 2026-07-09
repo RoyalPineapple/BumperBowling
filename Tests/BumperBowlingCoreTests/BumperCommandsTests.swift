@@ -172,6 +172,28 @@ struct BumperCommandsTests {
     }
 
     @Test
+    func lintRunsOptedInCustomRuleWorker() async throws {
+        let root = try makeRepository(source: """
+        import Foundation
+        import UIKit
+
+        public struct Thing {}
+        """)
+        try writeCustomRuleConfiguration(to: root)
+        try writeCustomRuleSource(to: root)
+
+        let report = try await BumperCommands.lint(root: root)
+        let violation = try #require(report.violations.first { violation in
+            violation.ruleID == RuleID("custom.import_allow_list")
+        })
+
+        #expect(report.hasErrors)
+        #expect(violation.path.rawValue == "Sources/BumperBowlingCore/Thing.swift")
+        #expect(violation.message.contains("UIKit"))
+        #expect(violation.evidence?.expectation == "allowed imports: Foundation")
+    }
+
+    @Test
     func initWritesRunnableConfiguration() async throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
@@ -270,6 +292,66 @@ struct BumperCommandsTests {
             atomically: true,
             encoding: .utf8
         )
+    }
+
+    private func writeCustomRuleConfiguration(to root: URL) throws {
+        let configuration = """
+        import BumperBowlingCore
+
+        let configuration = BumperConfiguration {
+            Included {
+                "Sources"
+            }
+
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/BumperBowlingCore")
+                    Modules("BumperBowlingCore")
+                }
+            }
+
+            CustomRules()
+        }
+        """
+
+        try configuration.write(
+            to: root.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    private func writeCustomRuleSource(to root: URL) throws {
+        let source = """
+        import BumperBowlingCore
+
+        let customRules = CustomRuleSet {
+            CustomRule("custom.import_allow_list", severity: .error) { context in
+                let allowedImports = Set(["Foundation"])
+                return context.files.flatMap { file in
+                    file.imports
+                        .filter { !allowedImports.contains($0) }
+                        .map { module in
+                            CustomRuleFailure(
+                                path: file.path,
+                                message: "\\(file.component) imports non-allowlisted module \\(module)",
+                                evidence: ViolationEvidence(
+                                    observed: module,
+                                    expectation: "allowed imports: Foundation"
+                                )
+                            )
+                        }
+                }
+            }
+        }
+        """
+
+        let sourceURL = root.appendingPathComponent(".bumper/Sources/CustomRules.swift")
+        try FileManager.default.createDirectory(
+            at: sourceURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try source.write(to: sourceURL, atomically: true, encoding: .utf8)
     }
 
     private func repositoryRoot() -> URL {

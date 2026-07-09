@@ -105,6 +105,52 @@ Swift values importable; `BumperBowling.swift` still chooses what to use:
 import BumperRules
 ```
 
+Custom rules are the escape hatch for repository-specific checks that cannot be
+named ahead of time by Bumper Bowling. They are still typed and opt-in:
+
+```swift
+let configuration = BumperConfiguration {
+    Architecture {
+        Component(.score) {
+            Owns("Sources/TheScore")
+            Modules("TheScore")
+        }
+    }
+
+    CustomRules()
+}
+```
+
+```swift
+// .bumper/Sources/CustomRules.swift
+import BumperBowlingCore
+
+let customRules = CustomRuleSet {
+    CustomRule("the_score.import_allow_list", severity: .error) { context in
+        let allowedImports = Set(["Foundation"])
+
+        return context.files(inComponent: "score").flatMap { file in
+            file.imports
+                .filter { !allowedImports.contains($0) }
+                .map { module in
+                    CustomRuleFailure(
+                        path: file.path,
+                        message: "\(file.component) imports non-allowlisted module \(module)",
+                        evidence: ViolationEvidence(
+                            observed: module,
+                            expectation: "allowed imports: Foundation"
+                        )
+                    )
+                }
+        }
+    }
+}
+```
+
+Bumper Bowling owns the scan. The custom worker receives `CustomRuleInput` as
+Codable data and returns `CustomRuleOutput` as Codable findings; the closures do
+not cross the process boundary.
+
 Raw syntax assertions use SwiftSyntax's own `SyntaxKind` values:
 
 ```swift

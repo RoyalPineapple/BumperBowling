@@ -154,6 +154,55 @@ a `BumperRules` library product:
   Sources/BumperRules/Rules.swift
 ```
 
+## Custom Rules
+
+When a repository needs a rule Bumper Bowling cannot know in advance, opt into a
+custom rule worker:
+
+```swift
+let configuration = BumperConfiguration {
+    Architecture {
+        Component(.score) {
+            Owns("Sources/TheScore")
+            Modules("TheScore")
+        }
+    }
+
+    CustomRules()
+}
+```
+
+Then define `customRules` in `.bumper/Sources`:
+
+```swift
+import BumperBowlingCore
+
+let customRules = CustomRuleSet {
+    CustomRule("the_score.import_allow_list", severity: .error) { context in
+        let allowedImports = Set(["Foundation"])
+
+        return context.files(inComponent: "score").flatMap { file in
+            file.imports
+                .filter { !allowedImports.contains($0) }
+                .map { module in
+                    CustomRuleFailure(
+                        path: file.path,
+                        message: "\(file.component) imports non-allowlisted module \(module)",
+                        evidence: ViolationEvidence(
+                            observed: module,
+                            expectation: "allowed imports: Foundation"
+                        )
+                    )
+                }
+        }
+    }
+}
+```
+
+The worker receives a `Codable` `CustomRuleInput` built from the host scan and
+returns a `Codable` `CustomRuleOutput`. Rule code does not rescan the repo or
+walk arbitrary files; it evaluates Bumper Bowling's typed facts.
+
 ## Agent Skill
 
 Bumper Bowling ships a Codex skill for agents composing repo-owned architecture
@@ -184,8 +233,8 @@ bumper explain <path>          # what bumper sees in one file
 
 `lint` and `scan` accept `--format markdown|json`. `lint` also accepts
 `--fail-on none|note|warning|error`, `--baseline <path>`, and `--progress`.
-Use `BUMPER_CACHE_DIR` to put compiled configuration runners in a stable CI
-cache location.
+Use `BUMPER_CACHE_DIR` to put compiled configuration and custom rule runners in
+a stable CI cache location.
 
 ## How The Configuration Loads
 

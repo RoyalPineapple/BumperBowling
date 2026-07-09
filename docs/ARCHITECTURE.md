@@ -39,6 +39,14 @@ The current SwiftSyntax node surface is documented in [SWIFTSYNTAX_SURFACE.md](S
 
 The configuration runner generates a small package that links `BumperBowlingCore`, compiles `BumperBowling.swift` into it, and runs the product in a deny-default sandbox — no network, no writable paths, an empty environment. The run computes the configuration value and prints it as JSON on stdout; nothing else crosses back, and scanning and linting run in the host process, never in configuration code.
 
+If `CustomRules()` is enabled, linting runs a second cached executable after the
+host scan completes. The host encodes `CustomRuleInput` from the scanned
+repository facts, feeds it to the custom rule worker on stdin, and decodes
+`CustomRuleOutput` from stdout. The worker can use Swift closures and local
+repository vocabulary, but the process boundary is still Codable facts in and
+Codable findings out; custom rules do not receive filesystem traversal or a
+fresh AST parse lane.
+
 The build is cached against the configuration's content hash (plus the toolchain identity and the runner's own hashes), so the compile happens once per change to `BumperBowling.swift`, not once per lint. An unchanged configuration loads from the cached binary with no build. `bumper config` loads the configuration and reports whether it is valid.
 
 A configuration should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
@@ -59,11 +67,12 @@ applies scope and severity. Built-in requirement conveniences and
 repository-owned requirements lower into the same raw graph assertions.
 
 Consumer repositories can place Swift files under `.bumper/Sources` to define
-their own `ComponentRequirement`, `ComponentShape`, and `AssertionShape`
-vocabulary. Those files compile into the temporary configuration runner beside
-`BumperBowling.swift`. They do not add a plugin boundary or hidden evaluator;
+their own `ComponentRequirement`, `ComponentShape`, `AssertionShape`, and
+custom rule vocabulary. Those files compile into the temporary configuration
+runner beside `BumperBowling.swift`. They do not add a plugin boundary or hidden evaluator;
 they are just consumer-owned Swift values that lower into the same
-`ArchitectureConfiguration` data as inline configuration code.
+`ArchitectureConfiguration` data as inline configuration code, or into the
+explicit `customRules` value consumed by the custom rule worker.
 
 Reusable vocabulary can also live in a conventional `.bumper/Package.swift`
 SwiftPM package. The generated runner depends on its `BumperRules` library

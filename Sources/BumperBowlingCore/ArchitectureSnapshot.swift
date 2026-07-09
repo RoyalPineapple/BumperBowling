@@ -109,6 +109,8 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
         case .enumStateMachine:
             lines.append("    Enums[\"ArchitectureGraph.sourceFiles.enums\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
             lines.append("    Paths[\"PathRuleConfiguration.paths\"] --> \(ruleNode)")
+        default:
+            lines.append("    Facts[\"Repository facts\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
         }
 
         lines.append("    \(ruleNode) --> Findings[\"ArchitectureViolation[]\"]")
