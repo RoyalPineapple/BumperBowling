@@ -20,6 +20,20 @@ public struct ArchitectureLinter: Sendable {
 
         return LintReport(violations: violations)
     }
+
+    public func lintConcurrently(_ nodes: RepositoryFacts) async -> LintReport {
+        let registry = RuleRegistry(configuration: rules.ruleConfiguration)
+        let graph = ArchitectureGraph(nodes: nodes, rules: rules)
+        let ruleViolations = await concurrentMap(registry.enabledRules) { rule in
+            rule.evaluate(graph: graph, rules: rules)
+        }
+
+        return LintReport(
+            violations: ruleViolations
+                .flatMap { $0 }
+                .deterministicallySorted()
+        )
+    }
 }
 
 public struct RuleRegistry: Sendable {

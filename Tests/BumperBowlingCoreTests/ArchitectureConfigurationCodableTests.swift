@@ -66,13 +66,23 @@ struct ArchitectureConfigurationCodableTests {
                     disallowedNames: [.prefix("legacy"), .contains("Deprecated")]
                 ),
                 enumStateMachine: PathRuleConfiguration(severity: .warning, paths: ["Sources/Core/Parser"])
-            )
+            ),
+            customRules: CustomRuleWorkerConfiguration(enabled: true, maxConcurrentRuleJobs: 8)
         )
 
         let data = try JSONEncoder().encode(configuration)
         let decoded = try JSONDecoder().decode(ArchitectureConfiguration.self, from: data)
 
         #expect(decoded == configuration)
+    }
+
+    @Test
+    func customRuleWorkerConfigurationDecodesOlderPayloads() throws {
+        let payload = Data(#"{"enabled":true}"#.utf8)
+
+        let configuration = try JSONDecoder().decode(CustomRuleWorkerConfiguration.self, from: payload)
+
+        #expect(configuration == CustomRuleWorkerConfiguration(enabled: true))
     }
 
     @Test

@@ -73,30 +73,11 @@ public enum BumperCommands {
         configuration: ArchitectureConfiguration,
         progress: BumperProgressReporter = .disabled
     ) async throws -> LintRunResult {
-        progress.report("Preparing architecture rules")
-        let rules = try ArchitectureRules(configuration: configuration)
-        progress.report("Scanning Swift source files")
-        let model = try await RepositoryScanner(rules: rules).scan(root: root)
-        progress.report("Parsed \(model.files.count) Swift source file(s)")
-        let enabledRuleCount = RuleRegistry(configuration: rules.ruleConfiguration).enabledRules.count
-        progress.report("Evaluating \(enabledRuleCount) architecture rule(s)")
-        let builtInReport = ArchitectureLinter(rules: rules).lint(model)
-        let customRuleOutput: CustomRuleOutput
-        if configuration.customRules.enabled {
-            progress.report("Evaluating custom rule worker")
-            customRuleOutput = try ConfigurationLoader.runCustomRules(
-                root: root,
-                configuration: configuration,
-                repository: model
-            )
-        } else {
-            customRuleOutput = .empty
-        }
-        let report = LintReport(
-            violations: builtInReport.violations + customRuleOutput.architectureViolations
-        )
-        progress.report("Found \(report.violations.count) architecture violation(s)")
-        return LintRunResult(rules: rules, repository: model, report: report)
+        try await LintRunEngine(
+            root: root,
+            configuration: configuration,
+            progress: progress
+        ).run()
     }
 
     public static func checkConfiguration(root: URL) throws -> ConfigurationReport {
