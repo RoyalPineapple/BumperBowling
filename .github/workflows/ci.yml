@@ -19,11 +19,27 @@ jobs:
   bumper-tests:
     name: Bumper Tests
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Cache Bumper runner
+        uses: actions/cache@v4
+        with:
+          path: .bumper-ci-cache
+          key: bumper-runner-${{ runner.os }}-${{ hashFiles('BumperBowling.swift', '.bumper/**', 'Sources/**', 'Package.swift') }}
+          restore-keys: |
+            bumper-runner-${{ runner.os }}-
 
       - name: Show toolchain versions
         run: |
@@ -42,3 +58,5 @@ jobs:
 
       - name: Run Bumper CLI lint
         run: swift run bumper lint .
+        env:
+          BUMPER_CACHE_DIR: ${{ github.workspace }}/.bumper-ci-cache
