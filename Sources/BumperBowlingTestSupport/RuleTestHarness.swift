@@ -4,11 +4,16 @@ import Foundation
 /// Evaluates exactly one rule over an in-memory repository and returns the
 /// same structured report the engine and CLI use. Framework-neutral: no
 /// XCTest or Swift Testing dependency.
-public struct RuleTestHarness<Rule: RuleDefinition>: Sendable {
-    private let rule: Rule
+public struct RuleTestHarness: Sendable {
+    private let rules: RuleSet
 
-    public init(_ rule: Rule) {
-        self.rule = rule
+    public init(_ rule: some RuleDefinition) {
+        self.rules = RuleSet(rules: [rule])
+    }
+
+    /// Runs an explicitly supplied rule set instead of one rule.
+    public init(_ rules: RuleSet) {
+        self.rules = rules
     }
 
     public func evaluate(_ repository: VirtualRepository) throws -> RuleReport {
@@ -18,11 +23,10 @@ public struct RuleTestHarness<Rule: RuleDefinition>: Sendable {
                 sourceFileFacts(for: file, summary: parser.parse(file.source))
             }
         )
-        let context = RuleContext(
+        return try rules.evaluate(
             configuration: configuration(for: repository),
-            repository: try RepositorySyntax(facts: facts)
+            repository: RepositorySyntax(facts: facts)
         )
-        return try RuleSet(rules: [AnyRuleDefinition(rule)]).evaluate(in: context)
     }
 
     private func configuration(for repository: VirtualRepository) -> ArchitectureConfiguration {

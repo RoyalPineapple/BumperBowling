@@ -277,11 +277,11 @@ public struct CustomRuleContext: Sendable {
     }
 }
 
-/// One parsed source file: typed path and component, source text, syntax,
-/// location conversion, and failure construction.
+/// One parsed source file: typed descriptor, source text, syntax, location
+/// conversion, and failure construction.
 public struct SourceFileContext: Sendable {
     public let facts: CustomRuleFileFacts
-    public let component: ComponentID
+    public let descriptor: SourceFileDescriptor
     public let source: String
     public let syntax: SourceFileSyntax
     public let locationConverter: SourceLocationConverter
@@ -294,7 +294,7 @@ public struct SourceFileContext: Sendable {
 
         let syntax = Parser.parse(source: source)
         self.facts = facts
-        self.component = component
+        self.descriptor = SourceFileDescriptor(path: facts.path, component: component)
         self.source = source
         self.syntax = syntax
         self.locationConverter = SourceLocationConverter(fileName: facts.path.rawValue, tree: syntax)
@@ -310,16 +310,24 @@ public struct SourceFileContext: Sendable {
     }
 
     public var path: RelativeFilePath {
-        facts.path
+        descriptor.path
+    }
+
+    public var component: ComponentID {
+        descriptor.component
     }
 
     public var imports: [String] {
         facts.imports
     }
 
-    public func location(for node: some SyntaxProtocol) -> SourcePosition {
+    public func position(of node: some SyntaxProtocol) -> SourcePosition {
         let sourceLocation = locationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
         return SourcePosition(line: sourceLocation.line, column: sourceLocation.column)
+    }
+
+    func location(for node: some SyntaxProtocol) -> SourcePosition {
+        position(of: node)
     }
 
     public func failure(
@@ -329,7 +337,7 @@ public struct SourceFileContext: Sendable {
     ) -> RuleFailure {
         RuleFailure(
             path: path,
-            location: location(for: node),
+            location: position(of: node),
             message: message,
             evidence: evidence
         )
@@ -434,7 +442,7 @@ public typealias CustomRuleSet = RuleSet
 extension RuleContext {
     /// Builds an evaluation context from the custom-rule worker payload.
     /// Files without source text keep their facts but have no syntax context.
-    public init(input: CustomRuleInput) {
+    convenience init(input: CustomRuleInput) {
         self.init(
             configuration: input.configuration,
             repository: RepositorySyntax(

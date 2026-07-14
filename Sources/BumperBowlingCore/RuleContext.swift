@@ -25,14 +25,27 @@ public struct RepositorySyntax: Sendable {
     }
 }
 
+/// Typed path, component, and other cheap per-file metadata that does not
+/// duplicate syntax facts.
+public struct SourceFileDescriptor: Equatable, Hashable, Sendable, Codable {
+    public let path: RelativeFilePath
+    public let component: ComponentID
+
+    public init(path: RelativeFilePath, component: ComponentID) {
+        self.path = path
+        self.component = component
+    }
+}
+
 /// Immutable repository, file, configuration, and fact access for one
-/// evaluation run.
-public struct RuleContext: Sendable {
+/// evaluation run. Only the engine constructs a context, which guarantees
+/// one repository and one fact cache per run.
+public final class RuleContext: Sendable {
     public let configuration: ArchitectureConfiguration
     public let repository: RepositorySyntax
     private let factStore: FactStore
 
-    public init(configuration: ArchitectureConfiguration, repository: RepositorySyntax) {
+    init(configuration: ArchitectureConfiguration, repository: RepositorySyntax) {
         self.configuration = configuration
         self.repository = repository
         self.factStore = FactStore()
@@ -44,7 +57,7 @@ public struct RuleContext: Sendable {
         }
     }
 
-    public func facts<Provider: FactProvider>(_ provider: Provider.Type) throws -> Provider.Facts {
+    public func facts<Provider: FactProvider>(_ provider: Provider) throws -> Provider.Facts {
         try factStore.facts(provider, repository: repository)
     }
 }

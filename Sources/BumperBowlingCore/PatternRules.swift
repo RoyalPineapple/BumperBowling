@@ -26,20 +26,22 @@ public struct ForbiddenPattern<Pattern: SyntaxPattern>: RuleDefinition {
     }
 }
 
-/// Concrete factory so consumers never spell generic signatures.
-public func forbid<Pattern: SyntaxPattern>(
-    _ pattern: Pattern,
-    id: RuleID,
-    severity: Severity = .error,
-    summary: String,
-    scope: RuleScope = .repository,
-    message: @escaping @Sendable (SyntaxMatch<Pattern.Match>) -> String
-) -> ForbiddenPattern<Pattern> {
-    ForbiddenPattern(
-        pattern,
-        metadata: RuleMetadata(id: id, severity: severity, summary: summary),
-        scope: scope
-    ) { match in
-        match.failure(message: message(match))
+extension Rules {
+    /// Concrete factory so consumers never spell generic signatures.
+    public static func forbid<Pattern: SyntaxPattern>(
+        _ pattern: Pattern,
+        id: String,
+        severity: Severity = .error,
+        summary: String = "Forbidden syntax pattern.",
+        scope: RuleScope = .repository,
+        message: @escaping @Sendable (SyntaxMatch<Pattern.Match>) -> String
+    ) -> ForbiddenPattern<Pattern> {
+        ForbiddenPattern(
+            pattern,
+            metadata: RuleMetadata(id: RuleID(id), severity: severity, summary: summary),
+            scope: scope
+        ) { match in
+            match.failure(message: message(match))
+        }
     }
 }

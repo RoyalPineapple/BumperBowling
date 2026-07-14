@@ -1,7 +1,7 @@
 import Foundation
 import SwiftSyntax
 import Testing
-import BumperBowlingCore
+@testable import BumperBowlingCore
 import BumperBowlingTestSupport
 
 @Suite("Rule engine")
@@ -15,7 +15,7 @@ struct RuleEngineTests {
             SyntaxRule(
                 metadata: RuleMetadata(id: "typed.syntax", severity: .error, summary: "typed")
             ) { _ in [] }
-            forbid(
+            Rules.forbid(
                 functionCalls(),
                 id: "query.rule",
                 summary: "no calls"
@@ -47,27 +47,30 @@ struct RuleEngineTests {
     func scopesComposeOverPathsAndComponents() throws {
         let core = try ComponentID("core")
         let cli = try ComponentID("cli")
-        let corePath = try RelativeFilePath("Sources/Core/A.swift")
-        let cliPath = try RelativeFilePath("Sources/CLI/B.swift")
-        let testPath = try RelativeFilePath("Tests/CoreTests/C.swift")
+        let coreFile = SourceFileDescriptor(path: try RelativeFilePath("Sources/Core/A.swift"), component: core)
+        let cliFile = SourceFileDescriptor(path: try RelativeFilePath("Sources/CLI/B.swift"), component: cli)
+        let testFile = SourceFileDescriptor(path: try RelativeFilePath("Tests/CoreTests/C.swift"), component: core)
 
         let underSources = RuleScope.under(try RelativePathPrefix("Sources"))
-        #expect(underSources.includes(path: corePath, component: core))
-        #expect(!underSources.includes(path: testPath, component: core))
+        #expect(underSources.includes(coreFile))
+        #expect(!underSources.includes(testFile))
 
         let coreOnly = RuleScope.component(core)
-        #expect(coreOnly.includes(path: corePath, component: core))
-        #expect(!coreOnly.includes(path: cliPath, component: cli))
+        #expect(coreOnly.includes(coreFile))
+        #expect(!coreOnly.includes(cliFile))
 
         let union = coreOnly.union(RuleScope.component(cli))
-        #expect(union.includes(path: cliPath, component: cli))
+        #expect(union.includes(cliFile))
 
-        let excluded = underSources.excluding(RuleScope.files([cliPath]))
-        #expect(excluded.includes(path: corePath, component: core))
-        #expect(!excluded.includes(path: cliPath, component: cli))
+        let excluded = underSources.excluding(RuleScope.files([cliFile.path]))
+        #expect(excluded.includes(coreFile))
+        #expect(!excluded.includes(cliFile))
 
-        #expect(RuleScope.productionSources.includes(path: corePath, component: core))
-        #expect(!RuleScope.productionSources.includes(path: testPath, component: core))
+        #expect(RuleScope.productionSources.includes(coreFile))
+        #expect(!RuleScope.productionSources.includes(testFile))
+
+        #expect(RuleScope.component(EngineTestComponent.core).includes(coreFile))
+        #expect(!RuleScope.component(EngineTestComponent.core).includes(cliFile))
     }
 
     @Test
@@ -147,6 +150,22 @@ struct RuleEngineTests {
     }
 
     @Test
+    func duplicateRuleIDsAreConfigurationErrors() throws {
+        let rules = RuleSet {
+            CustomRule("dup.rule") { _ in [] }
+            CustomRule("dup.rule") { _ in [] }
+        }
+
+        #expect(throws: RuleEvaluationError.duplicateRuleID(RuleID("dup.rule"))) {
+            _ = try RuleTestHarness(rules).evaluate(
+                VirtualRepository {
+                    VirtualSourceFile.swift("Sources/Core/A.swift", component: "core", source: "struct A {}")
+                }
+            )
+        }
+    }
+
+    @Test
     func analysisFailuresAreExplicitErrors() throws {
         struct Underlying: Error {}
         let rules = RuleSet {
@@ -219,7 +238,7 @@ struct RuleEngineTests {
 
         // map preserves the transformed node type: FunctionDeclSyntax -> TokenSyntax.
         let names: [SyntaxMatch<TokenSyntax>] = functions()
-            .map { match in match.node.name }
+            .compactMap { match in match.node.name }
             .matches(in: file)
         #expect(names.map(\.node.text) == ["takesTarget", "other", "recurse"])
     }
@@ -234,9 +253,9 @@ struct RuleEngineTests {
         )
         _ = rule
 
-        let first = try context.facts(CountingProvider.self)
-        let second = try context.facts(CountingProvider.self)
-        let dependent = try context.facts(DependentProvider.self)
+        let first = try context.facts(CountingProvider())
+        let second = try context.facts(CountingProvider())
+        let dependent = try context.facts(DependentProvider())
 
         #expect(first == 1)
         #expect(second == 1)
@@ -252,7 +271,7 @@ struct RuleEngineTests {
         )
 
         #expect(throws: FactProviderError.self) {
-            _ = try context.facts(CycleAProvider.self)
+            _ = try context.facts(CycleAProvider())
         }
     }
 
@@ -280,14 +299,19 @@ struct RuleEngineTests {
     }
 }
 
-private func projectRuleGroup() -> [AnyRuleDefinition] {
+private enum EngineTestComponent: String, ComponentKey {
+    case core
+    case cli
+}
+
+private func projectRuleGroup() -> [any RuleDefinition] {
     RuleSet {
         CustomRule("grouped.one") { _ in [] }
         CustomRule("grouped.two") { _ in [] }
     }.rules
 }
 
-private final class RecordingVisitor: SyntaxVisitor, RuleViolationSource {
+private final class RecordingVisitor: SyntaxVisitor, RuleFailureSource {
     private(set) var failures: [RuleFailure] = []
 
     init(file: SourceFileContext) {
@@ -296,7 +320,7 @@ private final class RecordingVisitor: SyntaxVisitor, RuleViolationSource {
     }
 }
 
-private final class StructRecordingVisitor: SyntaxVisitor, RuleViolationSource {
+private final class StructRecordingVisitor: SyntaxVisitor, RuleFailureSource {
     private let file: SourceFileContext
     private(set) var failures: [RuleFailure] = []
 
@@ -336,7 +360,7 @@ final class DerivationCounter: @unchecked Sendable {
 }
 
 private struct CountingProvider: FactProvider {
-    static let id: FactProviderID = "test.counting"
+    let id: FactProviderID = "test.counting"
     static let derivations = DerivationCounter()
 
     func derive(in context: FactDerivationContext) throws -> Int {
@@ -345,27 +369,27 @@ private struct CountingProvider: FactProvider {
 }
 
 private struct DependentProvider: FactProvider {
-    static let id: FactProviderID = "test.dependent"
+    let id: FactProviderID = "test.dependent"
 
     func derive(in context: FactDerivationContext) throws -> String {
-        let declarations = try context.facts(DeclarationInventoryProvider.self)
-        let base = try context.facts(CountingProvider.self)
+        let declarations = try context.facts(BuiltInFacts.declarations)
+        let base = try context.facts(CountingProvider())
         return "declarations: \(declarations.occurrences.count), base: \(base)"
     }
 }
 
 private struct CycleAProvider: FactProvider {
-    static let id: FactProviderID = "test.cycle_a"
+    let id: FactProviderID = "test.cycle_a"
 
     func derive(in context: FactDerivationContext) throws -> Int {
-        try context.facts(CycleBProvider.self)
+        try context.facts(CycleBProvider())
     }
 }
 
 private struct CycleBProvider: FactProvider {
-    static let id: FactProviderID = "test.cycle_b"
+    let id: FactProviderID = "test.cycle_b"
 
     func derive(in context: FactDerivationContext) throws -> Int {
-        try context.facts(CycleAProvider.self)
+        try context.facts(CycleAProvider())
     }
 }

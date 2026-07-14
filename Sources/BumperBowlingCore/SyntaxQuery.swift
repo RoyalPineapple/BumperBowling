@@ -54,7 +54,7 @@ public struct SyntaxQuery<Node: SyntaxProtocol>: SyntaxPattern, Sendable {
         }
     }
 
-    public func map<Output: SyntaxProtocol>(
+    public func compactMap<Output: SyntaxProtocol>(
         _ transform: @escaping @Sendable (SyntaxMatch<Node>) -> Output?
     ) -> SyntaxQuery<Output> {
         let extract = extract
@@ -117,6 +117,12 @@ public func functionCalls() -> SyntaxQuery<FunctionCallExprSyntax> {
 // MARK: - Capability-specific operations
 
 extension SyntaxQuery where Node == FunctionDeclSyntax {
+    public func named(_ name: FunctionSymbol) -> Self {
+        filter { match in
+            StringMatcher.exact(name.name).matches(match.node.name.text)
+        }
+    }
+
     public func taking(_ type: NominalSymbol) -> Self {
         filter { match in
             match.node.signature.parameterClause.parameters.contains { parameter in

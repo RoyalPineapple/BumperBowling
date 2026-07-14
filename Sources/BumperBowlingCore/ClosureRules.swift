@@ -21,6 +21,38 @@ public struct RepositoryRule: RuleDefinition {
     }
 }
 
+extension Rules {
+    /// A closure rule over the whole repository context.
+    public static func repository(
+        _ id: String,
+        severity: Severity = .error,
+        summary: String = "Project-defined repository rule.",
+        scope: RuleScope = .repository,
+        _ evaluate: @escaping @Sendable (RuleContext) throws -> [RuleFailure]
+    ) -> RepositoryRule {
+        RepositoryRule(
+            metadata: RuleMetadata(id: RuleID(id), severity: severity, summary: summary),
+            scope: scope,
+            evaluate: evaluate
+        )
+    }
+
+    /// A closure rule over each parsed source file in scope.
+    public static func files(
+        _ id: String,
+        severity: Severity = .error,
+        summary: String = "Project-defined per-file rule.",
+        scope: RuleScope = .repository,
+        _ evaluate: @escaping @Sendable (SourceFileContext) throws -> [RuleFailure]
+    ) -> SyntaxRule {
+        SyntaxRule(
+            metadata: RuleMetadata(id: RuleID(id), severity: severity, summary: summary),
+            scope: scope,
+            evaluate: evaluate
+        )
+    }
+}
+
 /// A rule evaluated over each parsed source file in scope.
 public struct SyntaxRule: RuleDefinition {
     public let metadata: RuleMetadata

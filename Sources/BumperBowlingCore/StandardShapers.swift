@@ -24,7 +24,7 @@ public enum Rules {
                 throw RuleEvaluationError.missingConfiguredOwner(id, owner.rawValue)
             }
 
-            let occurrences = try context.facts(DeclarationInventoryProvider.self).occurrences(of: symbol)
+            let occurrences = try context.facts(BuiltInFacts.declarations).occurrences(of: symbol)
 
             guard let first = occurrences.first else {
                 return [
@@ -86,10 +86,10 @@ public enum Rules {
                 summary: "\(symbol.name) is constructed only by its allowed owners."
             )
         ) { context in
-            try context.facts(FunctionCallInventoryProvider.self)
+            try context.facts(BuiltInFacts.functionCalls)
                 .calls(to: FunctionSymbol(symbol.name))
                 .filter { call in
-                    !allowed.includes(path: call.path, component: call.component)
+                    !allowed.includes(SourceFileDescriptor(path: call.path, component: call.component))
                 }
                 .map { call in
                     RuleFailure(
@@ -119,10 +119,10 @@ public enum Rules {
                 summary: "\(symbol.name) is called only at its declared boundary."
             )
         ) { context in
-            try context.facts(FunctionCallInventoryProvider.self)
+            try context.facts(BuiltInFacts.functionCalls)
                 .calls(to: symbol)
                 .filter { call in
-                    !allowed.includes(path: call.path, component: call.component)
+                    !allowed.includes(SourceFileDescriptor(path: call.path, component: call.component))
                 }
                 .map { call in
                     RuleFailure(
@@ -143,7 +143,7 @@ public enum Rules {
     // wrapper declarations can extend this rule without changing its contract.
     public static func noAlternateAliases(
         symbol: NominalSymbol,
-        allowing: RuleScope = RuleScope { _, _ in false },
+        allowing: RuleScope = RuleScope { _ in false },
         id: RuleID = RuleID("no_alternate_aliases"),
         severity: Severity = .error
     ) -> SyntaxRule {
@@ -188,11 +188,11 @@ public enum Rules {
                 summary: "Recursive traversal of \(root.name).\(structuralCase.name) stays with its owners."
             )
         ) { context in
-            try context.facts(DirectRecursionProvider.self)
+            try context.facts(BuiltInFacts.directRecursion)
                 .occurrences
                 .filter { occurrence in
                     occurrence.traverses(root)
-                        && !owners.includes(path: occurrence.path, component: occurrence.component)
+                        && !owners.includes(SourceFileDescriptor(path: occurrence.path, component: occurrence.component))
                 }
                 .map { occurrence in
                     RuleFailure(
