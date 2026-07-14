@@ -19,7 +19,7 @@ struct CustomRuleTests {
             ]
         )
 
-        let output = CustomRuleSet {
+        let output = try CustomRuleSet {
             CustomRule("custom.import_allow_list", severity: .error) { context in
                 let allowedImports = Set(["Foundation"])
                 return context.files.flatMap { file in
@@ -69,7 +69,7 @@ struct CustomRuleTests {
             ]
         )
 
-        let output = CustomRuleSet {
+        let output = try CustomRuleSet {
             CustomSyntaxRule("custom.no_tuple_api", severity: .error) { file in
                 let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
                 visitor.walk(file.syntax)

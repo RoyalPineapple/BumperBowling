@@ -9,13 +9,16 @@ extension ComponentShape {
         // are plain calls SwiftSyntax can't tell from any other. SwiftSyntax-first is the rule.
         Requires(DisallowSyntax(.regexLiteralExpr), severity: .error)
         Requires(.explicitDomainSurfaces, .typedIdentity, severity: .warning)
-        // Immutable stored state, except the two sites that legitimately hold it:
-        // the lock-guarded output buffer and the SwiftSyntax visitor.
+        // Immutable stored state, except the sites that legitimately hold it:
+        // the lock-guarded output buffer, the SwiftSyntax visitors, and the
+        // lock-guarded fact memoization store.
         Requires(
             .immutableStoredState,
             except: [
                 "Sources/BumperBowlingCore/ConfigurationCommandRunner.swift",
                 "Sources/BumperBowlingCore/SwiftFileParser.swift",
+                "Sources/BumperBowlingCore/FactProviders.swift",
+                "Sources/BumperBowlingCore/SyntaxQuery.swift",
             ],
             severity: .error
         )

@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- `CustomRuleSet` is now a typealias of the new `RuleSet`, and
+  `CustomRuleFailure` is a typealias of the canonical `RuleFailure`.
+  `CustomRuleSet.evaluate(_:)`/`evaluateConcurrently(_:)` now `throw` explicit
+  evaluation errors instead of silently passing on analysis failure.
+- `SourceFileContext.component` is now a typed `ComponentID` instead of a raw
+  `String`.
+
+### Added
+
+- Added one open rule engine: `RuleDefinition`, `RuleMetadata`, `RuleFailure`,
+  `RuleViolation`, `RuleReport`, `RuleScope`, `RuleContext`,
+  `RepositorySyntax`, and `RuleSet` with a result builder that accepts any
+  conforming rule — no central enum or registry. `CustomRule` and
+  `CustomSyntaxRule` are ordinary conformances, so project rule sets can mix
+  closure rules, visitor rules, typed queries, and prebuilt shapers.
+- Added extensible typed facts: `FactProvider` with memoized, concurrency-safe
+  derivation, explicit dependency access, and explicit cycle errors, plus
+  built-in providers for declaration inventory, function/initializer calls,
+  and direct recursion.
+- Added typed syntax queries: `SyntaxPattern`, `SyntaxMatch`, and composable
+  `SyntaxQuery` roots (`functions()`, `initializers()`, `variables()`,
+  `typeAliases()`, `nominalDeclarations()`, `functionCalls()`) with
+  capability-specific operations (`taking`, `callingSelf`, `aliasing`) that
+  preserve the matched node type, and a `forbid(...)`/`ForbiddenPattern` rule
+  over any pattern.
+- Added typed symbols (`NominalSymbol`, `FunctionSymbol`, `PropertySymbol`,
+  `EnumCaseSymbol`) that quarantine source-name strings.
+- Added `VisitorRule` and `RuleViolationSource` so raw `SyntaxVisitor`
+  subclasses remain a first-class, permanent escape hatch.
+- Added standard architectural shapers under `Rules`: `singleDeclaration`,
+  `constructionOwnership`, `boundaryOnly`, `noAlternateAliases`, and
+  `canonicalTraversal`.
+- Added the `BumperBowlingTestSupport` library with `VirtualRepository`,
+  `VirtualSourceFile`, and `RuleTestHarness` for single-rule, in-memory,
+  framework-neutral rule tests that return the canonical `RuleReport`.
+
 ## 0.4.0 - 2026-07-10
 
 ### Breaking

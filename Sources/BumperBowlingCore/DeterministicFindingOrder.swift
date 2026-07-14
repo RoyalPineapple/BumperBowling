@@ -16,6 +16,27 @@ extension Array where Element == CustomRuleFinding {
     }
 }
 
+extension Array where Element == RuleViolation {
+    func deterministicallySorted() -> [RuleViolation] {
+        sorted { lhs, rhs in
+            lhs.sortKey < rhs.sortKey
+        }
+    }
+}
+
+private extension RuleViolation {
+    var sortKey: FindingSortKey {
+        FindingSortKey(
+            ruleID: rule.id.rawValue,
+            severity: rule.severity.rawValue,
+            path: path.rawValue,
+            line: location?.line,
+            column: location?.column,
+            message: message
+        )
+    }
+}
+
 private extension ArchitectureViolation {
     var sortKey: FindingSortKey {
         FindingSortKey(
