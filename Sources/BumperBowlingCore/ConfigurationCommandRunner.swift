@@ -734,7 +734,7 @@ private extension ConfigurationLoader {
         do {
             let inputData = FileHandle.standardInput.readDataToEndOfFile()
             let input = try JSONDecoder().decode(CustomRuleInput.self, from: inputData)
-            let output = await customRules.evaluateConcurrently(
+            let output = try await customRules.evaluateConcurrently(
                 input,
                 maxConcurrentRuleJobs: input.configuration.customRules.maxConcurrentRuleJobs
             )

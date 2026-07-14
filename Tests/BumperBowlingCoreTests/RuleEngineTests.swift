@@ -1,0 +1,371 @@
+import Foundation
+import SwiftSyntax
+import Testing
+import BumperBowlingCore
+import BumperBowlingTestSupport
+
+@Suite("Rule engine")
+struct RuleEngineTests {
+    @Test
+    func ruleSetBuilderAcceptsEveryRuleForm() throws {
+        let includeOptional = true
+        let ruleSet = RuleSet {
+            CustomRule("closure.repository") { _ in [] }
+            CustomSyntaxRule("closure.syntax") { _ in [] }
+            SyntaxRule(
+                metadata: RuleMetadata(id: "typed.syntax", severity: .error, summary: "typed")
+            ) { _ in [] }
+            forbid(
+                functionCalls(),
+                id: "query.rule",
+                summary: "no calls"
+            ) { _ in "call" }
+            VisitorRule(
+                metadata: RuleMetadata(id: "visitor.rule", severity: .error, summary: "visitor")
+            ) { file in
+                RecordingVisitor(file: file)
+            }
+            if includeOptional {
+                CustomRule("conditional.rule") { _ in [] }
+            }
+            projectRuleGroup()
+        }
+
+        #expect(ruleSet.rules.map(\.metadata.id) == [
+            "closure.repository",
+            "closure.syntax",
+            "typed.syntax",
+            "query.rule",
+            "visitor.rule",
+            "conditional.rule",
+            "grouped.one",
+            "grouped.two",
+        ])
+    }
+
+    @Test
+    func scopesComposeOverPathsAndComponents() throws {
+        let core = try ComponentID("core")
+        let cli = try ComponentID("cli")
+        let corePath = try RelativeFilePath("Sources/Core/A.swift")
+        let cliPath = try RelativeFilePath("Sources/CLI/B.swift")
+        let testPath = try RelativeFilePath("Tests/CoreTests/C.swift")
+
+        let underSources = RuleScope.under(try RelativePathPrefix("Sources"))
+        #expect(underSources.includes(path: corePath, component: core))
+        #expect(!underSources.includes(path: testPath, component: core))
+
+        let coreOnly = RuleScope.component(core)
+        #expect(coreOnly.includes(path: corePath, component: core))
+        #expect(!coreOnly.includes(path: cliPath, component: cli))
+
+        let union = coreOnly.union(RuleScope.component(cli))
+        #expect(union.includes(path: cliPath, component: cli))
+
+        let excluded = underSources.excluding(RuleScope.files([cliPath]))
+        #expect(excluded.includes(path: corePath, component: core))
+        #expect(!excluded.includes(path: cliPath, component: cli))
+
+        #expect(RuleScope.productionSources.includes(path: corePath, component: core))
+        #expect(!RuleScope.productionSources.includes(path: testPath, component: core))
+    }
+
+    @Test
+    func invalidScopePathsFailAtConstruction() {
+        #expect(throws: ConfigurationError.self) {
+            _ = try RelativePathPrefix("../outside")
+        }
+        #expect(throws: ConfigurationError.self) {
+            _ = try RelativeFilePath("/absolute/path.swift")
+        }
+    }
+
+    @Test
+    func violationsRetainMetadataLocationAndEvidence() throws {
+        let rule = SyntaxRule(
+            metadata: RuleMetadata(id: "no.tuples", severity: .warning, summary: "No tuple APIs.")
+        ) { file in
+            SyntaxQuery<TupleTypeSyntax>().matches(in: file).map { match in
+                match.failure(
+                    message: "Tuple type found.",
+                    evidence: ViolationEvidence(observed: match.node.trimmedDescription, expectation: "named type")
+                )
+            }
+        }
+
+        let report = try RuleTestHarness(rule).evaluate(
+            VirtualRepository {
+                VirtualSourceFile.swift(
+                    "Sources/Core/Thing.swift",
+                    component: "core",
+                    source: "func pair() -> (String, Int) { (\"id\", 1) }"
+                )
+            }
+        )
+
+        let violation = try #require(report.violations.first)
+        #expect(violation.rule == RuleMetadata(id: "no.tuples", severity: .warning, summary: "No tuple APIs."))
+        #expect(violation.path.rawValue == "Sources/Core/Thing.swift")
+        #expect(violation.location == SourcePosition(line: 1, column: 16))
+        #expect(violation.evidence?.observed == "(String, Int)")
+        #expect(!report.hasErrors)
+    }
+
+    @Test
+    func reportsSortDeterministically() throws {
+        let failures = [
+            ("Sources/B.swift", 2, "z_rule"),
+            ("Sources/A.swift", 9, "m_rule"),
+            ("Sources/A.swift", 1, "m_rule"),
+        ]
+        let rules = RuleSet {
+            for (index, failure) in failures.enumerated() {
+                CustomRule(RuleID(failure.2 + "_\(index)")) { _ in
+                    [
+                        RuleFailure(
+                            path: RuleEngineTests.path(failure.0),
+                            location: SourcePosition(line: failure.1, column: 1),
+                            message: "violation"
+                        ),
+                    ]
+                }
+            }
+        }
+
+        let context = RuleContext(
+            input: CustomRuleInput(
+                configuration: ArchitectureConfiguration(components: []),
+                files: []
+            )
+        )
+        let report = try rules.evaluate(in: context)
+        #expect(report.violations.map { "\($0.path.rawValue):\($0.location?.line ?? 0)" } == [
+            "Sources/A.swift:1",
+            "Sources/A.swift:9",
+            "Sources/B.swift:2",
+        ])
+    }
+
+    @Test
+    func analysisFailuresAreExplicitErrors() throws {
+        struct Underlying: Error {}
+        let rules = RuleSet {
+            CustomSyntaxRule("fine.rule") { _ in [] }
+            SyntaxRule(
+                metadata: RuleMetadata(id: "broken.rule", severity: .error, summary: "broken")
+            ) { _ in
+                throw Underlying()
+            }
+        }
+        let harness = RuleTestHarness(rules.rules[1])
+
+        #expect(throws: RuleEvaluationError.self) {
+            _ = try harness.evaluate(
+                VirtualRepository {
+                    VirtualSourceFile.swift("Sources/Core/A.swift", component: "core", source: "struct A {}")
+                }
+            )
+        }
+    }
+
+    @Test
+    func visitorRulesWalkOnlyScopedFiles() throws {
+        let rule = VisitorRule(
+            metadata: RuleMetadata(id: "visitor.structs", severity: .error, summary: "No structs."),
+            scope: .under(try RelativePathPrefix("Sources/Scoped"))
+        ) { file in
+            StructRecordingVisitor(file: file)
+        }
+
+        let report = try RuleTestHarness(rule).evaluate(
+            VirtualRepository {
+                VirtualSourceFile.swift("Sources/Scoped/In.swift", component: "core", source: "struct InScope {}")
+                VirtualSourceFile.swift("Sources/Other/Out.swift", component: "core", source: "struct OutOfScope {}")
+            }
+        )
+
+        #expect(report.violations.map(\.path.rawValue) == ["Sources/Scoped/In.swift"])
+    }
+
+    @Test
+    func queriesPreserveNodeTypesThroughComposition() throws {
+        let file = try #require(
+            SourceFileContext(
+                facts: CustomRuleFileFacts(
+                    path: RuleEngineTests.path("Sources/Core/Q.swift"),
+                    component: "core",
+                    source: """
+                    typealias Alias = Target
+                    func takesTarget(value: Target) {}
+                    func other(value: Int) {}
+                    func recurse(value: Target) { recurse(value: value) }
+                    """,
+                    imports: []
+                )
+            )
+        )
+
+        let allFunctions = functions().matches(in: file)
+        #expect(allFunctions.count == 3)
+
+        let takingTarget = functions().taking(NominalSymbol("Target")).matches(in: file)
+        #expect(takingTarget.map(\.node.name.text) == ["takesTarget", "recurse"])
+
+        let recursive = functions().callingSelf().matches(in: file)
+        #expect(recursive.map(\.node.name.text) == ["recurse"])
+
+        let aliases = typeAliases().aliasing(NominalSymbol("Target")).matches(in: file)
+        #expect(aliases.map(\.node.name.text) == ["Alias"])
+
+        // map preserves the transformed node type: FunctionDeclSyntax -> TokenSyntax.
+        let names: [SyntaxMatch<TokenSyntax>] = functions()
+            .map { match in match.node.name }
+            .matches(in: file)
+        #expect(names.map(\.node.text) == ["takesTarget", "other", "recurse"])
+    }
+
+    @Test
+    func factProvidersMemoizeAndSupportDependencies() throws {
+        CountingProvider.derivations.reset()
+        let rule = CustomRule("facts.rule") { _ in [] }
+        let context = try makeContext(
+            source: "struct Counted {}",
+            path: "Sources/Core/Counted.swift"
+        )
+        _ = rule
+
+        let first = try context.facts(CountingProvider.self)
+        let second = try context.facts(CountingProvider.self)
+        let dependent = try context.facts(DependentProvider.self)
+
+        #expect(first == 1)
+        #expect(second == 1)
+        #expect(dependent == "declarations: 1, base: 1")
+        #expect(CountingProvider.derivations.value == 1)
+    }
+
+    @Test
+    func factProviderCyclesAreExplicitErrors() throws {
+        let context = try makeContext(
+            source: "struct A {}",
+            path: "Sources/Core/A.swift"
+        )
+
+        #expect(throws: FactProviderError.self) {
+            _ = try context.facts(CycleAProvider.self)
+        }
+    }
+
+    private func makeContext(source: String, path: String) throws -> RuleContext {
+        RuleContext(
+            input: CustomRuleInput(
+                configuration: ArchitectureConfiguration(components: []),
+                files: [
+                    CustomRuleFileFacts(
+                        path: try RelativeFilePath(path),
+                        component: "core",
+                        source: source,
+                        imports: []
+                    ),
+                ]
+            )
+        )
+    }
+
+    private static func path(_ value: String) -> RelativeFilePath {
+        guard let path = try? RelativeFilePath(value) else {
+            preconditionFailure("Invalid test path: \(value)")
+        }
+        return path
+    }
+}
+
+private func projectRuleGroup() -> [AnyRuleDefinition] {
+    RuleSet {
+        CustomRule("grouped.one") { _ in [] }
+        CustomRule("grouped.two") { _ in [] }
+    }.rules
+}
+
+private final class RecordingVisitor: SyntaxVisitor, RuleViolationSource {
+    private(set) var failures: [RuleFailure] = []
+
+    init(file: SourceFileContext) {
+        super.init(viewMode: .sourceAccurate)
+        _ = file
+    }
+}
+
+private final class StructRecordingVisitor: SyntaxVisitor, RuleViolationSource {
+    private let file: SourceFileContext
+    private(set) var failures: [RuleFailure] = []
+
+    init(file: SourceFileContext) {
+        self.file = file
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+        failures.append(file.failure(at: node, message: "Struct \(node.name.text) found."))
+        return .visitChildren
+    }
+}
+
+final class DerivationCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func increment() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+        return count
+    }
+
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        count = 0
+    }
+}
+
+private struct CountingProvider: FactProvider {
+    static let id: FactProviderID = "test.counting"
+    static let derivations = DerivationCounter()
+
+    func derive(in context: FactDerivationContext) throws -> Int {
+        Self.derivations.increment()
+    }
+}
+
+private struct DependentProvider: FactProvider {
+    static let id: FactProviderID = "test.dependent"
+
+    func derive(in context: FactDerivationContext) throws -> String {
+        let declarations = try context.facts(DeclarationInventoryProvider.self)
+        let base = try context.facts(CountingProvider.self)
+        return "declarations: \(declarations.occurrences.count), base: \(base)"
+    }
+}
+
+private struct CycleAProvider: FactProvider {
+    static let id: FactProviderID = "test.cycle_a"
+
+    func derive(in context: FactDerivationContext) throws -> Int {
+        try context.facts(CycleBProvider.self)
+    }
+}
+
+private struct CycleBProvider: FactProvider {
+    static let id: FactProviderID = "test.cycle_b"
+
+    func derive(in context: FactDerivationContext) throws -> Int {
+        try context.facts(CycleAProvider.self)
+    }
+}

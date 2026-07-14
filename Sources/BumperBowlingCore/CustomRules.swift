@@ -238,6 +238,14 @@ public struct CustomRuleContext: Sendable {
         self.parsedSourceFiles = input.files.compactMap(SourceFileContext.init)
     }
 
+    init(context: RuleContext) {
+        self.input = CustomRuleInput(
+            configuration: context.configuration,
+            files: context.repository.fileFacts
+        )
+        self.parsedSourceFiles = context.repository.files
+    }
+
     public var files: [CustomRuleFileFacts] {
         input.files
     }
@@ -247,11 +255,11 @@ public struct CustomRuleContext: Sendable {
     }
 
     public func files(inComponent component: String) -> [CustomRuleFileFacts] {
-        files.filter { $0.component == component }
+        files.filter { StringMatcher.exact(component).matches($0.component) }
     }
 
     public func sourceFiles(inComponent component: String) -> [SourceFileContext] {
-        sourceFiles.filter { $0.component == component }
+        sourceFiles.filter { StringMatcher.exact(component).matches($0.component) }
     }
 
     public func files(under prefix: String) -> [CustomRuleFileFacts] {
@@ -269,30 +277,40 @@ public struct CustomRuleContext: Sendable {
     }
 }
 
+/// One parsed source file: typed path and component, source text, syntax,
+/// location conversion, and failure construction.
 public struct SourceFileContext: Sendable {
     public let facts: CustomRuleFileFacts
+    public let component: ComponentID
     public let source: String
     public let syntax: SourceFileSyntax
     public let locationConverter: SourceLocationConverter
 
     public init?(facts: CustomRuleFileFacts) {
-        guard let source = facts.source else {
+        guard let source = facts.source,
+              let component = try? ComponentID(facts.component) else {
             return nil
         }
 
         let syntax = Parser.parse(source: source)
         self.facts = facts
+        self.component = component
         self.source = source
         self.syntax = syntax
         self.locationConverter = SourceLocationConverter(fileName: facts.path.rawValue, tree: syntax)
     }
 
-    public var path: RelativeFilePath {
-        facts.path
+    /// Missing source text is an explicit failure, not a skipped file.
+    public init(file: SourceFileFacts) throws {
+        guard file.source != nil,
+              let context = SourceFileContext(facts: CustomRuleFileFacts(file: file)) else {
+            throw RuleEvaluationError.missingSource(file.path)
+        }
+        self = context
     }
 
-    public var component: String {
-        facts.component
+    public var path: RelativeFilePath {
+        facts.path
     }
 
     public var imports: [String] {
@@ -308,8 +326,8 @@ public struct SourceFileContext: Sendable {
         at node: some SyntaxProtocol,
         message: String,
         evidence: ViolationEvidence? = nil
-    ) -> CustomRuleFailure {
-        CustomRuleFailure(
+    ) -> RuleFailure {
+        RuleFailure(
             path: path,
             location: location(for: node),
             message: message,
@@ -318,34 +336,20 @@ public struct SourceFileContext: Sendable {
     }
 }
 
-public struct CustomRuleFailure: Equatable, Sendable {
-    public let path: RelativeFilePath
-    public let location: SourcePosition?
-    public let message: String
-    public let evidence: ViolationEvidence?
+/// The former parallel failure currency, converged on `RuleFailure`.
+public typealias CustomRuleFailure = RuleFailure
 
-    public init(
-        path: RelativeFilePath,
-        location: SourcePosition? = nil,
-        message: String,
-        evidence: ViolationEvidence? = nil
-    ) {
-        self.path = path
-        self.location = location
-        self.message = message
-        self.evidence = evidence
-    }
-}
-
-public struct CustomRule: Sendable {
+/// A repository-fact closure rule. Conforms to `RuleDefinition`, so it enters
+/// the same engine and report as every other rule.
+public struct CustomRule: RuleDefinition {
     public let id: RuleID
     public let severity: Severity
-    private let evaluateFailures: @Sendable (CustomRuleContext) -> [CustomRuleFailure]
+    private let evaluateFailures: @Sendable (CustomRuleContext) -> [RuleFailure]
 
     public init(
         _ id: RuleID,
         severity: Severity = .error,
-        evaluate: @escaping @Sendable (CustomRuleContext) -> [CustomRuleFailure]
+        evaluate: @escaping @Sendable (CustomRuleContext) -> [RuleFailure]
     ) {
         self.id = id
         self.severity = severity
@@ -355,9 +359,21 @@ public struct CustomRule: Sendable {
     public init(
         _ id: String,
         severity: Severity = .error,
-        evaluate: @escaping @Sendable (CustomRuleContext) -> [CustomRuleFailure]
+        evaluate: @escaping @Sendable (CustomRuleContext) -> [RuleFailure]
     ) {
         self.init(RuleID(id), severity: severity, evaluate: evaluate)
+    }
+
+    public var metadata: RuleMetadata {
+        RuleMetadata(id: id, severity: severity, summary: "Project-defined repository rule.")
+    }
+
+    public var scope: RuleScope {
+        .repository
+    }
+
+    public func evaluate(in context: RuleContext) throws -> [RuleFailure] {
+        evaluateFailures(CustomRuleContext(context: context))
     }
 
     public func evaluate(in context: CustomRuleContext) -> [CustomRuleFinding] {
@@ -374,81 +390,75 @@ public struct CustomRule: Sendable {
     }
 }
 
-public struct CustomSyntaxRule: Sendable {
-    fileprivate let rule: CustomRule
+/// A per-file syntax closure rule over the same engine.
+public struct CustomSyntaxRule: RuleDefinition {
+    public let id: RuleID
+    public let severity: Severity
+    private let evaluateFile: @Sendable (SourceFileContext) -> [RuleFailure]
 
     public init(
         _ id: RuleID,
         severity: Severity = .error,
-        evaluate: @escaping @Sendable (SourceFileContext) -> [CustomRuleFailure]
+        evaluate: @escaping @Sendable (SourceFileContext) -> [RuleFailure]
     ) {
-        self.rule = CustomRule(id, severity: severity) { context in
-            context.sourceFiles.flatMap(evaluate)
-        }
+        self.id = id
+        self.severity = severity
+        self.evaluateFile = evaluate
     }
 
     public init(
         _ id: String,
         severity: Severity = .error,
-        evaluate: @escaping @Sendable (SourceFileContext) -> [CustomRuleFailure]
+        evaluate: @escaping @Sendable (SourceFileContext) -> [RuleFailure]
     ) {
         self.init(RuleID(id), severity: severity, evaluate: evaluate)
     }
-}
 
-@resultBuilder
-public enum CustomRuleBuilder {
-    public static func buildExpression(_ expression: CustomRule) -> CustomRule {
-        expression
+    public var metadata: RuleMetadata {
+        RuleMetadata(id: id, severity: severity, summary: "Project-defined syntax rule.")
     }
 
-    public static func buildExpression(_ expression: CustomSyntaxRule) -> CustomRule {
-        expression.rule
+    public var scope: RuleScope {
+        .repository
     }
 
-    public static func buildBlock(_ components: CustomRule...) -> [CustomRule] {
-        components
+    public func evaluate(in context: RuleContext) throws -> [RuleFailure] {
+        context.files(in: scope).flatMap(evaluateFile)
     }
 }
 
-public struct CustomRuleSet: Sendable {
-    public let rules: [CustomRule]
+/// Project rule sets are ordinary `RuleSet`s; one builder, one engine.
+public typealias CustomRuleBuilder = RuleSetBuilder
+public typealias CustomRuleSet = RuleSet
 
-    public init(rules: [CustomRule]) {
-        self.rules = rules
-    }
-
-    public init(@CustomRuleBuilder _ content: () -> [CustomRule]) {
-        self.init(rules: content())
-    }
-
-    public static let empty = CustomRuleSet(rules: [])
-
-    public func evaluate(_ input: CustomRuleInput) -> CustomRuleOutput {
-        let context = CustomRuleContext(input: input)
-        return CustomRuleOutput(
-            findings: rules.flatMap { rule in
-                rule.evaluate(in: context)
-            }
+extension RuleContext {
+    /// Builds an evaluation context from the custom-rule worker payload.
+    /// Files without source text keep their facts but have no syntax context.
+    public init(input: CustomRuleInput) {
+        self.init(
+            configuration: input.configuration,
+            repository: RepositorySyntax(
+                fileFacts: input.files,
+                files: input.files.compactMap(SourceFileContext.init)
+            )
         )
+    }
+}
+
+extension RuleSet {
+    public func evaluate(_ input: CustomRuleInput) throws -> CustomRuleOutput {
+        CustomRuleOutput(report: try evaluate(in: RuleContext(input: input)))
     }
 
     public func evaluateConcurrently(
         _ input: CustomRuleInput,
         maxConcurrentRuleJobs: Int? = nil
-    ) async -> CustomRuleOutput {
-        let context = CustomRuleContext(input: input)
-        let ruleFindings = await concurrentMap(
-            rules,
-            maxConcurrentJobs: maxConcurrentRuleJobs
-        ) { rule in
-            rule.evaluate(in: context)
-        }
-
-        return CustomRuleOutput(
-            findings: ruleFindings
-                .flatMap { $0 }
-                .deterministicallySorted()
+    ) async throws -> CustomRuleOutput {
+        CustomRuleOutput(
+            report: try await evaluateConcurrently(
+                in: RuleContext(input: input),
+                maxConcurrentRuleJobs: maxConcurrentRuleJobs
+            )
         )
     }
 }
@@ -458,6 +468,10 @@ public struct CustomRuleOutput: Equatable, Sendable, Codable {
 
     public init(findings: [CustomRuleFinding]) {
         self.findings = findings
+    }
+
+    public init(report: RuleReport) {
+        self.init(findings: report.violations.map(CustomRuleFinding.init))
     }
 
     public static let empty = CustomRuleOutput(findings: [])
@@ -489,6 +503,17 @@ public struct CustomRuleFinding: Equatable, Sendable, Codable {
         self.location = location
         self.message = message
         self.evidence = evidence
+    }
+
+    public init(violation: RuleViolation) {
+        self.init(
+            ruleID: violation.rule.id,
+            severity: violation.rule.severity,
+            path: violation.path,
+            location: violation.location,
+            message: violation.message,
+            evidence: violation.evidence
+        )
     }
 
     public var architectureViolation: ArchitectureViolation {
