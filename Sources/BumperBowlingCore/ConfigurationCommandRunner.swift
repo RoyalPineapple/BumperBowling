@@ -52,9 +52,12 @@ extension ConfigurationLoader {
     static let configurationEvaluationTimeoutSeconds: TimeInterval = 60
     static let evaluationTimeoutEnvironmentKey = "BUMPER_EVALUATION_TIMEOUT_SECONDS"
     /// The runner is a cached artifact built once per configuration change,
-    /// so it builds optimized: evaluation parses every scanned source and
-    /// derives facts, where debug-mode swift-syntax is several times slower.
-    static let projectRunnerBuildConfiguration = "release"
+    /// so it builds optimized by default: evaluation parses every scanned
+    /// source and derives facts, where debug-mode swift-syntax is several
+    /// times slower.
+    static let defaultProjectRunnerBuildConfiguration = "release"
+    static let runnerBuildConfigurationEnvironmentKey = "BUMPER_RUNNER_BUILD_CONFIGURATION"
+    static let supportedRunnerBuildConfigurations: Set<String> = ["release", "debug"]
 
     /// The validated evaluation budget: the documented default when the
     /// override is absent, a positive finite number of seconds when present,
@@ -74,12 +77,31 @@ extension ConfigurationLoader {
         return seconds
     }
 
-    static func cachedRunnerBuildArguments(packageRoot: URL) -> [String] {
+    /// The validated runner build configuration: release by default, debug
+    /// only through the documented override (for build-constrained hosts like
+    /// CI where cold optimized builds are too expensive), and a loud
+    /// configuration error for anything else. Cache identity records the
+    /// configuration, so the two never share an executable.
+    static func projectRunnerBuildConfiguration(
+        environment: [String: String]
+    ) throws -> String {
+        guard let raw = environment[runnerBuildConfigurationEnvironmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !raw.isEmpty else {
+            return defaultProjectRunnerBuildConfiguration
+        }
+        guard supportedRunnerBuildConfigurations.contains(raw) else {
+            throw BumperError.invalidRunnerBuildConfiguration(raw)
+        }
+        return raw
+    }
+
+    static func cachedRunnerBuildArguments(packageRoot: URL, buildConfiguration: String) -> [String] {
         [
             "swift",
             "build",
             "--configuration",
-            projectRunnerBuildConfiguration,
+            buildConfiguration,
             "--package-path",
             packageRoot.path,
             "--product",
@@ -87,14 +109,16 @@ extension ConfigurationLoader {
         ]
     }
 
-    static func cachedRunnerExecutableURL(in root: URL, productName: String) -> URL {
-        root.appendingPathComponent(".build/\(projectRunnerBuildConfiguration)/\(productName)")
+    static func cachedRunnerExecutableURL(in root: URL, productName: String, buildConfiguration: String) -> URL {
+        root.appendingPathComponent(".build/\(buildConfiguration)/\(productName)")
     }
 
     static func makeCachedPackage(
         configurationURL: URL,
-        bumperPackageRoot: URL
+        bumperPackageRoot: URL,
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> CachedPackage {
+        let buildConfiguration = try projectRunnerBuildConfiguration(environment: environment)
         let configurationData = try Data(contentsOf: configurationURL)
         let repositoryRoot = configurationURL.deletingLastPathComponent()
         let rulePackages = try rulePackageDependencies(root: repositoryRoot)
@@ -111,11 +135,12 @@ extension ConfigurationLoader {
             consumerSourcesHash: consumerSourcesHash,
             rulePackagesHash: rulePackagesHash,
             runnerProductName: projectRunnerProductName,
-            buildConfiguration: projectRunnerBuildConfiguration
+            buildConfiguration: buildConfiguration
         )
         let root = try cachedPackageRoot(
             configurationURL: configurationURL,
             bumperPackageRoot: bumperPackageRoot,
+            buildConfiguration: buildConfiguration,
             manifest: manifest,
             consumerSourcesHash: consumerSourcesHash,
             rulePackagesHash: rulePackagesHash
@@ -125,8 +150,13 @@ extension ConfigurationLoader {
         if cachedPackageIsCurrent(root: root, metadata: metadata) {
             return CachedPackage(
                 root: root,
-                executableURL: cachedRunnerExecutableURL(in: root, productName: projectRunnerProductName),
+                executableURL: cachedRunnerExecutableURL(
+                    in: root,
+                    productName: projectRunnerProductName,
+                    buildConfiguration: buildConfiguration
+                ),
                 productName: projectRunnerProductName,
+                buildConfiguration: buildConfiguration,
                 needsBuild: false
             )
         }
@@ -142,8 +172,13 @@ extension ConfigurationLoader {
 
         return CachedPackage(
             root: root,
-            executableURL: cachedRunnerExecutableURL(in: root, productName: projectRunnerProductName),
+            executableURL: cachedRunnerExecutableURL(
+                in: root,
+                productName: projectRunnerProductName,
+                buildConfiguration: buildConfiguration
+            ),
             productName: projectRunnerProductName,
+            buildConfiguration: buildConfiguration,
             needsBuild: true
         )
     }
@@ -343,6 +378,7 @@ private extension ConfigurationLoader {
     static func cachedPackageRoot(
         configurationURL: URL,
         bumperPackageRoot: URL,
+        buildConfiguration: String,
         manifest: String,
         consumerSourcesHash: String,
         rulePackagesHash: String
@@ -350,7 +386,7 @@ private extension ConfigurationLoader {
         let key = [
             "v4",
             projectRunnerProductName,
-            projectRunnerBuildConfiguration,
+            buildConfiguration,
             configurationURL.standardizedFileURL.path,
             bumperPackageRoot.standardizedFileURL.path,
             try packageRootFingerprint(bumperPackageRoot),
@@ -472,7 +508,10 @@ private extension ConfigurationLoader {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = cachedRunnerBuildArguments(packageRoot: package.root)
+        process.arguments = cachedRunnerBuildArguments(
+            packageRoot: package.root,
+            buildConfiguration: package.buildConfiguration
+        )
 
         let result = try runProcess(
             process,
@@ -785,6 +824,7 @@ struct CachedPackage {
     let root: URL
     let executableURL: URL
     let productName: String
+    let buildConfiguration: String
     let needsBuild: Bool
 }
 

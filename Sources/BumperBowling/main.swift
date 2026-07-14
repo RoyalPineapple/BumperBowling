@@ -216,6 +216,9 @@ struct BumperCLI {
       BUMPER_EVALUATION_TIMEOUT_SECONDS   Evaluation budget for the project runner
                                           (default 60; positive finite seconds).
                                           `--timings` shows where evaluation time goes.
+      BUMPER_RUNNER_BUILD_CONFIGURATION   Runner build configuration: release
+                                          (default) or debug, for hosts where the
+                                          one-time optimized build is too expensive.
 
     Security:
       BumperBowling.swift is a program, like Package.swift. Bumper compiles it

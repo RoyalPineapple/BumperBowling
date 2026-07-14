@@ -9,6 +9,7 @@ public enum BumperError: Error, CustomStringConvertible {
     case configurationOutputMalformed(String)
     case configurationPackageUnavailable(String)
     case invalidEvaluationTimeout(String)
+    case invalidRunnerBuildConfiguration(String)
     case noComponentForFile(String)
     case repositoryScanLimitExceeded(String)
     case sourceFileOutsideRoot(String, String)
@@ -35,6 +36,8 @@ public enum BumperError: Error, CustomStringConvertible {
             "Could not locate the BumperBowling package at \(path). Set BUMPER_PACKAGE_PATH to the package root."
         case .invalidEvaluationTimeout(let value):
             "BUMPER_EVALUATION_TIMEOUT_SECONDS must be a positive, finite number of seconds; found '\(value)'."
+        case .invalidRunnerBuildConfiguration(let value):
+            "BUMPER_RUNNER_BUILD_CONFIGURATION must be 'release' or 'debug'; found '\(value)'."
         case .noComponentForFile(let path):
             "No component matches \(path)."
         case .repositoryScanLimitExceeded(let message):

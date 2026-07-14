@@ -311,6 +311,9 @@ The compile is cached against the file's contents and built optimized
 (release configuration), so the one-time build cost is paid once per change
 to `BumperBowling.swift`, not once per lint — and evaluation runs at full
 speed. An unchanged configuration loads from cache with no build at all.
+Hosts where the one-time optimized build is too expensive (small CI runners)
+can set `BUMPER_RUNNER_BUILD_CONFIGURATION=debug`; only `release` and `debug`
+are accepted, and the cache keeps the two configurations separate.
 
 By default that cache lives under the system temporary directory. Set
 `BUMPER_CACHE_DIR` when CI should persist it between runs:

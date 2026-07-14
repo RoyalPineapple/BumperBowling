@@ -34,6 +34,11 @@ Large valid projects no longer time out during rule evaluation
   evaluation budget, validated at the process boundary. It accepts positive,
   finite seconds; zero, negative, non-numeric, NaN, or infinite values fail
   with `BumperError.invalidEvaluationTimeout`. Evaluation is always bounded.
+- `BUMPER_RUNNER_BUILD_CONFIGURATION`: a documented override for the runner
+  build configuration on hosts where cold optimized builds are too
+  expensive (small CI runners). Only `release` and `debug` are accepted;
+  anything else fails with `BumperError.invalidRunnerBuildConfiguration`.
+  Cache identity records the configuration.
 - Evaluation telemetry for rule authors: `RuleSet.evaluationRun(...)`,
   `BumperProject.evaluationRun(_:)`, and `EvaluationTelemetry` report
   per-rule and per-fact-provider durations. `bumper lint --timings` prints
