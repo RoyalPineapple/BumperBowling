@@ -89,7 +89,7 @@ public struct SwiftFileParser: Sendable {
     }
 }
 
-private final class SourceVisitor: SyntaxAnyVisitor {
+final class SourceVisitor: SyntaxAnyVisitor {
     private(set) var nodes: [CollectedSourceFact] = []
     private let locationConverter: SourceLocationConverter
     private var ownerStack: [TypeName?] = []

@@ -20,17 +20,23 @@ public struct RuleFailure: Equatable, Sendable {
     public let location: SourcePosition?
     public let message: String
     public let evidence: ViolationEvidence?
+    /// Overrides the rule's severity for this one diagnostic. Rules with
+    /// per-scope configured severities report each finding at its scope's
+    /// severity while keeping one stable rule ID.
+    public let severity: Severity?
 
     public init(
         path: RelativeFilePath,
         location: SourcePosition? = nil,
         message: String,
-        evidence: ViolationEvidence? = nil
+        evidence: ViolationEvidence? = nil,
+        severity: Severity? = nil
     ) {
         self.path = path
         self.location = location
         self.message = message
         self.evidence = evidence
+        self.severity = severity
     }
 }
 
@@ -59,12 +65,30 @@ public struct RuleViolation: Equatable, Sendable, Codable {
 
     public init(rule: RuleMetadata, failure: RuleFailure) {
         self.init(
-            rule: rule,
+            rule: failure.severity.map { severity in
+                RuleMetadata(id: rule.id, severity: severity, summary: rule.summary)
+            } ?? rule,
             path: failure.path,
             location: failure.location,
             message: failure.message,
             evidence: failure.evidence
         )
+    }
+
+    public var ruleID: RuleID {
+        rule.id
+    }
+
+    public var severity: Severity {
+        rule.severity
+    }
+
+    public var markdownLocation: String {
+        guard let location else {
+            return path.rawValue
+        }
+
+        return "\(path.rawValue):\(location.line):\(location.column)"
     }
 }
 
@@ -81,6 +105,23 @@ public struct RuleReport: Equatable, Sendable, Codable {
             violation.rule.severity == .error
         }
     }
+
+    public var markdownSummary: String {
+        if violations.isEmpty {
+            return "No architecture violations found."
+        }
+
+        var lines = [
+            hasErrors ? "The code breaks the architecture's rules:" : "The architecture holds, but note these warnings:",
+            "",
+        ]
+        for violation in violations {
+            lines.append(
+                "- [\(violation.severity.rawValue.uppercased())] \(violation.markdownLocation): \(violation.message) (\(violation.ruleID.rawValue))"
+            )
+        }
+        return lines.joined(separator: "\n")
+    }
 }
 
 /// One rule: identity, scope, and evaluation over an immutable context.
@@ -92,99 +133,85 @@ public protocol RuleDefinition: Sendable {
     func evaluate(in context: RuleContext) throws -> [RuleFailure]
 }
 
-/// Type erasure at the heterogeneous collection boundary only.
-public struct AnyRuleDefinition: RuleDefinition {
-    public let metadata: RuleMetadata
-    public let scope: RuleScope
-    private let evaluateInContext: @Sendable (RuleContext) throws -> [RuleFailure]
-
-    public init(_ rule: some RuleDefinition) {
-        if let erased = rule as? AnyRuleDefinition {
-            self = erased
-            return
-        }
-        self.metadata = rule.metadata
-        self.scope = rule.scope
-        self.evaluateInContext = rule.evaluate(in:)
-    }
-
-    public func evaluate(in context: RuleContext) throws -> [RuleFailure] {
-        try evaluateInContext(context)
-    }
-}
-
 @resultBuilder
 public enum RuleSetBuilder {
-    public static func buildExpression(_ expression: some RuleDefinition) -> [AnyRuleDefinition] {
-        [AnyRuleDefinition(expression)]
+    public static func buildExpression(_ expression: some RuleDefinition) -> [any RuleDefinition] {
+        [expression]
     }
 
-    public static func buildExpression(_ expression: [AnyRuleDefinition]) -> [AnyRuleDefinition] {
+    public static func buildExpression(_ expression: [any RuleDefinition]) -> [any RuleDefinition] {
         expression
     }
 
-    public static func buildBlock(_ components: [AnyRuleDefinition]...) -> [AnyRuleDefinition] {
+    public static func buildExpression(_ expression: RuleSet) -> [any RuleDefinition] {
+        expression.rules
+    }
+
+    public static func buildBlock(_ components: [any RuleDefinition]...) -> [any RuleDefinition] {
         components.flatMap { $0 }
     }
 
-    public static func buildOptional(_ component: [AnyRuleDefinition]?) -> [AnyRuleDefinition] {
+    public static func buildOptional(_ component: [any RuleDefinition]?) -> [any RuleDefinition] {
         component ?? []
     }
 
-    public static func buildEither(first component: [AnyRuleDefinition]) -> [AnyRuleDefinition] {
+    public static func buildEither(first component: [any RuleDefinition]) -> [any RuleDefinition] {
         component
     }
 
-    public static func buildEither(second component: [AnyRuleDefinition]) -> [AnyRuleDefinition] {
+    public static func buildEither(second component: [any RuleDefinition]) -> [any RuleDefinition] {
         component
     }
 
-    public static func buildArray(_ components: [[AnyRuleDefinition]]) -> [AnyRuleDefinition] {
+    public static func buildArray(_ components: [[any RuleDefinition]]) -> [any RuleDefinition] {
         components.flatMap { $0 }
     }
 }
 
 /// One heterogeneous rule collection evaluated by one engine.
 public struct RuleSet: Sendable {
-    public let rules: [AnyRuleDefinition]
+    public let rules: [any RuleDefinition]
 
-    public init(rules: [AnyRuleDefinition]) {
+    public init(rules: [any RuleDefinition]) {
         self.rules = rules
     }
 
-    public init(@RuleSetBuilder _ rules: () -> [AnyRuleDefinition]) {
+    public init(@RuleSetBuilder _ rules: () -> [any RuleDefinition]) {
         self.init(rules: rules())
     }
 
     public static let empty = RuleSet(rules: [])
 
-    /// Evaluates every rule over the shared context. Analysis errors are not
-    /// violations: a throwing rule aborts the run with an explicit error.
-    public func evaluate(in context: RuleContext) throws -> RuleReport {
+    /// Evaluates every rule over one parsed repository. The engine owns
+    /// context construction, so every run has one repository and one fact
+    /// cache. Analysis errors are not violations: a throwing rule aborts
+    /// the run with an explicit error.
+    public func evaluate(
+        configuration: ArchitectureConfiguration,
+        repository: RepositorySyntax
+    ) throws -> RuleReport {
+        try evaluate(in: RuleContext(configuration: configuration, repository: repository))
+    }
+
+    func evaluate(in context: RuleContext) throws -> RuleReport {
+        try validateRuleIdentity()
         let collected = try rules.flatMap { rule in
             try Self.violations(of: rule, in: context)
         }
         return RuleReport(violations: collected.deterministicallySorted())
     }
 
-    public func evaluateConcurrently(
-        in context: RuleContext,
-        maxConcurrentRuleJobs: Int? = nil
-    ) async throws -> RuleReport {
-        let results = await concurrentMap(
-            rules,
-            maxConcurrentJobs: maxConcurrentRuleJobs
-        ) { rule in
-            Result { try Self.violations(of: rule, in: context) }
+    /// Duplicate rule IDs are a configuration error, not last-writer-wins.
+    private func validateRuleIdentity() throws {
+        var seen = Set<RuleID>()
+        for rule in rules {
+            guard seen.insert(rule.metadata.id).inserted else {
+                throw RuleEvaluationError.duplicateRuleID(rule.metadata.id)
+            }
         }
-
-        let collected = try results.flatMap { result in
-            try result.get()
-        }
-        return RuleReport(violations: collected.deterministicallySorted())
     }
 
-    private static func violations(of rule: AnyRuleDefinition, in context: RuleContext) throws -> [RuleViolation] {
+    private static func violations(of rule: any RuleDefinition, in context: RuleContext) throws -> [RuleViolation] {
         do {
             return try rule.evaluate(in: context).map { failure in
                 RuleViolation(rule: rule.metadata, failure: failure)
@@ -202,6 +229,7 @@ public enum RuleEvaluationError: Error, Equatable, Sendable, CustomStringConvert
     case ruleFailed(RuleID, String)
     case missingSource(RelativeFilePath)
     case missingConfiguredOwner(RuleID, String)
+    case duplicateRuleID(RuleID)
 
     public var description: String {
         switch self {
@@ -211,6 +239,8 @@ public enum RuleEvaluationError: Error, Equatable, Sendable, CustomStringConvert
             "Source text is unavailable for \(path.rawValue); rules over syntax cannot evaluate."
         case .missingConfiguredOwner(let id, let owner):
             "Rule \(id.rawValue) requires configured owner files under \(owner), but none exist."
+        case .duplicateRuleID(let id):
+            "Rule ID \(id.rawValue) is declared more than once; rule IDs must be unique."
         }
     }
 }

@@ -53,7 +53,7 @@ struct DownstreamExtensibilityTests {
                 summary: "Views end in View."
             )
         ) { context in
-            try context.facts(MisnamedViewProvider.self).map { occurrence in
+            try context.facts(MisnamedViewProvider()).map { occurrence in
                 RuleFailure(
                     path: occurrence.path,
                     location: occurrence.location,
@@ -74,7 +74,7 @@ struct DownstreamExtensibilityTests {
 
     @Test
     func downstreamQueryExtensionComposesWithBuiltInQueries() throws {
-        let rule = forbid(
+        let rule = Rules.forbid(
             functions().asyncFunctions().within(.productionSources),
             id: "project.no_async",
             summary: "This layer stays synchronous."
@@ -102,7 +102,7 @@ struct DownstreamExtensibilityTests {
     func downstreamRuleGroupsEnterOneRuleSet() throws {
         let rules = RuleSet {
             projectRules()
-            forbid(functionCalls(), id: "extra", summary: "none") { _ in "call" }
+            Rules.forbid(functionCalls(), id: "extra", summary: "none") { _ in "call" }
         }
 
         #expect(rules.rules.map(\.metadata.id) == [
@@ -114,14 +114,12 @@ struct DownstreamExtensibilityTests {
 
     @Test
     func harnessReturnsCanonicalReportForConsumption() throws {
-        let rule = CustomRule("project.no_uikit") { context in
-            context.files.flatMap { file in
-                file.imports
-                    .filter { $0 == "UIKit" }
-                    .map { _ in
-                        RuleFailure(path: file.path, message: "UIKit is not allowed here.")
-                    }
-            }
+        let rule = Rules.repository("project.no_uikit") { context in
+            try context.facts(BuiltInFacts.imports).occurrences
+                .filter { $0.module.rawValue == "UIKit" }
+                .map { occurrence in
+                    RuleFailure(path: occurrence.path, message: "UIKit is not allowed here.")
+                }
         }
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -137,29 +135,26 @@ struct DownstreamExtensibilityTests {
     }
 }
 
-private func projectRules() -> [AnyRuleDefinition] {
+private func projectRules() -> [any RuleDefinition] {
     RuleSet {
-        CustomRule("project.first") { _ in [] }
-        CustomRule("project.second") { _ in [] }
+        Rules.repository("project.first") { _ in [] }
+        Rules.repository("project.second") { _ in [] }
     }.rules
 }
 
-// A downstream-defined provider depending on another downstream provider.
-private struct ViewLikeTypesProvider: FactProvider {
-    static let id: FactProviderID = "project.view_like_types"
-
-    func derive(in context: FactDerivationContext) throws -> [DeclarationOccurrence] {
-        try context.facts(DeclarationInventoryProvider.self).occurrences.filter { occurrence in
-            occurrence.kind == .struct
-        }
+// A downstream closure-backed provider: the normal low-boilerplate API.
+private let viewLikeTypes = DerivedFact<[DeclarationOccurrence]>("project.view_like_types") { context in
+    try context.facts(BuiltInFacts.declarations).occurrences.filter { occurrence in
+        occurrence.kind == .struct
     }
 }
 
+// A downstream named provider depending on the closure-backed provider.
 private struct MisnamedViewProvider: FactProvider {
-    static let id: FactProviderID = "project.misnamed_views"
+    let id: FactProviderID = "project.misnamed_views"
 
     func derive(in context: FactDerivationContext) throws -> [DeclarationOccurrence] {
-        try context.facts(ViewLikeTypesProvider.self).filter { occurrence in
+        try context.facts(viewLikeTypes).filter { occurrence in
             !occurrence.symbol.name.hasSuffix("View")
         }
     }
@@ -174,7 +169,7 @@ private extension SyntaxQuery where Node == FunctionDeclSyntax {
     }
 }
 
-private final class ForceUnwrapVisitor: SyntaxVisitor, RuleViolationSource {
+private final class ForceUnwrapVisitor: SyntaxVisitor, RuleFailureSource {
     private let file: SourceFileContext
     private(set) var failures: [RuleFailure] = []
 

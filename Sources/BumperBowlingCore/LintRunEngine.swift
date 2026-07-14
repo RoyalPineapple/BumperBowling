@@ -55,48 +55,26 @@ struct LintRunEngine: Sendable {
             )
 
         case .scanSources(let preparedRules):
-            let repository = try await RepositoryScanner(rules: preparedRules.rules).scan(root: root)
-            return .scannedSources(preparedRules: preparedRules, repository: repository)
+            let files = try await RepositoryScanner(rules: preparedRules.rules).scanSources(root: root)
+            return .scannedSources(preparedRules: preparedRules, files: files)
 
         case .evaluateRules(let plan):
-            async let builtInReport = ArchitectureLinter(rules: plan.rules)
-                .lintConcurrently(plan.repository)
-            async let customRuleOutput = evaluateCustomRules(plan)
-            return .evaluatedRules(
-                try await LintRuleEvaluation(
-                    plan: plan,
-                    builtInReport: builtInReport,
-                    customRuleOutput: customRuleOutput
-                )
-            )
-
-        case .collectFindings(let evaluation):
-            let report = LintReport(
-                violations: (
-                    evaluation.builtInReport.violations
-                        + evaluation.customRuleOutput.architectureViolations
-                ).deterministicallySorted()
-            )
-            return .collectedFindings(report)
+            let root = root
+            let input = RepositoryInput(architecture: plan.configuration, files: plan.files)
+            let configurationURL = root.appendingPathComponent(ConfigurationLoader.fileName)
+            let report: RuleReport
+            if FileManager.default.fileExists(atPath: configurationURL.path) {
+                report = try await Task.detached {
+                    try ConfigurationLoader.evaluateRules(root: root, input: input)
+                }.value
+            } else {
+                // No authored BumperBowling.swift means no project rules, so
+                // built-in rules evaluate in process without the runner.
+                report = try RuleSet(rules: BuiltInRules.rules(from: input.architecture.rules))
+                    .evaluate(configuration: input.architecture, repository: RepositorySyntax(input: input))
+            }
+            return .evaluatedRules(plan: plan, report: report)
         }
-    }
-
-    private func evaluateCustomRules(_ plan: LintEvaluationPlan) async throws -> CustomRuleOutput {
-        guard plan.configuration.customRules.enabled else {
-            return .empty
-        }
-
-        let root = root
-        let configuration = plan.configuration
-        let repository = plan.repository
-
-        return try await Task.detached {
-            try ConfigurationLoader.runCustomRules(
-                root: root,
-                configuration: configuration,
-                repository: repository
-            )
-        }.value
     }
 }
 
@@ -115,27 +93,21 @@ struct LintRunReducer: Sendable {
                 effect: .scanSources(preparedRules)
             )
 
-        case (.scanningSources, .scannedSources(let preparedRules, let repository)):
+        case (.scanningSources, .scannedSources(let preparedRules, let files)):
             let plan = LintEvaluationPlan(
                 configuration: preparedRules.configuration,
                 rules: preparedRules.rules,
-                repository: repository
+                files: files
             )
             return LintRunTransition(
                 state: .evaluatingRules(plan),
                 effect: .evaluateRules(plan)
             )
 
-        case (.evaluatingRules, .evaluatedRules(let evaluation)):
-            return LintRunTransition(
-                state: .collectingFindings(evaluation),
-                effect: .collectFindings(evaluation)
-            )
-
-        case (.collectingFindings(let evaluation), .collectedFindings(let report)):
+        case (.evaluatingRules, .evaluatedRules(let plan, let report)):
             let result = LintRunResult(
-                rules: evaluation.plan.rules,
-                repository: evaluation.plan.repository,
+                rules: plan.rules,
+                scannedFileCount: plan.files.count,
                 report: report
             )
             return LintRunTransition(state: .reporting(result), effect: nil)
@@ -155,7 +127,6 @@ enum LintRunState: Sendable {
     case preparingRules(ArchitectureConfiguration)
     case scanningSources(LintPreparedRules)
     case evaluatingRules(LintEvaluationPlan)
-    case collectingFindings(LintRuleEvaluation)
     case reporting(LintRunResult)
     case failed(LintRunFailure)
 
@@ -168,9 +139,7 @@ enum LintRunState: Sendable {
         case .scanningSources:
             "Scanning Swift source files"
         case .evaluatingRules(let plan):
-            "Evaluating \(plan.enabledRuleCount) architecture rule(s)"
-        case .collectingFindings:
-            "Collecting architecture findings"
+            "Evaluating rules over \(plan.files.count) source file(s)"
         case .reporting(let result):
             "Found \(result.report.violations.count) architecture violation(s)"
         case .failed(let failure):
@@ -182,9 +151,8 @@ enum LintRunState: Sendable {
 enum LintRunEvent: Equatable, Sendable {
     case start(ArchitectureConfiguration)
     case preparedRules(LintPreparedRules)
-    case scannedSources(preparedRules: LintPreparedRules, repository: RepositoryFacts)
-    case evaluatedRules(LintRuleEvaluation)
-    case collectedFindings(LintReport)
+    case scannedSources(preparedRules: LintPreparedRules, files: [SourceInput])
+    case evaluatedRules(plan: LintEvaluationPlan, report: RuleReport)
     case failed(LintRunFailure)
 }
 
@@ -192,7 +160,6 @@ enum LintRunEffect: Sendable, Equatable {
     case prepareRules(ArchitectureConfiguration)
     case scanSources(LintPreparedRules)
     case evaluateRules(LintEvaluationPlan)
-    case collectFindings(LintRuleEvaluation)
 }
 
 struct LintRunTransition: Sendable {
@@ -208,17 +175,7 @@ struct LintPreparedRules: Sendable, Equatable {
 struct LintEvaluationPlan: Sendable, Equatable {
     let configuration: ArchitectureConfiguration
     let rules: ArchitectureRules
-    let repository: RepositoryFacts
-
-    var enabledRuleCount: Int {
-        RuleRegistry(configuration: rules.ruleConfiguration).enabledRules.count
-    }
-}
-
-struct LintRuleEvaluation: Sendable, Equatable {
-    let plan: LintEvaluationPlan
-    let builtInReport: LintReport
-    let customRuleOutput: CustomRuleOutput
+    let files: [SourceInput]
 }
 
 struct LintRunFailure: Error, Sendable, Equatable {

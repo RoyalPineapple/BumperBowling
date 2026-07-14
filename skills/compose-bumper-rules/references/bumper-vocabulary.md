@@ -50,7 +50,7 @@ extension AssertionShape {
 Then apply it:
 
 ```swift
-let configuration = BumperConfiguration {
+let bumper = BumperProject {
     Architecture {
         Component(.core) {
             Owns("Sources/Core")
@@ -58,7 +58,7 @@ let configuration = BumperConfiguration {
         }
     }
 
-    Assertions {
+    Rules {
         ApplyAssertions(.global)
     }
 }

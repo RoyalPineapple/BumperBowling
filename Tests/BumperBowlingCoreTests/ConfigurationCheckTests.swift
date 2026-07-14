@@ -24,7 +24,7 @@ struct ConfigurationCheckTests {
         let source = """
         import BumperBowlingCore
 
-        let configuration = BumperConfiguration {
+        let bumper = BumperProject {
             Architecture {
                 Component(.core) {
                     Modules("Core")

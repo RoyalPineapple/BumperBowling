@@ -20,14 +20,14 @@ struct ScopedRuleSettingsTests {
             Requires(.explicitDomainSurfaces, severity: .error)
             Requires(.noOptionalStoredProperties, .noBoolStoredProperties, severity: .warning)
         }
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
                     Applies(shape)
                 }
             }
-        }.architectureConfiguration
+        }.architecture
 
         let report = try ArchitectureLinter(configuration: configuration)
             .lint(RepositoryFacts(files: [file]))
@@ -45,14 +45,14 @@ struct ScopedRuleSettingsTests {
             Requires(.noOptionalStoredProperties, .noBoolStoredProperties, severity: .warning)
         }
 
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
                     Applies(domainShape)
                 }
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
 

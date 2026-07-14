@@ -4,6 +4,66 @@ import Testing
 
 private let violationMarker: Character = "↓"
 
+// ponytail: test-only shim preserving the old linter surface over the
+// internal family evaluators, so fixture suites keep unit-testing the
+// evaluators with hand-built facts. The production path (BuiltInRule through
+// RuleSet) is covered by the engine, command, and self-lint suites.
+struct ArchitectureViolation: Equatable, Sendable {
+    let ruleID: RuleID
+    let severity: Severity
+    let path: RelativeFilePath
+    let location: SourcePosition?
+    let message: String
+    let evidence: ViolationEvidence?
+
+    init(ruleID: RuleID, failure: RuleFailure) {
+        self.ruleID = ruleID
+        self.severity = failure.severity ?? .error
+        self.path = failure.path
+        self.location = failure.location
+        self.message = failure.message
+        self.evidence = failure.evidence
+    }
+
+    var markdownLocation: String {
+        guard let location else {
+            return path.rawValue
+        }
+
+        return "\(path.rawValue):\(location.line):\(location.column)"
+    }
+}
+
+struct FixtureLintReport: Sendable {
+    let violations: [ArchitectureViolation]
+
+    var hasErrors: Bool {
+        violations.contains { $0.severity == .error }
+    }
+}
+
+struct ArchitectureLinter {
+    private let rules: ArchitectureRules
+
+    init(configuration: ArchitectureConfiguration) throws {
+        self.rules = try ArchitectureRules(configuration: configuration)
+    }
+
+    func lint(_ nodes: RepositoryFacts) -> FixtureLintReport {
+        let graph = ArchitectureGraph(nodes: nodes, rules: rules)
+        let violations = BuiltInRules.families(from: rules.ruleConfiguration)
+            .flatMap { family in
+                family.filter(\.isEnabled)
+            }
+            .flatMap { rule in
+                rule.evaluate(graph: graph, rules: rules).map { failure in
+                    ArchitectureViolation(ruleID: rule.id, failure: failure)
+                }
+            }
+        return FixtureLintReport(violations: violations)
+    }
+}
+
 struct SourceFixture: Sendable {
     let files: [String: String]
 
@@ -86,7 +146,9 @@ private func violations(
     let rules = try ArchitectureRules(configuration: configuration)
     let nodes = try await RepositoryScanner(rules: rules).scan(root: root)
     let graph = ArchitectureGraph(nodes: nodes, rules: rules)
-    return rule.evaluate(graph: graph, rules: rules)
+    return rule.evaluate(graph: graph, rules: rules).map { failure in
+        ArchitectureViolation(ruleID: rule.id, failure: failure)
+    }
 }
 
 private func writeFixture(_ fixture: SourceFixture) throws -> URL {

@@ -54,7 +54,7 @@ public struct SyntaxQuery<Node: SyntaxProtocol>: SyntaxPattern, Sendable {
         }
     }
 
-    public func map<Output: SyntaxProtocol>(
+    public func compactMap<Output: SyntaxProtocol>(
         _ transform: @escaping @Sendable (SyntaxMatch<Node>) -> Output?
     ) -> SyntaxQuery<Output> {
         let extract = extract
@@ -117,6 +117,12 @@ public func functionCalls() -> SyntaxQuery<FunctionCallExprSyntax> {
 // MARK: - Capability-specific operations
 
 extension SyntaxQuery where Node == FunctionDeclSyntax {
+    public func named(_ name: FunctionSymbol) -> Self {
+        filter { match in
+            StringMatcher.exact(name.name).matches(match.node.name.text)
+        }
+    }
+
     public func taking(_ type: NominalSymbol) -> Self {
         filter { match in
             match.node.signature.parameterClause.parameters.contains { parameter in
@@ -125,14 +131,14 @@ extension SyntaxQuery where Node == FunctionDeclSyntax {
         }
     }
 
+    /// Functions whose body contains a locally dispatched call to their own
+    /// name. A call on another receiver (`renderer.render(...)`) is not
+    /// local dispatch and does not count.
     public func callingSelf() -> Self {
         filter { match in
-            guard let body = match.node.body else {
-                return false
-            }
             let name = match.node.name.text
-            return body.descendants(of: FunctionCallExprSyntax.self).contains { call in
-                StringMatcher.exact(name).matches(call.calleeBaseName)
+            return match.node.locallyDispatchedCalleeNames.contains { callee in
+                StringMatcher.exact(name).matches(callee)
             }
         }
     }
@@ -169,12 +175,37 @@ extension SyntaxProtocol {
 
     /// The name of the nearest enclosing nominal or extension declaration.
     public var enclosingNominalName: String? {
-        for ancestor in ancestors {
-            if let name = Syntax(ancestor).nominalDeclarationName {
-                return name
-            }
+        enclosingNominalNames.first
+    }
+
+    /// Enclosing nominal and extension names from nearest to outermost.
+    public var enclosingNominalNames: [String] {
+        ancestors.compactMap { ancestor in
+            Syntax(ancestor).nominalDeclarationName
         }
-        return nil
+    }
+}
+
+extension FunctionDeclSyntax {
+    /// Base names of calls in this function's body that dispatch locally:
+    /// bare references (`descend(...)`) or explicit self (`self.descend(...)`).
+    /// Calls on any other receiver are excluded.
+    var locallyDispatchedCalleeNames: [String] {
+        guard let body else {
+            return []
+        }
+        return body.descendants(of: FunctionCallExprSyntax.self).compactMap { call in
+            if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+                return reference.baseName.text
+            }
+            if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+               let base = member.base,
+               base.is(DeclReferenceExprSyntax.self),
+               StringMatcher.exact("self").matches(base.trimmedDescription) {
+                return member.declName.baseName.text
+            }
+            return nil
+        }
     }
 }
 

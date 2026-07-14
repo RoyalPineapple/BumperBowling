@@ -46,6 +46,26 @@ public struct RepositoryScanner: Sendable {
         self.limits = limits
     }
 
+    /// Reads bounded raw sources for the runner's `evaluate` mode. The host
+    /// owns filesystem safety; parsing happens once, in the runner.
+    public func scanSources(root: URL) async throws -> [SourceInput] {
+        let root = root.standardizedFileURL
+        return try sourceFileInputs(in: root)
+            .map { input in
+                guard let source = try? String(contentsOf: input.url, encoding: .utf8) else {
+                    throw BumperError.unreadableFile(input.relativePath.rawValue)
+                }
+                return SourceInput(
+                    path: input.relativePath,
+                    component: input.component,
+                    source: source
+                )
+            }
+            .sorted { lhs, rhs in
+                lhs.path.rawValue < rhs.path.rawValue
+            }
+    }
+
     public func scan(root: URL) async throws -> RepositoryFacts {
         let root = root.standardizedFileURL
         let inputs = try sourceFileInputs(in: root)

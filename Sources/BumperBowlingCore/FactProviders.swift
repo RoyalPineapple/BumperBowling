@@ -23,27 +23,47 @@ public struct FactProviderID: Hashable, Sendable, CustomStringConvertible, Expre
 
 /// An extensible, typed, memoized derivation over repository syntax.
 /// A provider is evaluated at most once per engine run; dependencies are
-/// explicit through `context.facts(...)`.
+/// explicit through `context.facts(...)`. Providers are values, so both
+/// named provider structs and closure-backed `DerivedFact`s conform.
 public protocol FactProvider: Sendable {
     associatedtype Facts: Sendable
 
-    static var id: FactProviderID { get }
+    var id: FactProviderID { get }
 
-    init()
     func derive(in context: FactDerivationContext) throws -> Facts
+}
+
+/// A closure-backed fact provider: the normal low-boilerplate project API.
+public struct DerivedFact<Value: Sendable>: FactProvider {
+    public let id: FactProviderID
+    private let derivation: @Sendable (FactDerivationContext) throws -> Value
+
+    public init(
+        _ id: FactProviderID,
+        derive: @escaping @Sendable (FactDerivationContext) throws -> Value
+    ) {
+        self.id = id
+        self.derivation = derive
+    }
+
+    public func derive(in context: FactDerivationContext) throws -> Value {
+        try derivation(context)
+    }
 }
 
 public struct FactDerivationContext: Sendable {
     public let repository: RepositorySyntax
+    public let configuration: ArchitectureConfiguration
     private let store: FactStore
 
-    init(repository: RepositorySyntax, store: FactStore) {
+    init(repository: RepositorySyntax, configuration: ArchitectureConfiguration, store: FactStore) {
         self.repository = repository
+        self.configuration = configuration
         self.store = store
     }
 
-    public func facts<Provider: FactProvider>(_ provider: Provider.Type) throws -> Provider.Facts {
-        try store.facts(provider, repository: repository)
+    public func facts<Provider: FactProvider>(_ provider: Provider) throws -> Provider.Facts {
+        try store.facts(provider, repository: repository, configuration: configuration)
     }
 }
 
@@ -69,13 +89,14 @@ final class FactStore: @unchecked Sendable {
     private var derivationPath: [FactProviderID] = []
 
     func facts<Provider: FactProvider>(
-        _ provider: Provider.Type,
-        repository: RepositorySyntax
+        _ provider: Provider,
+        repository: RepositorySyntax,
+        configuration: ArchitectureConfiguration
     ) throws -> Provider.Facts {
         lock.lock()
         defer { lock.unlock() }
 
-        let id = Provider.id
+        let id = provider.id
         if let cached = cache[id] {
             return try typedFacts(from: cached.get(), id: id)
         }
@@ -87,8 +108,8 @@ final class FactStore: @unchecked Sendable {
         derivationPath.append(id)
         defer { derivationPath.removeLast() }
 
-        let context = FactDerivationContext(repository: repository, store: self)
-        let result = Result<any Sendable, Error> { try Provider().derive(in: context) }
+        let context = FactDerivationContext(repository: repository, configuration: configuration, store: self)
+        let result = Result<any Sendable, Error> { try provider.derive(in: context) }
         cache[id] = result
         return try typedFacts(from: result.get(), id: id)
     }
@@ -142,7 +163,7 @@ public struct DeclarationInventory: Sendable {
 
 /// Nominal declarations across the repository.
 public struct DeclarationInventoryProvider: FactProvider {
-    public static let id: FactProviderID = "bumper.declaration_inventory"
+    public let id: FactProviderID = "bumper.declaration_inventory"
 
     public init() {}
 
@@ -201,7 +222,7 @@ public struct FunctionCallInventory: Sendable {
 
 /// Function and initializer calls derived from repository syntax.
 public struct FunctionCallInventoryProvider: FactProvider {
-    public static let id: FactProviderID = "bumper.function_call_inventory"
+    public let id: FactProviderID = "bumper.function_call_inventory"
 
     public init() {}
 
@@ -255,10 +276,17 @@ public struct DirectRecursionInventory: Sendable {
     }
 }
 
+/// Canonical built-in provider values, mirroring `Rules` for facts.
+public enum BuiltInFacts {
+    public static let declarations = DeclarationInventoryProvider()
+    public static let functionCalls = FunctionCallInventoryProvider()
+    public static let directRecursion = DirectRecursionProvider()
+}
+
 // ponytail: direct recursion only; a call-graph SCC provider can add mutual
 // recursion later without changing dependent rule contracts.
 public struct DirectRecursionProvider: FactProvider {
-    public static let id: FactProviderID = "bumper.direct_recursion"
+    public let id: FactProviderID = "bumper.direct_recursion"
 
     public init() {}
 

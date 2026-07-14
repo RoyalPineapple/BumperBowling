@@ -119,11 +119,10 @@ struct BumperCommandsTests {
 
     @Test
     func failureThresholdControlsExitIntent() throws {
-        let report = LintReport(
+        let report = RuleReport(
             violations: [
-                ArchitectureViolation(
-                    ruleID: .forbiddenImport,
-                    severity: .warning,
+                RuleViolation(
+                    rule: RuleMetadata(id: .forbiddenImport, severity: .warning, summary: "Forbidden import."),
                     path: try RelativeFilePath("Sources/Core/Thing.swift"),
                     message: "warning"
                 )
@@ -242,7 +241,7 @@ struct BumperCommandsTests {
     }
 
     private var commandFixtureConfiguration: ArchitectureConfiguration {
-        BumperConfiguration {
+        BumperProject {
             Included {
                 "Sources"
             }
@@ -256,10 +255,10 @@ struct BumperCommandsTests {
                 }
             }
 
-            Assertions {
+            Rules {
                 SingleOwner(.error)
             }
-        }.architectureConfiguration
+        }.architecture
     }
 
     private func makeRepository(source: String) throws -> URL {
@@ -281,8 +280,8 @@ struct BumperCommandsTests {
         let configuration = """
         import BumperBowlingCore
 
-        private func makeConfiguration() -> BumperConfiguration {
-            BumperConfiguration {
+        private func makeConfiguration() -> BumperProject {
+            BumperProject {
             Included {
                 "Sources"
             }
@@ -301,13 +300,13 @@ struct BumperCommandsTests {
                 }
             }
 
-            Assertions {
+            Rules {
                 SingleOwner(.error)
             }
             }
         }
 
-        let configuration = makeConfiguration()
+        let bumper = makeConfiguration()
         """
 
         try configuration.write(
@@ -321,7 +320,7 @@ struct BumperCommandsTests {
         let configuration = """
         import BumperBowlingCore
 
-        let configuration = BumperConfiguration {
+        let bumper = BumperProject {
             Included {
                 "Sources"
             }
@@ -333,7 +332,9 @@ struct BumperCommandsTests {
                 }
             }
 
-            CustomRules()
+            Rules {
+                projectRules
+            }
         }
         """
 
@@ -348,23 +349,21 @@ struct BumperCommandsTests {
         let source = """
         import BumperBowlingCore
 
-        let customRules = CustomRuleSet {
-            CustomRule("custom.import_allow_list", severity: .error) { context in
+        let projectRules = RuleSet {
+            Rules.repository("custom.import_allow_list", severity: .error) { context in
                 let allowedImports = Set(["Foundation"])
-                return context.files.flatMap { file in
-                    file.imports
-                        .filter { !allowedImports.contains($0) }
-                        .map { module in
-                            CustomRuleFailure(
-                                path: file.path,
-                                message: "\\(file.component) imports non-allowlisted module \\(module)",
-                                evidence: ViolationEvidence(
-                                    observed: module,
-                                    expectation: "allowed imports: Foundation"
-                                )
+                return try context.facts(BuiltInFacts.imports).occurrences
+                    .filter { !allowedImports.contains($0.module.rawValue) }
+                    .map { occurrence in
+                        RuleFailure(
+                            path: occurrence.path,
+                            message: "\\(occurrence.component.rawValue) imports non-allowlisted module \\(occurrence.module.rawValue)",
+                            evidence: ViolationEvidence(
+                                observed: occurrence.module.rawValue,
+                                expectation: "allowed imports: Foundation"
                             )
-                        }
-                }
+                        )
+                    }
             }
         }
         """
@@ -382,8 +381,8 @@ struct BumperCommandsTests {
         import BumperBowlingCore
         import SwiftSyntax
 
-        let customRules = CustomRuleSet {
-            CustomSyntaxRule("custom.no_tuple_types", severity: .error) { file in
+        let projectRules = RuleSet {
+            Rules.files("custom.no_tuple_types", severity: .error) { file in
                 let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
                 visitor.walk(file.syntax)
 

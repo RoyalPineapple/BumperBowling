@@ -48,11 +48,11 @@ public enum BumperCommands {
         return try ArchitectureSnapshot(configuration: configuration).render()
     }
 
-    public static func lint(root: URL) async throws -> LintReport {
+    public static func lint(root: URL) async throws -> RuleReport {
         try await lintRun(root: root).report
     }
 
-    public static func lint(root: URL, configuration: ArchitectureConfiguration) async throws -> LintReport {
+    public static func lint(root: URL, configuration: ArchitectureConfiguration) async throws -> RuleReport {
         try await lintRun(root: root, configuration: configuration).report
     }
 

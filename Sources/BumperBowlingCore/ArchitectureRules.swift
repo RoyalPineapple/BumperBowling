@@ -145,7 +145,7 @@ private struct PathOwnership {
     let owner: ComponentID
 }
 
-public struct ComponentID: Hashable, Sendable, CustomStringConvertible {
+public struct ComponentID: Hashable, Sendable, CustomStringConvertible, Codable {
     public let rawValue: String
 
     public init(_ rawValue: String) throws {
@@ -158,6 +158,15 @@ public struct ComponentID: Hashable, Sendable, CustomStringConvertible {
 
     public var description: String {
         rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        try self.init(decoder.singleValueContainer().decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 

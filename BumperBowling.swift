@@ -3,7 +3,7 @@ import BumperBowlingCore
 // Bumper Bowling's own architecture, asserted against itself.
 // - core is the engine. It depends on nothing of ours and stays typed and boring.
 // - cli is a thin interface over core. It forwards; it holds no state.
-let configuration = BumperConfiguration {
+let bumper = BumperProject {
     Included {
         "Sources"
     }
@@ -27,7 +27,7 @@ let configuration = BumperConfiguration {
         }
     }
 
-    Assertions {
+    Rules {
         ApplyAssertions(.bumperGlobal)
     }
 }

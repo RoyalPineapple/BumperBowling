@@ -20,7 +20,7 @@ directly from this repository, pinned to a release tag:
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/RoyalPineapple/BumperBowling.git", from: "0.4.0")
+    .package(url: "https://github.com/RoyalPineapple/BumperBowling.git", from: "0.5.0")
 ]
 ```
 
@@ -48,15 +48,24 @@ swift run bumper lint . --baseline .bumper-baseline.json --fail-on error
 
 ## Configuration
 
+`BumperBowling.swift` declares one `BumperProject` named `bumper`. Component
+names come from your own `ComponentKey` enum, so `Component(.core)` and
+`MayDependOn(.core)` are typo-checked by the compiler:
+
 ```swift
 import BumperBowlingCore
 
-let configuration = BumperConfiguration {
+enum AppComponent: String, ComponentKey {
+    case core
+    case cli
+}
+
+let bumper = BumperProject {
     Included {
         "Sources"
     }
 
-    Architecture {
+    Architecture(AppComponent.self) {
         Component(.core) {
             Owns("Sources/Core")
             Modules("Core")
@@ -72,7 +81,7 @@ let configuration = BumperConfiguration {
         }
     }
 
-    Assertions {
+    Rules {
         DependencyBoundaries(.error)
         SingleOwner(.error)
         AcyclicDeclaredDependencies(.error)
@@ -80,8 +89,8 @@ let configuration = BumperConfiguration {
 }
 ```
 
-The same value works in your test suite, so architecture failures are just
-test failures:
+The same architecture works in your test suite, so architecture failures are
+just test failures:
 
 ```swift
 import BumperBowlingCore
@@ -91,7 +100,7 @@ import Testing
 func architectureStaysInLane() async throws {
     let report = try await BumperCommands.lint(
         root: projectRoot,
-        configuration: configuration.architectureConfiguration
+        configuration: bumper.architecture
     )
 
     for violation in report.violations where violation.severity == .error {
@@ -154,63 +163,56 @@ a `BumperRules` library product:
   Sources/BumperRules/Rules.swift
 ```
 
-## Custom Rules
+## Project Rules
 
-When a repository needs a rule Bumper Bowling cannot know in advance, opt into a
-custom rule worker:
+When a repository needs a rule Bumper Bowling cannot know in advance, define it
+as an ordinary `RuleDefinition` and add it to the project's `Rules` block. Built-in
+rules and project rules run in one engine and produce one `RuleReport`.
 
-```swift
-let configuration = BumperConfiguration {
-    Architecture {
-        Component(.score) {
-            Owns("Sources/TheScore")
-            Modules("TheScore")
-        }
-    }
-
-    CustomRules()
-}
-```
-
-Then define `customRules` in `.bumper/Sources`. Fact-based rules can stay at
-the repository snapshot level:
+Fact-based rules evaluate memoized typed facts over the parsed repository:
 
 ```swift
+// .bumper/Sources/ProjectRules.swift
 import BumperBowlingCore
 
-let customRules = CustomRuleSet {
-    CustomRule("the_score.import_allow_list", severity: .error) { context in
+let projectRules = RuleSet {
+    Rules.repository("the_score.import_allow_list", severity: .error) { context in
         let allowedImports = Set(["Foundation"])
-
-        return context.files(inComponent: "score").flatMap { file in
-            file.imports
-                .filter { !allowedImports.contains($0) }
-                .map { module in
-                    CustomRuleFailure(
-                        path: file.path,
-                        message: "\(file.component) imports non-allowlisted module \(module)",
-                        evidence: ViolationEvidence(
-                            observed: module,
-                            expectation: "allowed imports: Foundation"
-                        )
+        return try context.facts(BuiltInFacts.imports).occurrences
+            .filter { !allowedImports.contains($0.module.rawValue) }
+            .map { occurrence in
+                RuleFailure(
+                    path: occurrence.path,
+                    message: "\(occurrence.component.rawValue) imports non-allowlisted module \(occurrence.module.rawValue)",
+                    evidence: ViolationEvidence(
+                        observed: occurrence.module.rawValue,
+                        expectation: "allowed imports: Foundation"
                     )
-                }
-        }
+                )
+            }
     }
 }
 ```
 
-When projected facts are not enough, write a syntax rule. The worker receives
-bounded source text from the host scan, parses it in-process, and gives each
-rule a `SourceFileContext` with `SourceFileSyntax`, source text, component
-metadata, imports, and location helpers:
+```swift
+// BumperBowling.swift
+Rules {
+    DependencyBoundaries(.error)
+    projectRules
+}
+```
+
+When projected facts are not enough, write a per-file syntax rule. Each rule
+receives a `SourceFileContext` with the parsed `SourceFileSyntax`, source text,
+component metadata, and location helpers — every file is parsed exactly once
+per run, shared across all rules:
 
 ```swift
 import BumperBowlingCore
 import SwiftSyntax
 
-let customRules = CustomRuleSet {
-    CustomSyntaxRule("core.no_tuple_api", severity: .error) { file in
+let projectRules = RuleSet {
+    Rules.files("core.no_tuple_api", severity: .error) { file in
         let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
 
@@ -237,11 +239,26 @@ private final class TupleTypeCollector: SyntaxVisitor {
 }
 ```
 
-The worker receives a `Codable` `CustomRuleInput` built from the host scan and
-returns a `Codable` `CustomRuleOutput`. Rule code does not rescan the repo or
-walk arbitrary files. Repo-local `.bumper/Sources` files can import
-`SwiftSyntax` directly; packaged `.bumper/Package.swift` rule libraries should
-declare their own SwiftSyntax dependency when they use AST types.
+Common ownership and traversal invariants ship as prebuilt shapers —
+`Rules.singleDeclaration`, `Rules.constructionOwnership`, `Rules.boundaryOnly`,
+`Rules.noAlternateAliases`, `Rules.canonicalTraversal`,
+`Rules.canonicalConstruction`, and `Rules.singleNominalSpelling` — implemented
+only through the same public rule, fact, and query interfaces.
+
+Every rule can be tested in memory with `BumperBowlingTestSupport`:
+
+```swift
+import BumperBowlingTestSupport
+
+let report = try RuleTestHarness(rule).evaluate(
+    VirtualRepository {
+        VirtualSourceFile.swift("Sources/Core/Thing.swift", component: "core", source: "struct Thing {}")
+    }
+)
+```
+
+See [rule authoring](docs/RULE_AUTHORING.md) for the full ladder: DSL, shapers,
+typed facts and queries, and the raw `SyntaxVisitor` escape hatch.
 
 ## Agent Skill
 
@@ -280,13 +297,15 @@ a stable CI cache location.
 
 `BumperBowling.swift` is a program, not a data file — the same as
 `Package.swift`. So Bumper Bowling loads it the way SwiftPM loads a manifest:
-it compiles the file, runs it in a sealed-off process, and reads back the
-configuration value the run produced.
+it compiles the file into one cached project runner and runs that runner in a
+sealed-off process.
 
-The sealed-off process has no network, nowhere to write, and an empty
-environment. It emits one thing — the configuration, as JSON — and nothing
-else crosses back. Scanning and linting run in the `bumper` process itself,
-never in configuration code.
+The runner has two modes. `describe` prints the architecture configuration as
+JSON so the host knows what to scan. `evaluate` receives the scanned source
+files as JSON on stdin, parses each file once, evaluates built-in and project
+rules in one engine, and prints one `RuleReport` as JSON. The sealed-off
+process has no network, nowhere to write, and an empty environment; scanning
+stays in the `bumper` process itself.
 
 The compile is cached against the file's contents, so it happens once per
 change to `BumperBowling.swift`, not once per lint. An unchanged
@@ -329,6 +348,7 @@ from this repository. The checked-in architecture snapshot is generated by
 - [Architecture](docs/ARCHITECTURE.md)
 - [Configuration language](docs/DSL_SPEC.md)
 - [Rule authoring](docs/RULE_AUTHORING.md)
+- [Migrating to 0.5](docs/MIGRATION_0.5.md)
 - [SwiftSyntax surface](docs/SWIFTSYNTAX_SURFACE.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 

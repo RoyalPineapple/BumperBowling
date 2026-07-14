@@ -21,6 +21,18 @@ public struct VirtualSourceFile: Sendable {
         VirtualSourceFile(path: path, component: component, source: source)
     }
 
+    /// Project component enums work directly at the fixture boundary.
+    public static func swift<Key: ComponentKey>(
+        _ path: RelativeFilePath,
+        component: Key,
+        source: String
+    ) -> Self {
+        guard let typedComponent = try? ComponentID(component.rawValue) else {
+            preconditionFailure("Invalid virtual source file component: \(component.rawValue)")
+        }
+        return .swift(path, component: typedComponent, source: source)
+    }
+
     /// Strings are accepted at this test boundary and normalized into typed
     /// values. Invalid fixture paths fail loudly at construction.
     public static func swift(

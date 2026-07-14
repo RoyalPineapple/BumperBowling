@@ -3,11 +3,11 @@ import SwiftParser
 import SwiftSyntax
 @testable import BumperBowlingCore
 
-@Suite("BumperConfiguration DSL")
-struct BumperConfigurationDSLTests {
+@Suite("BumperProject DSL")
+struct BumperProjectDSLTests {
     @Test
     func buildsTypedArchitectureConfiguration() throws {
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Included {
                 "Sources"
             }
@@ -32,10 +32,10 @@ struct BumperConfigurationDSLTests {
                 }
             }
 
-            Assertions {
+            Rules {
                 DependencyBoundaries(.error)
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
 
@@ -56,25 +56,15 @@ struct BumperConfigurationDSLTests {
     }
 
     @Test
-    func configuresCustomRuleConcurrencyLimit() {
-        let configuration = BumperConfiguration {
-            CustomRules(maxConcurrentRuleJobs: 12)
-        }.architectureConfiguration
-
-        #expect(configuration.customRules.enabled)
-        #expect(configuration.customRules.maxConcurrentRuleJobs == 12)
-    }
-
-    @Test
     func exposesDisallowedPublicDeclarations() throws {
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
                     DoesNot(Declare("bumperBowling"), severity: .error)
                 }
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
 
@@ -86,14 +76,14 @@ struct BumperConfigurationDSLTests {
 
     @Test
     func exposesRequiredPublicDeclarations() throws {
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
                     Declares("Reducer", severity: .warning)
                 }
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
 
@@ -105,14 +95,14 @@ struct BumperConfigurationDSLTests {
 
     @Test
     func invertsSyntaxPredicates() throws {
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
                     DoesNot(ContainSyntax(.forceUnwrapExpr), severity: .error)
                 }
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
 
@@ -124,7 +114,7 @@ struct BumperConfigurationDSLTests {
 
     @Test
     func exposesGenericSyntaxNodePredicates() throws {
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
@@ -139,7 +129,7 @@ struct BumperConfigurationDSLTests {
                     )
                 }
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
         let matcher = SyntaxNodeMatcher(
@@ -155,15 +145,15 @@ struct BumperConfigurationDSLTests {
 
     @Test
     func configuresDirectStringMatchingBoundary() throws {
-        let configuration = BumperConfiguration {
-            Assertions {
+        let configuration = BumperProject {
+            Rules {
                 NoDirectStringMatching(
                     .error,
                     paths: ["Sources/BumperBowlingCore"],
                     except: ["Sources/BumperBowlingCore/StringMatcher.swift"]
                 )
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rule = try ArchitectureRules(configuration: configuration).ruleConfiguration.syntaxConstructs
 
@@ -175,7 +165,7 @@ struct BumperConfigurationDSLTests {
 
     @Test
     func exposesForbiddenComponentDependencies() throws {
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
@@ -186,7 +176,7 @@ struct BumperConfigurationDSLTests {
                     Owns("Sources/UI")
                 }
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
 
@@ -202,14 +192,14 @@ struct BumperConfigurationDSLTests {
             .functionalCore
         )
 
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
                     Requires(valueCore, severity: .error)
                 }
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
 
@@ -239,7 +229,7 @@ struct BumperConfigurationDSLTests {
             NoDirectStringMatching(.warning, paths: ["Sources/Core"], except: ["Sources/Core/StringMatcher.swift"])
         }
 
-        let configuration = BumperConfiguration {
+        let configuration = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
@@ -248,10 +238,10 @@ struct BumperConfigurationDSLTests {
                 }
             }
 
-            Assertions {
+            Rules {
                 ApplyAssertions(globalShape)
             }
-        }.architectureConfiguration
+        }.architecture
 
         let rules = try ArchitectureRules(configuration: configuration)
 

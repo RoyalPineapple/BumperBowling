@@ -68,7 +68,7 @@ extension AssertionShape {
 
 ```swift
 // BumperBowling.swift
-let configuration = BumperConfiguration {
+let bumper = BumperProject {
     Architecture {
         Component(.core) {
             Owns("Sources/Core")
@@ -76,7 +76,7 @@ let configuration = BumperConfiguration {
         }
     }
 
-    Assertions {
+    Rules {
         ApplyAssertions(.global)
     }
 }
@@ -105,11 +105,12 @@ Swift values importable; `BumperBowling.swift` still chooses what to use:
 import BumperRules
 ```
 
-Custom rules are the escape hatch for repository-specific checks that cannot be
-named ahead of time by Bumper Bowling. They are still typed and opt-in:
+Project rules are the escape hatch for repository-specific checks that cannot
+be named ahead of time by Bumper Bowling. They are ordinary `RuleDefinition`
+values added to the `Rules` block, evaluated by the same engine as built-ins:
 
 ```swift
-let configuration = BumperConfiguration {
+let bumper = BumperProject {
     Architecture {
         Component(.score) {
             Owns("Sources/TheScore")
@@ -117,51 +118,51 @@ let configuration = BumperConfiguration {
         }
     }
 
-    CustomRules()
-}
-```
-
-Fact-based custom rules evaluate the projected repository snapshot:
-
-```swift
-// .bumper/Sources/CustomRules.swift
-import BumperBowlingCore
-
-let customRules = CustomRuleSet {
-    CustomRule("the_score.import_allow_list", severity: .error) { context in
-        let allowedImports = Set(["Foundation"])
-
-        return context.files(inComponent: "score").flatMap { file in
-            file.imports
-                .filter { !allowedImports.contains($0) }
-                .map { module in
-                    CustomRuleFailure(
-                        path: file.path,
-                        message: "\(file.component) imports non-allowlisted module \(module)",
-                        evidence: ViolationEvidence(
-                            observed: module,
-                            expectation: "allowed imports: Foundation"
-                        )
-                    )
-                }
-        }
+    Rules {
+        projectRules
     }
 }
 ```
 
-Bumper Bowling owns the scan. The custom worker receives `CustomRuleInput` as
-Codable data and returns `CustomRuleOutput` as Codable findings; the closures do
-not cross the process boundary.
-
-Syntax custom rules evaluate `SourceFileContext` values with raw SwiftSyntax:
+Fact-based project rules evaluate memoized typed facts:
 
 ```swift
-// .bumper/Sources/CustomRules.swift
+// .bumper/Sources/ProjectRules.swift
+import BumperBowlingCore
+
+let projectRules = RuleSet {
+    Rules.repository("the_score.import_allow_list", severity: .error) { context in
+        let allowedImports = Set(["Foundation"])
+        return try context.facts(BuiltInFacts.imports).occurrences
+            .filter { !allowedImports.contains($0.module.rawValue) }
+            .map { occurrence in
+                RuleFailure(
+                    path: occurrence.path,
+                    message: "\(occurrence.component.rawValue) imports non-allowlisted module \(occurrence.module.rawValue)",
+                    evidence: ViolationEvidence(
+                        observed: occurrence.module.rawValue,
+                        expectation: "allowed imports: Foundation"
+                    )
+                )
+            }
+    }
+}
+```
+
+Bumper Bowling owns the scan. The host sends the scanned source files to the
+cached project runner as Codable `RepositoryInput`; the runner parses each file
+once, evaluates all rules, and returns one Codable `RuleReport`. Closures never
+cross the process boundary, and rule code does not traverse the filesystem.
+
+Per-file syntax rules evaluate `SourceFileContext` values with raw SwiftSyntax:
+
+```swift
+// .bumper/Sources/ProjectRules.swift
 import BumperBowlingCore
 import SwiftSyntax
 
-let customRules = CustomRuleSet {
-    CustomSyntaxRule("core.no_tuple_api", severity: .error) { file in
+let projectRules = RuleSet {
+    Rules.files("core.no_tuple_api", severity: .error) { file in
         let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
 
@@ -191,7 +192,7 @@ Requires(DisallowSyntax(.forceUnwrapExpr), severity: .warning)
 Bumper Bowling does not maintain a parallel enum of SwiftSyntax nodes. Facts that need typed access to syntax fields are computed from real SwiftSyntax node types through `node.bumper` views.
 
 ```text
-BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner -> ArchitectureGraph -> validator
+BumperProject -> ArchitectureConfiguration -> scanner -> RepositoryInput -> project runner -> RepositorySyntax -> facts -> RuleSet -> RuleReport
 ```
 
 ## Design Goals
@@ -211,7 +212,12 @@ BumperConfiguration -> ArchitectureConfiguration -> ArchitectureRules -> scanner
 ```swift
 import BumperBowlingCore
 
-let configuration = BumperConfiguration {
+enum AppComponent: String, ComponentKey {
+    case core
+    case cli
+}
+
+let bumper = BumperProject {
     Included {
         "Sources"
     }
@@ -221,7 +227,7 @@ let configuration = BumperConfiguration {
         "DerivedData"
     }
 
-    Architecture {
+    Architecture(AppComponent.self) {
         Component(.core) {
             Owns("Sources/BumperBowlingCore")
             Modules("BumperBowlingCore")
@@ -242,13 +248,19 @@ let configuration = BumperConfiguration {
         }
     }
 
-    Assertions {
+    Rules {
         DependencyBoundaries(.error)
         SingleOwner(.error)
         AcyclicDeclaredDependencies(.error)
     }
 }
 ```
+
+`Architecture(AppComponent.self)` takes the project's own `ComponentKey` enum,
+so `Component(.core)` and `MayDependOn(.core)` are compiler-checked. Duplicate
+component IDs after normalization are a configuration error. The untyped
+`Architecture { Component(.core) { ... } }` spelling over `ComponentID` values
+remains valid.
 
 ## Core Vocabulary
 
@@ -270,10 +282,10 @@ let configuration = BumperConfiguration {
 - `Requires`: positive modeling guarantees that derive syntax-first checks.
 - `ComponentShape`: reusable component policy bundle owned by the consumer.
 - `AssertionShape`: reusable repo-level assertion bundle owned by the consumer.
-- `ApplyAssertions`: applies an `AssertionShape` inside `Assertions`.
+- `ApplyAssertions`: applies an `AssertionShape` inside `Rules`.
 - `Disallows`: concrete syntax nodes that must not appear in a component.
 - `NoDirectStringMatching`: a syntax-first assertion that keeps direct string matching inside the matcher implementation.
-- `Assertions`: graph-level assertions such as ownership and dependency shape.
+- `Rules`: the project rule block — graph-level assertions such as ownership and dependency shape, plus project-defined `RuleDefinition` values. `Rules.*` static members are the prebuilt shaper catalog.
 
 Current modeling requirements include:
 
@@ -342,7 +354,7 @@ repository-owned requirements, component shapes, assertion shapes, and examples.
 Bumper Bowling is SwiftSyntax-driven:
 
 ```text
-SwiftSyntax -> SourceFileFacts -> RepositoryFacts -> ArchitectureGraph -> RuleRegistry
+SwiftSyntax -> RepositorySyntax -> typed facts -> ArchitectureGraph -> RuleSet
 ```
 
 Swift is the only language surface. The configuration language must not promise facts SwiftSyntax cannot observe, such as symbol resolution, inferred types, or compiler-level dependency truth.
@@ -353,8 +365,9 @@ See [SWIFTSYNTAX_SURFACE.md](SWIFTSYNTAX_SURFACE.md) for the current fact surfac
 
 Bumper Bowling follows a tiny version of SwiftLint's self-test pattern:
 
-- Every source-oriented rule has `RuleDescription` metadata.
-- Rule examples use `↓` markers for expected violations.
-- `verifyRule(...)` checks triggering and non-triggering examples.
+- Rule fixtures use `↓` markers for expected violation locations.
+- Every rule can be tested in memory with `RuleTestHarness` and
+  `VirtualRepository` from `BumperBowlingTestSupport`, returning the same
+  `RuleReport` the engine and CLI produce.
 - Command tests cover `scan` and `lint`.
 - A self-lint test runs Bumper Bowling against this repository and records error-level findings.

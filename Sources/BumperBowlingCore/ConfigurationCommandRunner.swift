@@ -4,38 +4,44 @@ import Foundation
 
 public extension ConfigurationLoader {
     /// Loads `BumperBowling.swift` the way SwiftPM loads `Package.swift`:
-    /// compile it into a package, run the product in a sandbox, read back the
-    /// value it prints. The build is cached against the file's content hash,
-    /// so the compile happens once per change, not once per lint.
+    /// compile the project into one cached runner, run its `describe` mode in
+    /// a sandbox, read back the configuration it prints. The build is cached
+    /// against the project source fingerprint, so the compile happens once
+    /// per change, not once per lint.
     static func loadConfiguration(root: URL) throws -> ArchitectureConfiguration {
-        let output = try evaluateConfiguration(root: root.standardizedFileURL)
+        let output = try runProjectRunner(
+            root: root.standardizedFileURL,
+            mode: .describe,
+            input: nil
+        )
         guard !output.isEmpty else {
             throw BumperError.configurationOutputMalformed("empty configuration payload")
         }
         return try JSONDecoder().decode(ArchitectureConfiguration.self, from: Data(output.utf8))
     }
 
-    static func runCustomRules(
-        root: URL,
-        configuration: ArchitectureConfiguration,
-        repository: RepositoryFacts
-    ) throws -> CustomRuleOutput {
-        guard configuration.customRules.enabled else {
-            return .empty
-        }
-
+    /// Runs the same cached runner in `evaluate` mode: the bounded repository
+    /// input goes in over stdin, one canonical report comes back. Built-in
+    /// and project rules execute in the same evaluation invocation.
+    static func evaluateRules(root: URL, input: RepositoryInput) throws -> RuleReport {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let input = CustomRuleInput(configuration: configuration, repository: repository)
-        let output = try evaluateCustomRules(
+        let output = try runProjectRunner(
             root: root.standardizedFileURL,
+            mode: .evaluate,
             input: try encoder.encode(input)
         )
         guard !output.isEmpty else {
-            throw BumperError.configurationOutputMalformed("empty custom rule payload")
+            throw BumperError.configurationOutputMalformed("empty rule report payload")
         }
-        return try JSONDecoder().decode(CustomRuleOutput.self, from: output)
+        return try JSONDecoder().decode(RuleReport.self, from: Data(output.utf8))
     }
+}
+
+/// The cached runner's typed modes, selected by its process arguments.
+enum ProjectRunnerMode: String, Sendable {
+    case describe
+    case evaluate
 }
 
 private extension ConfigurationLoader {
@@ -43,7 +49,6 @@ private extension ConfigurationLoader {
     static let outputEndMarker = "__BUMPER_OUTPUT_END__"
     static let configurationBuildTimeoutSeconds: TimeInterval = 300
     static let configurationEvaluationTimeoutSeconds: TimeInterval = 60
-    static let customRuleEvaluationTimeoutSeconds: TimeInterval = 60
     static let configurationCommandOutputLimitBytes = 4 * 1024 * 1024
     static let swiftToolchainIdentityTimeoutSeconds: TimeInterval = 10
     static let swiftToolchainIdentityOutputLimitBytes = 16 * 1024
@@ -52,8 +57,7 @@ private extension ConfigurationLoader {
     static let consumerRulePackageName = ".bumper"
     static let consumerRuleProductName = "BumperRules"
     static let configurationCacheEnvironmentKey = "BUMPER_CACHE_DIR"
-    static let configurationRunnerProductName = "BumperConfigurationRunner"
-    static let customRuleRunnerProductName = "BumperCustomRuleRunner"
+    static let projectRunnerProductName = "BumperProjectRunner"
 
     /// The configuration runner computes a pure value: it evaluates the
     /// repository's `BumperBowling.swift` into an `ArchitectureConfiguration`
@@ -70,7 +74,7 @@ private extension ConfigurationLoader {
     (allow sysctl-read)
     """
 
-    static func evaluateConfiguration(root: URL) throws -> String {
+    static func runProjectRunner(root: URL, mode: ProjectRunnerMode, input: Data?) throws -> String {
         let root = root.standardizedFileURL
         let configurationURL = root.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: configurationURL.path) else {
@@ -80,8 +84,7 @@ private extension ConfigurationLoader {
         let packageRoot = try bumperPackageRoot()
         let cachedPackage = try makeCachedPackage(
             configurationURL: configurationURL,
-            bumperPackageRoot: packageRoot,
-            runner: .configuration
+            bumperPackageRoot: packageRoot
         )
         try buildCachedPackageIfNeeded(cachedPackage)
 
@@ -91,13 +94,15 @@ private extension ConfigurationLoader {
             "-p",
             sandboxProfile,
             cachedPackage.executableURL.path,
+            mode.rawValue,
         ]
         process.environment = [:]
 
         let result = try runProcess(
             process,
             timeoutSeconds: configurationEvaluationTimeoutSeconds,
-            outputLimitBytes: configurationCommandOutputLimitBytes
+            outputLimitBytes: configurationCommandOutputLimitBytes,
+            stdin: input
         )
 
         if result.timedOut {
@@ -126,63 +131,6 @@ private extension ConfigurationLoader {
         }
 
         return try extractPayload(from: stdoutText)
-    }
-
-    static func evaluateCustomRules(root: URL, input: Data) throws -> Data {
-        let root = root.standardizedFileURL
-        let configurationURL = root.appendingPathComponent(fileName)
-        guard FileManager.default.fileExists(atPath: configurationURL.path) else {
-            throw BumperError.configurationMissing(configurationURL.path)
-        }
-
-        let packageRoot = try bumperPackageRoot()
-        let cachedPackage = try makeCachedPackage(
-            configurationURL: configurationURL,
-            bumperPackageRoot: packageRoot,
-            runner: .customRules
-        )
-        try buildCachedPackageIfNeeded(cachedPackage)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
-        process.arguments = [
-            "-p",
-            sandboxProfile,
-            cachedPackage.executableURL.path,
-        ]
-        process.environment = [:]
-
-        let result = try runProcess(
-            process,
-            timeoutSeconds: customRuleEvaluationTimeoutSeconds,
-            outputLimitBytes: configurationCommandOutputLimitBytes,
-            stdin: input
-        )
-
-        if result.timedOut {
-            throw BumperError.configurationExecutionTimedOut(
-                configurationURL.path,
-                Int(customRuleEvaluationTimeoutSeconds)
-            )
-        }
-
-        if let stream = result.outputTooLargeStream {
-            throw BumperError.configurationOutputTooLarge(
-                configurationURL.path,
-                stream,
-                configurationCommandOutputLimitBytes
-            )
-        }
-
-        let stderrText = String(data: result.stderr, encoding: .utf8) ?? "<non-UTF-8 stderr>"
-        guard result.terminationStatus == 0 else {
-            throw BumperError.configurationExecutionFailed(
-                configurationURL.path,
-                stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
-        }
-
-        return result.stdout
     }
 
     static func runProcess(
@@ -287,8 +235,7 @@ private extension ConfigurationLoader {
 
     static func makeCachedPackage(
         configurationURL: URL,
-        bumperPackageRoot: URL,
-        runner: CachedPackageRunner
+        bumperPackageRoot: URL
     ) throws -> CachedPackage {
         let configurationData = try Data(contentsOf: configurationURL)
         let repositoryRoot = configurationURL.deletingLastPathComponent()
@@ -299,29 +246,28 @@ private extension ConfigurationLoader {
         let manifest = packageManifest(
             bumperPackageRoot: bumperPackageRoot,
             rulePackages: rulePackages,
-            runnerProductName: runner.productName
+            runnerProductName: projectRunnerProductName
         )
         let metadata = CachedPackageMetadata(
             configurationContentHash: sha256Hex(configurationData),
             consumerSourcesHash: consumerSourcesHash,
             rulePackagesHash: rulePackagesHash,
-            runnerProductName: runner.productName
+            runnerProductName: projectRunnerProductName
         )
         let root = try cachedPackageRoot(
             configurationURL: configurationURL,
             bumperPackageRoot: bumperPackageRoot,
             manifest: manifest,
             consumerSourcesHash: consumerSourcesHash,
-            rulePackagesHash: rulePackagesHash,
-            runner: runner
+            rulePackagesHash: rulePackagesHash
         )
-        let sources = root.appendingPathComponent("Sources/\(runner.productName)")
+        let sources = root.appendingPathComponent("Sources/\(projectRunnerProductName)")
 
-        if cachedPackageIsCurrent(root: root, metadata: metadata, runner: runner) {
+        if cachedPackageIsCurrent(root: root, metadata: metadata) {
             return CachedPackage(
                 root: root,
-                executableURL: cachedRunnerExecutableURL(in: root, productName: runner.productName),
-                productName: runner.productName,
+                executableURL: cachedRunnerExecutableURL(in: root, productName: projectRunnerProductName),
+                productName: projectRunnerProductName,
                 needsBuild: false
             )
         }
@@ -330,15 +276,15 @@ private extension ConfigurationLoader {
         try manifest.write(to: root.appendingPathComponent("Package.swift"), atomically: true, encoding: .utf8)
         try configurationData.write(to: sources.appendingPathComponent("UserConfiguration.swift"), options: .atomic)
         try writeConsumerConfigurationSources(consumerSources, to: sources.appendingPathComponent("ConsumerSources"))
-        try runner.source.write(to: sources.appendingPathComponent("main.swift"), atomically: true, encoding: .utf8)
+        try runnerSource.write(to: sources.appendingPathComponent("main.swift"), atomically: true, encoding: .utf8)
         try JSONEncoder()
             .encode(metadata)
             .write(to: root.appendingPathComponent(CachedPackageMetadata.fileName), options: .atomic)
 
         return CachedPackage(
             root: root,
-            executableURL: cachedRunnerExecutableURL(in: root, productName: runner.productName),
-            productName: runner.productName,
+            executableURL: cachedRunnerExecutableURL(in: root, productName: projectRunnerProductName),
+            productName: projectRunnerProductName,
             needsBuild: true
         )
     }
@@ -348,18 +294,17 @@ private extension ConfigurationLoader {
         bumperPackageRoot: URL,
         manifest: String,
         consumerSourcesHash: String,
-        rulePackagesHash: String,
-        runner: CachedPackageRunner
+        rulePackagesHash: String
     ) throws -> URL {
         let key = [
-            "v2",
-            runner.productName,
+            "v3",
+            projectRunnerProductName,
             configurationURL.standardizedFileURL.path,
             bumperPackageRoot.standardizedFileURL.path,
             try packageRootFingerprint(bumperPackageRoot),
             try swiftToolchainIdentity(),
             sha256Hex(Data(manifest.utf8)),
-            sha256Hex(Data(runner.source.utf8)),
+            sha256Hex(Data(runnerSource.utf8)),
             consumerSourcesHash,
             rulePackagesHash,
         ].joined(separator: "\n")
@@ -527,10 +472,9 @@ private extension ConfigurationLoader {
 
     static func cachedPackageIsCurrent(
         root: URL,
-        metadata: CachedPackageMetadata,
-        runner: CachedPackageRunner
+        metadata: CachedPackageMetadata
     ) -> Bool {
-        let sources = root.appendingPathComponent("Sources/\(runner.productName)")
+        let sources = root.appendingPathComponent("Sources/\(projectRunnerProductName)")
         let requiredFiles = [
             root.appendingPathComponent("Package.swift"),
             sources.appendingPathComponent("UserConfiguration.swift"),
@@ -707,40 +651,34 @@ private extension ConfigurationLoader {
         """
     }
 
+    /// One runner, two modes. `describe` prints the project's serializable
+    /// configuration; `evaluate` reads a bounded `RepositoryInput` from stdin
+    /// and prints one `RuleReport`. Both reference the project's `bumper`
+    /// entry point.
     static var runnerSource: String {
         """
         import BumperBowlingCore
         import Foundation
 
         do {
+            let mode = CommandLine.arguments.dropFirst().first ?? "describe"
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
-            let resolvedConfiguration = configuration.architectureConfiguration
-            let payload = String(data: try encoder.encode(resolvedConfiguration), encoding: .utf8) ?? "{}"
+            let payloadData: Data
+            switch mode {
+            case "describe":
+                payloadData = try encoder.encode(bumper.architecture)
+            case "evaluate":
+                let inputData = FileHandle.standardInput.readDataToEndOfFile()
+                let input = try JSONDecoder().decode(RepositoryInput.self, from: inputData)
+                payloadData = try encoder.encode(bumper.evaluate(input))
+            default:
+                FileHandle.standardError.write(Data(("unknown runner mode: " + mode + "\\n").utf8))
+                exit(64)
+            }
+            let payload = String(data: payloadData, encoding: .utf8) ?? "{}"
             let output = "\(outputBeginMarker)\\n" + payload + "\\n\(outputEndMarker)\\n"
             FileHandle.standardOutput.write(Data(output.utf8))
-        } catch {
-            FileHandle.standardError.write(Data((String(describing: error) + "\\n").utf8))
-            exit(1)
-        }
-        """
-    }
-
-    static var customRuleRunnerSource: String {
-        """
-        import BumperBowlingCore
-        import Foundation
-
-        do {
-            let inputData = FileHandle.standardInput.readDataToEndOfFile()
-            let input = try JSONDecoder().decode(CustomRuleInput.self, from: inputData)
-            let output = try await customRules.evaluateConcurrently(
-                input,
-                maxConcurrentRuleJobs: input.configuration.customRules.maxConcurrentRuleJobs
-            )
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            FileHandle.standardOutput.write(try encoder.encode(output))
         } catch {
             FileHandle.standardError.write(Data((String(describing: error) + "\\n").utf8))
             exit(1)
@@ -817,25 +755,6 @@ private struct RulePackageDependency {
     let path: URL
     let package: String
     let product: String
-}
-
-private struct CachedPackageRunner {
-    let productName: String
-    let source: String
-
-    static var configuration: CachedPackageRunner {
-        CachedPackageRunner(
-            productName: ConfigurationLoader.configurationRunnerProductName,
-            source: ConfigurationLoader.runnerSource
-        )
-    }
-
-    static var customRules: CachedPackageRunner {
-        CachedPackageRunner(
-            productName: ConfigurationLoader.customRuleRunnerProductName,
-            source: ConfigurationLoader.customRuleRunnerSource
-        )
-    }
 }
 
 private final class BoundedOutputBuffer: @unchecked Sendable {
