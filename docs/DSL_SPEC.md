@@ -278,7 +278,7 @@ remains valid.
   family, node kind, and spelling.
 - `Does`: asserts that a predicate is present in the component graph.
 - `DoesNot`: asserts that a predicate is absent from the component graph.
-- `StringMatcher`: typed matching for name-like facts; string literals are exact matches, with `.contains`, `.prefix`, and `.suffix` available explicitly.
+- `StringMatcher`: typed matching for name-like facts; string literals are exact matches, with `.contains`, `.prefix`, `.suffix`, and `.regex` available explicitly. Regex patterns validate at construction.
 - `Requires`: positive modeling guarantees that derive syntax-first checks.
 - `ComponentShape`: reusable component policy bundle owned by the consumer.
 - `AssertionShape`: reusable repo-level assertion bundle owned by the consumer.

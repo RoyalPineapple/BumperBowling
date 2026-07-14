@@ -18,7 +18,7 @@ extension Rules {
     /// Exactly one declaration of `symbol`, owned by files under `owner`.
     /// A configured owner path with no files is a configuration failure.
     public static func singleDeclaration(
-        symbol: NominalSymbol,
+        _ symbol: NominalSymbol,
         owner: RelativePathPrefix,
         id: RuleID = RuleID("single_declaration"),
         severity: Severity = .error
@@ -84,7 +84,7 @@ extension Rules {
 
     /// `symbol` may only be constructed inside the allowed scope.
     public static func constructionOwnership(
-        symbol: NominalSymbol,
+        _ symbol: NominalSymbol,
         allowed: RuleScope,
         id: RuleID = RuleID("construction_ownership"),
         severity: Severity = .error
@@ -117,7 +117,7 @@ extension Rules {
 
     /// Calls to `symbol` may only occur inside the allowed boundary scope.
     public static func boundaryOnly(
-        symbol: FunctionSymbol,
+        function symbol: FunctionSymbol,
         allowed: RuleScope,
         id: RuleID = RuleID("boundary_only_use"),
         severity: Severity = .error
@@ -152,7 +152,7 @@ extension Rules {
     // ponytail: inspects aliases only; duplicate nominal currencies and
     // wrapper declarations can extend this rule without changing its contract.
     public static func noAlternateAliases(
-        symbol: NominalSymbol,
+        _ symbol: NominalSymbol,
         allowing: RuleScope = RuleScope { _ in false },
         id: RuleID = RuleID("no_alternate_aliases"),
         severity: Severity = .error
@@ -223,12 +223,12 @@ extension Rules {
 
     /// `symbol` may only be constructed by its declared owners.
     public static func canonicalConstruction(
-        symbol: NominalSymbol,
+        _ symbol: NominalSymbol,
         owners: RuleScope,
         id: RuleID = RuleID("canonical_construction"),
         severity: Severity = .error
     ) -> RepositoryRule {
-        constructionOwnership(symbol: symbol, allowed: owners, id: id, severity: severity)
+        constructionOwnership(symbol, allowed: owners, id: id, severity: severity)
     }
 
     /// Every nominal declaration named with `suffix` lives in the owner scope.
@@ -280,9 +280,4 @@ private extension CallGraphFunction {
     }
 }
 
-private let occurrenceFallbackPath: RelativeFilePath = {
-    guard let path = try? RelativeFilePath("Package.swift") else {
-        preconditionFailure("Invalid built-in fallback path")
-    }
-    return path
-}()
+private let occurrenceFallbackPath: RelativeFilePath = "Package.swift"

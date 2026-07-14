@@ -75,11 +75,15 @@ struct RuleEngineTests {
 
     @Test
     func invalidScopePathsFailAtConstruction() {
+        // Runtime String values take the throwing initializers; only literals
+        // get the trapping literal conversion.
+        let traversalPrefix = "../outside"
+        let absolutePath = "/absolute/path.swift"
         #expect(throws: ConfigurationError.self) {
-            _ = try RelativePathPrefix("../outside")
+            _ = try RelativePathPrefix(traversalPrefix)
         }
         #expect(throws: ConfigurationError.self) {
-            _ = try RelativeFilePath("/absolute/path.swift")
+            _ = try RelativeFilePath(absolutePath)
         }
     }
 

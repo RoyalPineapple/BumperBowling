@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.1 - 2026-07-14
+
+Closes the remaining letter-of-spec gaps from the open shaper architecture
+spec. The spec's example spellings now compile verbatim, enforced by
+`SpecSpellingTests`.
+
+### Changed
+
+- Shaper factories use the spec's argument labels: `singleDeclaration(_:owner:)`,
+  `constructionOwnership(_:allowed:)`, `boundaryOnly(function:allowed:)`,
+  `noAlternateAliases(_:allowing:)`, and `canonicalConstruction(_:owners:)`
+  (previously `symbol:`-labeled).
+
+### Added
+
+- `StringMatcher.regex(_:)`: explicit regular-expression matching, validated at
+  construction; string literals remain exact matches.
+- `RelativeFilePath` and `RelativePathPrefix` are `ExpressibleByStringLiteral`
+  at the authoring boundary; a malformed literal is a loud configuration error,
+  and runtime strings still use the throwing initializers.
+- `BumperProject.scanConfiguration`: the typed `ScanConfiguration` projection
+  (included and excluded paths) the host scanner honors.
+- `ViolationMatcher` in `BumperBowlingTestSupport`: pure, framework-neutral
+  violation predicates with `RuleReport.violations(matching:)` and
+  `RuleReport.contains(_:)`.
+
 ## 0.5.0 - 2026-07-14
 
 One open rule engine and one project entry point. See

@@ -1,11 +1,26 @@
 import Foundation
 import SwiftSyntax
 
+/// The typed scan surface: which paths the host scanner includes and
+/// excludes before any source crosses the runner boundary.
+public struct ScanConfiguration: Equatable, Sendable, Codable {
+    public let includedPaths: [String]
+    public let excludedPaths: [String]
+
+    public init(includedPaths: [String], excludedPaths: [String]) {
+        self.includedPaths = includedPaths
+        self.excludedPaths = excludedPaths
+    }
+}
+
 /// The one authored project entry point. `describe` serializes only the
 /// typed scan and architecture configuration; `evaluate` uses the rules in
 /// process, so the project itself is not Codable.
 public struct BumperProject: Sendable {
-    /// The serializable scan and architecture configuration.
+    /// The typed scan surface the host scanner honors.
+    public let scanConfiguration: ScanConfiguration
+    /// The serializable scan and architecture configuration — the value the
+    /// runner's `describe` mode emits and `RepositoryInput` carries back.
     public let architecture: ArchitectureConfiguration
     /// Project-defined rule definitions. Built-in rules derive from
     /// `architecture` so both sides of the runner boundary agree on them.
@@ -39,6 +54,10 @@ public struct BumperProject: Sendable {
             }
         }
 
+        self.scanConfiguration = ScanConfiguration(
+            includedPaths: includedPaths,
+            excludedPaths: excludedPaths
+        )
         self.architecture = ArchitectureConfiguration(
             includedPaths: includedPaths,
             excludedPaths: excludedPaths,

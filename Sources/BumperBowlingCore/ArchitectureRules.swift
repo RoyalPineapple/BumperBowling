@@ -11,8 +11,8 @@ public struct ArchitectureRules: Equatable, Sendable {
     public let ruleConfiguration: RuleConfiguration
 
     public init(configuration: ArchitectureConfiguration) throws {
-        self.includedPaths = Set(try configuration.includedPaths.map(RelativePathPrefix.init))
-        self.excludedPaths = Set(try configuration.excludedPaths.map(RelativePathPrefix.init))
+        self.includedPaths = Set(try configuration.includedPaths.map { try RelativePathPrefix($0) })
+        self.excludedPaths = Set(try configuration.excludedPaths.map { try RelativePathPrefix($0) })
         try Self.validateRuleConfiguration(configuration.rules)
 
         var components: [ComponentRule] = []
@@ -71,28 +71,28 @@ public struct ArchitectureRules: Equatable, Sendable {
     private static func validateRuleConfiguration(_ configuration: RuleConfiguration) throws {
         for setting in configuration.forbiddenImports {
             _ = try setting.values.map(ModuleName.init)
-            _ = try setting.paths.map(RelativePathPrefix.init)
+            _ = try setting.paths.map { try RelativePathPrefix($0) }
         }
 
         for setting in configuration.storedPropertyRules {
-            _ = try setting.paths.map(RelativePathPrefix.init)
-            _ = try setting.excludedPaths.map(RelativePathPrefix.init)
+            _ = try setting.paths.map { try RelativePathPrefix($0) }
+            _ = try setting.excludedPaths.map { try RelativePathPrefix($0) }
         }
         for setting in configuration.syntaxConstructRules {
-            _ = try setting.paths.map(RelativePathPrefix.init)
-            _ = try setting.excludedPaths.map(RelativePathPrefix.init)
+            _ = try setting.paths.map { try RelativePathPrefix($0) }
+            _ = try setting.excludedPaths.map { try RelativePathPrefix($0) }
         }
         for setting in configuration.syntaxKindRules {
-            _ = try setting.paths.map(RelativePathPrefix.init)
+            _ = try setting.paths.map { try RelativePathPrefix($0) }
         }
         for setting in configuration.syntaxNodeRules {
-            _ = try setting.paths.map(RelativePathPrefix.init)
+            _ = try setting.paths.map { try RelativePathPrefix($0) }
         }
         for setting in configuration.publicDeclarationRules {
-            _ = try setting.paths.map(RelativePathPrefix.init)
+            _ = try setting.paths.map { try RelativePathPrefix($0) }
         }
         for setting in configuration.enumStateMachineRules {
-            _ = try setting.paths.map(RelativePathPrefix.init)
+            _ = try setting.paths.map { try RelativePathPrefix($0) }
         }
     }
 
@@ -123,7 +123,7 @@ public struct ComponentRule: Equatable, Sendable {
 
         self.id = id
         self.modules = modules
-        self.paths = Set(try configuration.paths.map(RelativePathPrefix.init))
+        self.paths = Set(try configuration.paths.map { try RelativePathPrefix($0) })
         self.allowedDependencies = Set(try configuration.mayDependOn.map(ComponentID.init))
         self.forbiddenDependencies = Set(try configuration.mustNotDependOn.map(ComponentID.init))
 

@@ -8,7 +8,7 @@ struct StandardShaperTests {
     @Test
     func singleDeclarationPassesForOneOwnedDeclaration() throws {
         let rule = Rules.singleDeclaration(
-            symbol: NominalSymbol("AccessibilityTarget"),
+            NominalSymbol("AccessibilityTarget"),
             owner: try RelativePathPrefix("Sources/Plans")
         )
 
@@ -24,7 +24,7 @@ struct StandardShaperTests {
     @Test
     func singleDeclarationFlagsDuplicatesAndForeignOwners() throws {
         let rule = Rules.singleDeclaration(
-            symbol: NominalSymbol("AccessibilityTarget"),
+            NominalSymbol("AccessibilityTarget"),
             owner: try RelativePathPrefix("Sources/Plans")
         )
 
@@ -46,7 +46,7 @@ struct StandardShaperTests {
     @Test
     func singleDeclarationMissingOwnerFilesIsConfigurationFailure() throws {
         let rule = Rules.singleDeclaration(
-            symbol: NominalSymbol("AccessibilityTarget"),
+            NominalSymbol("AccessibilityTarget"),
             owner: try RelativePathPrefix("Sources/Missing")
         )
 
@@ -62,7 +62,7 @@ struct StandardShaperTests {
     @Test
     func constructionOwnershipFlagsOutsideBuilders() throws {
         let rule = Rules.constructionOwnership(
-            symbol: NominalSymbol("InterfaceObservation"),
+            NominalSymbol("InterfaceObservation"),
             allowed: .under(try RelativePathPrefix("Sources/Builders"))
         )
 
@@ -88,7 +88,7 @@ struct StandardShaperTests {
     @Test
     func boundaryOnlyFlagsCallsOutsideBoundary() throws {
         let rule = Rules.boundaryOnly(
-            symbol: FunctionSymbol("JSONDecoder.decode"),
+            function: FunctionSymbol("JSONDecoder.decode"),
             allowed: .under(try RelativePathPrefix("Sources/Boundary"))
         )
 
@@ -113,7 +113,7 @@ struct StandardShaperTests {
     @Test
     func noAlternateAliasesFlagsAliasesOutsideFacade() throws {
         let rule = Rules.noAlternateAliases(
-            symbol: NominalSymbol("AccessibilityTarget"),
+            NominalSymbol("AccessibilityTarget"),
             allowing: .under(try RelativePathPrefix("Sources/DSL"))
         )
 
@@ -202,7 +202,7 @@ struct StandardShaperTests {
     @Test
     func canonicalConstructionFlagsConstructionOutsideOwners() throws {
         let rule = Rules.canonicalConstruction(
-            symbol: NominalSymbol("InterfaceGraph"),
+            NominalSymbol("InterfaceGraph"),
             owners: .under(try RelativePathPrefix("Sources/Builders"))
         )
 
