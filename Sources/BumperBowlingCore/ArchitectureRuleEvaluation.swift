@@ -2,10 +2,10 @@ import Foundation
 import SwiftSyntax
 
 extension ArchitectureRule {
-    func evaluateForbiddenImports(graph: ArchitectureGraph, settings: [RuleSetting]) -> [ArchitectureViolation] {
+    func evaluateForbiddenImports(graph: ArchitectureGraph, settings: [RuleSetting]) -> [RuleFailure] {
         settings.flatMap { setting in
             let forbiddenImports = Set((try? setting.values.map(ModuleName.init)) ?? [])
-            return graph.imports(in: scope(paths: setting.paths)).compactMap { importFact -> ArchitectureViolation? in
+            return graph.imports(in: scope(paths: setting.paths)).compactMap { importFact -> RuleFailure? in
                 guard forbiddenImports.contains(importFact.module) else {
                     return nil
                 }
@@ -23,9 +23,9 @@ extension ArchitectureRule {
         graph: ArchitectureGraph,
         rules: ArchitectureRules,
         severity: Severity
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         let componentByName = rules.componentByID
-        var violations: [ArchitectureViolation] = []
+        var violations: [RuleFailure] = []
 
         for edge in graph.componentImportEdges {
             guard let sourceComponent = componentByName[edge.sourceComponent] else {
@@ -59,7 +59,7 @@ extension ArchitectureRule {
         graph architectureGraph: ArchitectureGraph,
         rules: ArchitectureRules,
         severity: Severity
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         let graph = Dictionary(
             uniqueKeysWithValues: rules.components.map { component in
                 (component.id, component.allowedDependencies)
@@ -85,7 +85,7 @@ extension ArchitectureRule {
     func evaluateDuplicateOwnership(
         rules: ArchitectureRules,
         severity: Severity
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         rules.pathOwnershipConflicts.map { conflict in
             violation(
                 severity: severity,
@@ -119,10 +119,10 @@ extension ArchitectureRule {
     func evaluateStoredProperties(
         graph: ArchitectureGraph,
         configuration: StoredPropertyRuleConfiguration
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         let excludedPaths = (try? configuration.excludedPaths.map(RelativePathPrefix.init)) ?? []
 
-        return graph.storedProperties(in: scope(paths: configuration.paths)).flatMap { propertyFact -> [ArchitectureViolation] in
+        return graph.storedProperties(in: scope(paths: configuration.paths)).flatMap { propertyFact -> [RuleFailure] in
             guard !excludedPaths.contains(where: { $0.contains(propertyFact.file.path) }) else {
                 return []
             }
@@ -139,10 +139,10 @@ extension ArchitectureRule {
     func evaluateSyntaxConstructs(
         graph: ArchitectureGraph,
         configuration: SyntaxConstructRuleConfiguration
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         let excludedPaths = (try? configuration.excludedPaths.map(RelativePathPrefix.init)) ?? []
 
-        return graph.constructs(in: scope(paths: configuration.paths)).compactMap { constructFact -> ArchitectureViolation? in
+        return graph.constructs(in: scope(paths: configuration.paths)).compactMap { constructFact -> RuleFailure? in
             guard !excludedPaths.contains(where: { $0.contains(constructFact.file.path) }) else {
                 return nil
             }
@@ -167,7 +167,7 @@ extension ArchitectureRule {
     func evaluateSyntaxKinds(
         graph: ArchitectureGraph,
         configuration: SyntaxKindRuleConfiguration
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         graph.files(in: scope(paths: configuration.paths)).flatMap { file in
             let observedKinds = Set(file.syntaxNodes.nodeKinds.map(SyntaxKindName.init))
             let missingRequiredKinds = configuration.requiredKinds
@@ -207,7 +207,7 @@ extension ArchitectureRule {
     func evaluateSyntaxNodes(
         graph: ArchitectureGraph,
         configuration: SyntaxNodeRuleConfiguration
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         graph.files(in: scope(paths: configuration.paths)).flatMap { file in
             let missingRequiredNodes = configuration.requiredNodes
                 .filter { matcher in
@@ -221,7 +221,7 @@ extension ArchitectureRule {
                     )
             }
 
-            let disallowedNodes = file.syntaxNodes.nodes.compactMap { node -> ArchitectureViolation? in
+            let disallowedNodes = file.syntaxNodes.nodes.compactMap { node -> RuleFailure? in
                 guard let matcher = configuration.disallowedNodes.first(where: { $0.matches(node) }) else {
                     return nil
                 }
@@ -245,7 +245,7 @@ extension ArchitectureRule {
     func evaluatePublicDeclarations(
         graph: ArchitectureGraph,
         configuration: PublicDeclarationRuleConfiguration
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         let scope = scope(paths: configuration.paths)
         let scopedFiles = graph.files(in: scope)
         let scopedDeclarations = graph.declarations(in: scope)
@@ -263,7 +263,7 @@ extension ArchitectureRule {
                     )
                 }
 
-        let disallowedNames: [ArchitectureViolation] = scopedDeclarations.compactMap { declarationFact -> ArchitectureViolation? in
+        let disallowedNames: [RuleFailure] = scopedDeclarations.compactMap { declarationFact -> RuleFailure? in
             guard configuration.disallowedNames.contains(where: { $0.matches(declarationFact.declaration.name) }) else {
                 return nil
             }
@@ -288,8 +288,8 @@ extension ArchitectureRule {
         property: StoredProperty,
         graph: ArchitectureGraph,
         configuration: StoredPropertyRuleConfiguration
-    ) -> [ArchitectureViolation] {
-        var violations: [ArchitectureViolation] = []
+    ) -> [RuleFailure] {
+        var violations: [RuleFailure] = []
         let typeName = property.type?.rawValue ?? ""
 
         if configuration.disallowances.contains(.storedProperty) {
@@ -429,7 +429,7 @@ extension ArchitectureRule {
     func evaluateEnumStateMachines(
         graph: ArchitectureGraph,
         configuration: PathRuleConfiguration
-    ) -> [ArchitectureViolation] {
+    ) -> [RuleFailure] {
         graph.sourceFiles.compactMap { file in
             guard matchesAny(configuration.paths, file.path) else {
                 return nil
@@ -514,14 +514,13 @@ extension ArchitectureRule {
         message: String,
         location: SourcePosition? = nil,
         evidence: ViolationEvidence? = nil
-    ) -> ArchitectureViolation {
-        ArchitectureViolation(
-            ruleID: id,
-            severity: severity,
+    ) -> RuleFailure {
+        RuleFailure(
             path: path,
             location: location,
             message: message,
-            evidence: evidence
+            evidence: evidence,
+            severity: severity
         )
     }
 }

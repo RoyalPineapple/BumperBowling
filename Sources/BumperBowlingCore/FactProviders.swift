@@ -53,15 +53,17 @@ public struct DerivedFact<Value: Sendable>: FactProvider {
 
 public struct FactDerivationContext: Sendable {
     public let repository: RepositorySyntax
+    public let configuration: ArchitectureConfiguration
     private let store: FactStore
 
-    init(repository: RepositorySyntax, store: FactStore) {
+    init(repository: RepositorySyntax, configuration: ArchitectureConfiguration, store: FactStore) {
         self.repository = repository
+        self.configuration = configuration
         self.store = store
     }
 
     public func facts<Provider: FactProvider>(_ provider: Provider) throws -> Provider.Facts {
-        try store.facts(provider, repository: repository)
+        try store.facts(provider, repository: repository, configuration: configuration)
     }
 }
 
@@ -88,7 +90,8 @@ final class FactStore: @unchecked Sendable {
 
     func facts<Provider: FactProvider>(
         _ provider: Provider,
-        repository: RepositorySyntax
+        repository: RepositorySyntax,
+        configuration: ArchitectureConfiguration
     ) throws -> Provider.Facts {
         lock.lock()
         defer { lock.unlock() }
@@ -105,7 +108,7 @@ final class FactStore: @unchecked Sendable {
         derivationPath.append(id)
         defer { derivationPath.removeLast() }
 
-        let context = FactDerivationContext(repository: repository, store: self)
+        let context = FactDerivationContext(repository: repository, configuration: configuration, store: self)
         let result = Result<any Sendable, Error> { try provider.derive(in: context) }
         cache[id] = result
         return try typedFacts(from: result.get(), id: id)

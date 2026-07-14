@@ -1,63 +1,8 @@
 import Foundation
 
-public struct ArchitectureLinter: Sendable {
-    private let rules: ArchitectureRules
-
-    public init(configuration: ArchitectureConfiguration) throws {
-        self.rules = try ArchitectureRules(configuration: configuration)
-    }
-
-    public init(rules: ArchitectureRules) {
-        self.rules = rules
-    }
-
-    public func lint(_ nodes: RepositoryFacts) -> LintReport {
-        let registry = RuleRegistry(configuration: rules.ruleConfiguration)
-        let graph = ArchitectureGraph(nodes: nodes, rules: rules)
-        let violations = registry.enabledRules.flatMap { rule in
-            rule.evaluate(graph: graph, rules: rules)
-        }
-
-        return LintReport(violations: violations)
-    }
-
-    public func lintConcurrently(_ nodes: RepositoryFacts) async -> LintReport {
-        let registry = RuleRegistry(configuration: rules.ruleConfiguration)
-        let graph = ArchitectureGraph(nodes: nodes, rules: rules)
-        let ruleViolations = await concurrentMap(registry.enabledRules) { rule in
-            rule.evaluate(graph: graph, rules: rules)
-        }
-
-        return LintReport(
-            violations: ruleViolations
-                .flatMap { $0 }
-                .deterministicallySorted()
-        )
-    }
-}
-
-public struct RuleRegistry: Sendable {
-    public let enabledRules: [ArchitectureRule]
-
-    public init(configuration: RuleConfiguration) {
-        var rules: [ArchitectureRule] = [
-            .forbiddenImport(configuration.forbiddenImports),
-            .componentBoundary(configuration.componentBoundary),
-            .duplicateOwnership(configuration.duplicateOwnership),
-            .declaredDependencyCycle(configuration.declaredDependencyCycle),
-        ]
-        rules += configuration.storedPropertyRules.map(ArchitectureRule.storedProperties)
-        rules += configuration.syntaxConstructRules.map(ArchitectureRule.syntaxConstructs)
-        rules += configuration.syntaxKindRules.map(ArchitectureRule.syntaxKinds)
-        rules += configuration.syntaxNodeRules.map(ArchitectureRule.syntaxNodes)
-        rules += configuration.publicDeclarationRules.map(ArchitectureRule.publicDeclarations)
-        rules += configuration.enumStateMachineRules.map(ArchitectureRule.enumStateMachine)
-
-        self.enabledRules = rules.filter(\.isEnabled)
-    }
-}
-
-public enum ArchitectureRule: Sendable {
+/// One configured built-in rule family. Internal evaluation currency only:
+/// the public surface is `BuiltInRules` producing ordinary `RuleDefinition`s.
+enum ArchitectureRule: Sendable {
     case forbiddenImport([RuleSetting])
     case componentBoundary(Severity)
     case duplicateOwnership(Severity)
@@ -69,7 +14,7 @@ public enum ArchitectureRule: Sendable {
     case publicDeclarations(PublicDeclarationRuleConfiguration)
     case enumStateMachine(PathRuleConfiguration)
 
-    public var id: RuleID {
+    var id: RuleID {
         switch self {
         case .forbiddenImport:
             .forbiddenImport
@@ -94,7 +39,7 @@ public enum ArchitectureRule: Sendable {
         }
     }
 
-    public var description: String {
+    var description: String {
         switch self {
         case .forbiddenImport:
             "Disallows configured imports in linted source files."
@@ -120,10 +65,10 @@ public enum ArchitectureRule: Sendable {
     }
 
     var isEnabled: Bool {
-        severity != .off
+        configuredSeverity != .off
     }
 
-    private var severity: Severity {
+    var configuredSeverity: Severity {
         switch self {
         case .forbiddenImport(let settings):
             settings.map(\.severity).reduce(.off) { partialResult, severity in
@@ -150,7 +95,7 @@ public enum ArchitectureRule: Sendable {
         }
     }
 
-    func evaluate(graph: ArchitectureGraph, rules: ArchitectureRules) -> [ArchitectureViolation] {
+    func evaluate(graph: ArchitectureGraph, rules: ArchitectureRules) -> [RuleFailure] {
         switch self {
         case .forbiddenImport(let settings):
             evaluateForbiddenImports(graph: graph, settings: settings)
@@ -183,75 +128,50 @@ extension RelativePathPrefix {
     }
 }
 
-public struct LintReport: Equatable, Sendable, Codable {
-    public let violations: [ArchitectureViolation]
-
-    public init(violations: [ArchitectureViolation]) {
-        self.violations = violations
-    }
-
-    public var hasErrors: Bool {
-        violations.contains { $0.severity == .error }
-    }
-
-    public var markdownSummary: String {
-        if violations.isEmpty {
-            return "No architecture violations found."
-        }
-
-        var lines = [
-            hasErrors ? "The code breaks the architecture's rules:" : "The architecture holds, but note these warnings:",
-            "",
-        ]
-        for violation in violations {
-            lines.append(
-                "- [\(violation.severity.rawValue.uppercased())] \(violation.markdownLocation): \(violation.message) (\(violation.ruleID.rawValue))"
-            )
-        }
-        return lines.joined(separator: "\n")
-    }
-}
-
-public struct ArchitectureViolation: Equatable, Sendable, Codable {
-    public let ruleID: RuleID
-    public let severity: Severity
-    public let path: RelativeFilePath
-    public let location: SourcePosition?
-    public let message: String
-    public let evidence: ViolationEvidence?
-
-    public init(
-        ruleID: RuleID,
-        severity: Severity,
-        path: RelativeFilePath,
-        location: SourcePosition? = nil,
-        message: String,
-        evidence: ViolationEvidence? = nil
-    ) {
-        self.ruleID = ruleID
-        self.severity = severity
-        self.path = path
-        self.location = location
-        self.message = message
-        self.evidence = evidence
-    }
-
-    public var markdownLocation: String {
-        guard let location else {
-            return path.rawValue
-        }
-
-        return "\(path.rawValue):\(location.line):\(location.column)"
-    }
-}
-
 public struct ViolationEvidence: Equatable, Sendable, Codable {
     public let observed: String
     public let expectation: String
+    /// Project-specific named details, kept in deterministic name order.
+    public let details: [EvidenceDetail]
 
-    public init(observed: String, expectation: String) {
+    public init(observed: String, expectation: String, details: [EvidenceDetail] = []) {
         self.observed = observed
         self.expectation = expectation
+        self.details = details.sorted { lhs, rhs in lhs.name < rhs.name }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case observed
+        case expectation
+        case details
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            observed: try container.decode(String.self, forKey: .observed),
+            expectation: try container.decode(String.self, forKey: .expectation),
+            details: try container.decodeIfPresent([EvidenceDetail].self, forKey: .details) ?? []
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(observed, forKey: .observed)
+        try container.encode(expectation, forKey: .expectation)
+        if !details.isEmpty {
+            try container.encode(details, forKey: .details)
+        }
+    }
+}
+
+public struct EvidenceDetail: Equatable, Sendable, Codable {
+    public let name: String
+    public let value: String
+
+    public init(name: String, value: String) {
+        self.name = name
+        self.value = value
     }
 }
 

@@ -17,15 +17,16 @@ public struct RuleTestHarness: Sendable {
     }
 
     public func evaluate(_ repository: VirtualRepository) throws -> RuleReport {
-        let parser = SwiftFileParser()
-        let facts = RepositoryFacts(
-            files: repository.files.map { file in
-                sourceFileFacts(for: file, summary: parser.parse(file.source))
-            }
-        )
-        return try rules.evaluate(
+        try rules.evaluate(
             configuration: configuration(for: repository),
-            repository: RepositorySyntax(facts: facts)
+            repository: RepositorySyntax(
+                files: repository.files.map { file in
+                    SourceFileContext(
+                        descriptor: SourceFileDescriptor(path: file.path, component: file.component),
+                        source: file.source
+                    )
+                }
+            )
         )
     }
 
@@ -40,22 +41,6 @@ public struct RuleTestHarness: Sendable {
                         paths: files.map(\.path.rawValue)
                     )
                 }
-        )
-    }
-
-    private func sourceFileFacts(for file: VirtualSourceFile, summary: SwiftFileSummary) -> SourceFileFacts {
-        SourceFileFacts(
-            path: file.path,
-            component: file.component,
-            source: file.source,
-            imports: summary.imports,
-            nominalTypes: summary.nominalTypes,
-            extensionDeclarations: summary.extensionDeclarations,
-            publicDeclarations: summary.publicDeclarations,
-            storedProperties: summary.storedProperties,
-            enums: summary.enums,
-            observedImperativeConstructs: summary.observedImperativeConstructs,
-            syntaxNodes: summary.syntaxNodes
         )
     }
 }

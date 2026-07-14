@@ -1,44 +1,60 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-07-14
+
+One open rule engine and one project entry point. See
+[docs/MIGRATION_0.5.md](docs/MIGRATION_0.5.md) for every removed symbol and its
+exact replacement. There are no compatibility aliases.
 
 ### Breaking
 
-- `CustomRuleSet` is now a typealias of the new `RuleSet`, and
-  `CustomRuleFailure` is a typealias of the canonical `RuleFailure`.
-  `CustomRuleSet.evaluate(_:)`/`evaluateConcurrently(_:)` now `throw` explicit
-  evaluation errors instead of silently passing on analysis failure.
-- `SourceFileContext.component` is now a typed `ComponentID` instead of a raw
-  `String`.
+- `BumperBowling.swift` now declares `let bumper = BumperProject { ... }`
+  instead of `let configuration = BumperConfiguration { ... }`, and the
+  repository rule block is `Rules { ... }` instead of `Assertions { ... }`.
+- Removed the custom rule worker and its surface: `CustomRules()`,
+  `CustomRuleSet`, `CustomRule`, `CustomSyntaxRule`, `CustomRuleFailure`,
+  `CustomRuleInput`, `CustomRuleOutput`, `CustomRuleFinding`,
+  `CustomRuleFileFacts`, `CustomRuleContext`, and
+  `CustomRuleWorkerConfiguration`. Project rules are ordinary `RuleDefinition`
+  values (`Rules.repository(...)`, `Rules.files(...)`) added to the project's
+  `Rules { ... }` block and evaluated by the same engine as built-ins.
+- Removed the closed built-in reporting surface: `ArchitectureLinter`,
+  `LintReport`, `ArchitectureViolation`, `RuleRegistry`, and
+  `RuleDescription`. Built-in rules evaluate as `RuleDefinition`s and every
+  interface — CLI, JSON, Markdown, baselines, tests — projects one
+  `RuleReport` of `RuleViolation` values.
+- Replaced the two cached executables (configuration runner and custom rule
+  worker) with one cached `BumperProjectRunner` running in a deny-default
+  sandbox with two modes: `describe` emits the architecture configuration;
+  `evaluate` reads scanned sources as `RepositoryInput` on stdin, parses each
+  file exactly once, and emits one `RuleReport`. Existing caches rebuild once.
+- Removed `RuleSet.evaluateConcurrently(...)`; evaluation is sequential in
+  declaration order, and reports are sorted deterministically by path, line,
+  column, rule ID, then message.
 
 ### Added
 
-- Added one open rule engine: `RuleDefinition`, `RuleMetadata`, `RuleFailure`,
-  `RuleViolation`, `RuleReport`, `RuleScope`, `RuleContext`,
-  `RepositorySyntax`, and `RuleSet` with a result builder that accepts any
-  conforming rule — no central enum or registry. `CustomRule` and
-  `CustomSyntaxRule` are ordinary conformances, so project rule sets can mix
-  closure rules, visitor rules, typed queries, and prebuilt shapers.
-- Added extensible typed facts: `FactProvider` with memoized, concurrency-safe
-  derivation, explicit dependency access, and explicit cycle errors, plus
-  built-in providers for declaration inventory, function/initializer calls,
-  and direct recursion.
-- Added typed syntax queries: `SyntaxPattern`, `SyntaxMatch`, and composable
-  `SyntaxQuery` roots (`functions()`, `initializers()`, `variables()`,
-  `typeAliases()`, `nominalDeclarations()`, `functionCalls()`) with
-  capability-specific operations (`taking`, `callingSelf`, `aliasing`) that
-  preserve the matched node type, and a `forbid(...)`/`ForbiddenPattern` rule
-  over any pattern.
-- Added typed symbols (`NominalSymbol`, `FunctionSymbol`, `PropertySymbol`,
-  `EnumCaseSymbol`) that quarantine source-name strings.
-- Added `VisitorRule` and `RuleViolationSource` so raw `SyntaxVisitor`
-  subclasses remain a first-class, permanent escape hatch.
-- Added standard architectural shapers under `Rules`: `singleDeclaration`,
-  `constructionOwnership`, `boundaryOnly`, `noAlternateAliases`, and
-  `canonicalTraversal`.
-- Added the `BumperBowlingTestSupport` library with `VirtualRepository`,
-  `VirtualSourceFile`, and `RuleTestHarness` for single-rule, in-memory,
-  framework-neutral rule tests that return the canonical `RuleReport`.
+- Added `BumperProject`, the one authored entry point, with
+  `evaluate(_: RepositoryInput) -> RuleReport` for direct use in tests.
+- Added typed component keys: `Architecture(MyComponentKey.self) { ... }`
+  accepts a project-owned `ComponentKey` enum so `Component(.core)` and
+  `MayDependOn(.core)` are compiler-checked. Duplicate normalized component
+  IDs are a configuration error.
+- Added `RepositoryInput`/`SourceInput`: the host scans raw sources and the
+  runner owns all parsing, so each file is parsed exactly once per run.
+- Added built-in fact providers `BuiltInFacts.nominalTypes`, `extensions`,
+  `storedProperties`, `syntaxNodes`, `effectiveAccess`,
+  `enclosingDeclarations`, `memberReferences`, `componentDependencies`, and
+  `recursiveCallGroups` (strongly connected components of the locally
+  dispatched call graph), joining `sourceFiles`, `imports`, `declarations`,
+  `functionCalls`, and `directRecursion`.
+- Added shapers `Rules.canonicalConstruction` and
+  `Rules.singleNominalSpelling`; upgraded `Rules.canonicalTraversal` to detect
+  mutual recursion through call-graph SCCs while ignoring calls on another
+  receiver.
+- Added duplicate rule ID validation across built-in and project rules.
+- Per-family built-in rules now report one stable rule ID with per-setting
+  severities folded into each violation.
 
 ## 0.4.0 - 2026-07-10
 

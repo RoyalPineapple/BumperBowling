@@ -63,21 +63,17 @@ public struct ScanDependency: Equatable, Sendable, Codable {
 
 public struct LintRunResult: Sendable {
     public let rules: ArchitectureRules
-    public let repository: RepositoryFacts
-    public let report: LintReport
+    public let scannedFileCount: Int
+    public let report: RuleReport
 
-    public init(rules: ArchitectureRules, repository: RepositoryFacts, report: LintReport) {
+    public init(rules: ArchitectureRules, scannedFileCount: Int, report: RuleReport) {
         self.rules = rules
-        self.repository = repository
+        self.scannedFileCount = scannedFileCount
         self.report = report
     }
 
-    public var scannedFileCount: Int {
-        repository.files.count
-    }
-
     public var enabledRuleCount: Int {
-        RuleRegistry(configuration: rules.ruleConfiguration).enabledRules.count
+        BuiltInRules.rules(from: rules.ruleConfiguration).count
     }
 
     public func output(baseline: LintBaseline? = nil) -> LintOutput {
@@ -94,7 +90,7 @@ public struct LintOutput: Equatable, Sendable, Codable {
     public let summary: LintOutputSummary
 
     public init(
-        report: LintReport,
+        report: RuleReport,
         rules: ArchitectureRules,
         baselineComparison: LintBaselineComparison? = nil
     ) {
@@ -129,7 +125,7 @@ public struct LintViolationOutput: Equatable, Sendable, Codable {
     public let baselineState: LintBaselineState?
 
     public init(
-        violation: ArchitectureViolation,
+        violation: RuleViolation,
         component: String?,
         baselineState: LintBaselineState? = nil
     ) {
@@ -182,7 +178,7 @@ public struct LintBaseline: Equatable, Sendable, Codable {
         self.violations = violations
     }
 
-    public init(report: LintReport) {
+    public init(report: RuleReport) {
         let entries = Set(report.violations.map(LintBaselineViolation.init))
         self.init(
             violations: entries.sorted { lhs, rhs in
@@ -204,7 +200,7 @@ public struct LintBaseline: Equatable, Sendable, Codable {
         )
     }
 
-    public func contains(_ violation: ArchitectureViolation) -> Bool {
+    public func contains(_ violation: RuleViolation) -> Bool {
         identities.contains(LintBaselineIdentity(violation: violation))
     }
 
@@ -223,7 +219,7 @@ public struct LintBaselineViolation: Hashable, Sendable, Codable {
     public let observed: String?
     public let expected: String?
 
-    public init(_ violation: ArchitectureViolation) {
+    public init(_ violation: RuleViolation) {
         self.ruleID = violation.ruleID.rawValue
         self.severity = violation.severity.rawValue
         self.path = violation.path.rawValue
@@ -237,11 +233,11 @@ public struct LintBaselineViolation: Hashable, Sendable, Codable {
 
 public struct LintBaselineComparison: Equatable, Sendable {
     public let baseline: LintBaseline
-    public let existingViolations: [ArchitectureViolation]
-    public let newViolations: [ArchitectureViolation]
+    public let existingViolations: [RuleViolation]
+    public let newViolations: [RuleViolation]
     public let resolvedViolations: [LintBaselineViolation]
 
-    public init(report: LintReport, baseline: LintBaseline) {
+    public init(report: RuleReport, baseline: LintBaseline) {
         let currentIdentities = Set(report.violations.map { LintBaselineIdentity(violation: $0) })
         self.baseline = baseline
         self.existingViolations = report.violations.filter { baseline.contains($0) }
@@ -251,8 +247,8 @@ public struct LintBaselineComparison: Equatable, Sendable {
         }
     }
 
-    public var effectiveReport: LintReport {
-        LintReport(violations: newViolations)
+    public var effectiveReport: RuleReport {
+        RuleReport(violations: newViolations)
     }
 
     public var markdownSummary: String {
@@ -290,7 +286,7 @@ private struct LintBaselineIdentity: Hashable {
     let observed: String?
     let expected: String?
 
-    init(violation: ArchitectureViolation) {
+    init(violation: RuleViolation) {
         self.ruleID = violation.ruleID.rawValue
         self.path = violation.path.rawValue
         self.message = violation.message
@@ -313,7 +309,7 @@ public enum LintFailureThreshold: String, Equatable, Sendable {
     case warning
     case error
 
-    public func shouldFail(_ report: LintReport) -> Bool {
+    public func shouldFail(_ report: RuleReport) -> Bool {
         guard self != .none else {
             return false
         }

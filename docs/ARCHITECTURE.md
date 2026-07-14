@@ -30,9 +30,9 @@ Lint runs math over the graph
 ```
 
 The lint run itself is modeled as an explicit reducer-backed state machine:
-prepare rules, scan sources, evaluate rules, collect findings, and report.
-Parallel execution must preserve that single lifecycle and merge findings
-deterministically.
+prepare rules, scan sources, evaluate rules, and report. Evaluation is
+sequential in declaration order; the final report is sorted deterministically
+by path, line, column, rule ID, then message.
 
 Bumper Bowling is not a semantic analyzer. If SwiftSyntax cannot observe something, Bumper Bowling cannot truthfully assert it. Compiler-backed checks belong in a later, separate `analyze` lane; candidate requests are tracked in [COMPILER_REQUESTS.md](COMPILER_REQUESTS.md).
 
@@ -42,16 +42,7 @@ The current SwiftSyntax node surface is documented in [SWIFTSYNTAX_SURFACE.md](S
 
 `BumperBowling.swift` loads the way SwiftPM loads `Package.swift`: it is a program, so it is compiled and run rather than parsed.
 
-The configuration runner generates a small package that links `BumperBowlingCore`, compiles `BumperBowling.swift` into it, and runs the product in a deny-default sandbox — no network, no writable paths, an empty environment. The run computes the configuration value and prints it as JSON on stdout; nothing else crosses back, and scanning and linting run in the host process, never in configuration code.
-
-If `CustomRules()` is enabled, linting runs a second cached executable after the
-host scan completes. The host encodes `CustomRuleInput` from the scanned
-repository facts and bounded source text, feeds it to the custom rule worker on
-stdin, and decodes `CustomRuleOutput` from stdout. The worker can use Swift
-closures and local repository vocabulary. Fact-based rules evaluate the
-projected snapshot; syntax rules parse the supplied source into SwiftSyntax
-inside the worker. The process boundary remains Codable input and Codable
-findings, and custom rules do not receive filesystem traversal.
+The project runner generates a small package that links `BumperBowlingCore`, compiles `BumperBowling.swift` into it, and runs the product in a deny-default sandbox — no network, no writable paths, an empty environment. One cached executable serves two modes. `describe` prints the project's architecture configuration as JSON so the host knows what to scan. `evaluate` receives the scanned source files on stdin as Codable `RepositoryInput`, parses each file exactly once into `RepositorySyntax`, evaluates built-in and project rules in one `RuleSet`, and prints one Codable `RuleReport`. Nothing else crosses back; scanning stays in the host process, never in configuration code, and rule code does not receive filesystem traversal.
 
 The build is cached against the configuration's content hash (plus the toolchain identity and the runner's own hashes), so the compile happens once per change to `BumperBowling.swift`, not once per lint. An unchanged configuration loads from the cached binary with no build. `bumper config` loads the configuration and reports whether it is valid.
 
@@ -67,10 +58,10 @@ SwiftSyntax remains the full source tree. `ArchitectureGraph` is the smaller pro
 
 Add graph facts only when they support an assertion Bumper Bowling can explain. Rules should be lean mathematical operations over nodes: path matching, set membership, graph edges, and cycles. Keep scorecards explainable: report the observed graph fact, the declared lane, and why they do not match.
 
-The intended fast path for custom rules is documented in
-[PARALLEL_RULE_GRAPH.md](PARALLEL_RULE_GRAPH.md): project one durable graph
-artifact, schedule built-in and custom rule jobs over that graph, execute jobs
-in parallel, and reserve raw SwiftSyntax for an explicit escape hatch.
+Rule evaluation is sequential in V1: one parse of each file, one memoized fact
+cache, rules in declaration order. A future parallel scheduler is sketched in
+[PARALLEL_RULE_GRAPH.md](PARALLEL_RULE_GRAPH.md); it must preserve this
+lifecycle and deterministic report ordering.
 
 Semantic shorthand names are not special engine concepts.
 `ComponentRequirement` composes `SourceFactRule` values, then `Requires(...)`
@@ -82,8 +73,8 @@ their own `ComponentRequirement`, `ComponentShape`, `AssertionShape`, and
 custom rule vocabulary. Those files compile into the temporary configuration
 runner beside `BumperBowling.swift`. They do not add a plugin boundary or hidden evaluator;
 they are just consumer-owned Swift values that lower into the same
-`ArchitectureConfiguration` data as inline configuration code, or into the
-explicit `customRules` value consumed by the custom rule worker.
+`ArchitectureConfiguration` data as inline configuration code, or into
+`RuleDefinition` values the project adds to its `Rules` block.
 
 Reusable vocabulary can also live in a conventional `.bumper/Package.swift`
 SwiftPM package. The generated runner depends on its `BumperRules` library

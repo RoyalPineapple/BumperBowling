@@ -1,10 +1,20 @@
 import Foundation
 import SwiftSyntax
 
-/// Prebuilt architectural shapers, implemented only through the public rule,
-/// fact, and query interfaces. Conveniences, not a closed taxonomy: a
-/// consumer can implement a different meaning from the lower layers.
-public enum Rules {
+/// The rule-authoring namespace and the project's rule block. Static members
+/// are prebuilt shapers and factories, implemented only through the public
+/// rule, fact, and query interfaces — conveniences, not a closed taxonomy.
+/// `Rules { ... }` in a `BumperProject` collects built-in shaper
+/// configurations and project rule definitions into one engine.
+public struct Rules: Sendable {
+    let elements: [ProjectRuleElement]
+
+    public init(@ProjectRulesBuilder _ content: () -> [ProjectRuleElement]) {
+        self.elements = content()
+    }
+}
+
+extension Rules {
     /// Exactly one declaration of `symbol`, owned by files under `owner`.
     /// A configured owner path with no files is a configuration failure.
     public static func singleDeclaration(
@@ -172,8 +182,8 @@ public enum Rules {
     }
 
     /// Traversal of `root`'s recursive structure belongs to its owners.
-    // ponytail: detects direct recursion over the root type; a call-graph SCC
-    // provider can add mutual recursion later behind this same contract.
+    /// Detects direct and mutual recursion over the locally-dispatched call
+    /// graph; calls on another receiver never count as recursion.
     public static func canonicalTraversal(
         root: NominalSymbol,
         structuralCase: EnumCaseSymbol,
@@ -188,20 +198,67 @@ public enum Rules {
                 summary: "Recursive traversal of \(root.name).\(structuralCase.name) stays with its owners."
             )
         ) { context in
-            try context.facts(BuiltInFacts.directRecursion)
-                .occurrences
+            try context.facts(BuiltInFacts.recursiveCallGroups)
+                .groups
+                .filter { group in
+                    group.contains { function in function.traverses(root) }
+                }
+                .flatMap { $0 }
+                .filter { function in
+                    !owners.includes(SourceFileDescriptor(path: function.path, component: function.component))
+                }
+                .map { function in
+                    RuleFailure(
+                        path: function.path,
+                        location: function.location,
+                        message: "\(function.function.name) recursively traverses \(root.name) outside its owners.",
+                        evidence: ViolationEvidence(
+                            observed: "recursive function \(function.function.name) over \(root.name)",
+                            expectation: "traversal implemented only by the owner scope"
+                        )
+                    )
+                }
+        }
+    }
+
+    /// `symbol` may only be constructed by its declared owners.
+    public static func canonicalConstruction(
+        symbol: NominalSymbol,
+        owners: RuleScope,
+        id: RuleID = RuleID("canonical_construction"),
+        severity: Severity = .error
+    ) -> RepositoryRule {
+        constructionOwnership(symbol: symbol, allowed: owners, id: id, severity: severity)
+    }
+
+    /// Every nominal declaration named with `suffix` lives in the owner scope.
+    public static func singleNominalSpelling(
+        suffix: String,
+        owner: RuleScope,
+        id: RuleID = RuleID("single_nominal_spelling"),
+        severity: Severity = .error
+    ) -> RepositoryRule {
+        RepositoryRule(
+            metadata: RuleMetadata(
+                id: id,
+                severity: severity,
+                summary: "Declarations named *\(suffix) live only in their owner scope."
+            )
+        ) { context in
+            let matcher = StringMatcher.suffix(suffix)
+            return try context.facts(BuiltInFacts.nominalTypes)
                 .filter { occurrence in
-                    occurrence.traverses(root)
-                        && !owners.includes(SourceFileDescriptor(path: occurrence.path, component: occurrence.component))
+                    matcher.matches(occurrence.type.name)
+                        && !owner.includes(SourceFileDescriptor(path: occurrence.path, component: occurrence.component))
                 }
                 .map { occurrence in
                     RuleFailure(
                         path: occurrence.path,
-                        location: occurrence.location,
-                        message: "\(occurrence.function.name) recursively traverses \(root.name) outside its owners.",
+                        location: occurrence.type.location,
+                        message: "\(occurrence.type.name.rawValue) is declared outside the \(suffix) owner scope.",
                         evidence: ViolationEvidence(
-                            observed: "recursive function \(occurrence.function.name) over \(root.name)",
-                            expectation: "traversal implemented only by the owner scope"
+                            observed: "declaration of \(occurrence.type.name.rawValue)",
+                            expectation: "*\(suffix) declarations only in the owner scope"
                         )
                     )
                 }
@@ -209,7 +266,9 @@ public enum Rules {
     }
 }
 
-private extension RecursiveFunctionOccurrence {
+private extension CallGraphFunction {
+    /// The function participates in traversal of `root`: it is declared on
+    /// the type or takes it as a parameter.
     func traverses(_ root: NominalSymbol) -> Bool {
         let matcher = StringMatcher.exact(root.name)
         if let enclosingType, matcher.matches(enclosingType.name) {

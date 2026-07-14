@@ -114,14 +114,12 @@ struct DownstreamExtensibilityTests {
 
     @Test
     func harnessReturnsCanonicalReportForConsumption() throws {
-        let rule = CustomRule("project.no_uikit") { context in
-            context.files.flatMap { file in
-                file.imports
-                    .filter { $0 == "UIKit" }
-                    .map { _ in
-                        RuleFailure(path: file.path, message: "UIKit is not allowed here.")
-                    }
-            }
+        let rule = Rules.repository("project.no_uikit") { context in
+            try context.facts(BuiltInFacts.imports).occurrences
+                .filter { $0.module.rawValue == "UIKit" }
+                .map { occurrence in
+                    RuleFailure(path: occurrence.path, message: "UIKit is not allowed here.")
+                }
         }
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -139,8 +137,8 @@ struct DownstreamExtensibilityTests {
 
 private func projectRules() -> [any RuleDefinition] {
     RuleSet {
-        CustomRule("project.first") { _ in [] }
-        CustomRule("project.second") { _ in [] }
+        Rules.repository("project.first") { _ in [] }
+        Rules.repository("project.second") { _ in [] }
     }.rules
 }
 

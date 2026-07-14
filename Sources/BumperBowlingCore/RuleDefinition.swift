@@ -20,17 +20,23 @@ public struct RuleFailure: Equatable, Sendable {
     public let location: SourcePosition?
     public let message: String
     public let evidence: ViolationEvidence?
+    /// Overrides the rule's severity for this one diagnostic. Rules with
+    /// per-scope configured severities report each finding at its scope's
+    /// severity while keeping one stable rule ID.
+    public let severity: Severity?
 
     public init(
         path: RelativeFilePath,
         location: SourcePosition? = nil,
         message: String,
-        evidence: ViolationEvidence? = nil
+        evidence: ViolationEvidence? = nil,
+        severity: Severity? = nil
     ) {
         self.path = path
         self.location = location
         self.message = message
         self.evidence = evidence
+        self.severity = severity
     }
 }
 
@@ -59,12 +65,30 @@ public struct RuleViolation: Equatable, Sendable, Codable {
 
     public init(rule: RuleMetadata, failure: RuleFailure) {
         self.init(
-            rule: rule,
+            rule: failure.severity.map { severity in
+                RuleMetadata(id: rule.id, severity: severity, summary: rule.summary)
+            } ?? rule,
             path: failure.path,
             location: failure.location,
             message: failure.message,
             evidence: failure.evidence
         )
+    }
+
+    public var ruleID: RuleID {
+        rule.id
+    }
+
+    public var severity: Severity {
+        rule.severity
+    }
+
+    public var markdownLocation: String {
+        guard let location else {
+            return path.rawValue
+        }
+
+        return "\(path.rawValue):\(location.line):\(location.column)"
     }
 }
 
@@ -80,6 +104,23 @@ public struct RuleReport: Equatable, Sendable, Codable {
         violations.contains { violation in
             violation.rule.severity == .error
         }
+    }
+
+    public var markdownSummary: String {
+        if violations.isEmpty {
+            return "No architecture violations found."
+        }
+
+        var lines = [
+            hasErrors ? "The code breaks the architecture's rules:" : "The architecture holds, but note these warnings:",
+            "",
+        ]
+        for violation in violations {
+            lines.append(
+                "- [\(violation.severity.rawValue.uppercased())] \(violation.markdownLocation): \(violation.message) (\(violation.ruleID.rawValue))"
+            )
+        }
+        return lines.joined(separator: "\n")
     }
 }
 
@@ -156,24 +197,6 @@ public struct RuleSet: Sendable {
         try validateRuleIdentity()
         let collected = try rules.flatMap { rule in
             try Self.violations(of: rule, in: context)
-        }
-        return RuleReport(violations: collected.deterministicallySorted())
-    }
-
-    func evaluateConcurrently(
-        in context: RuleContext,
-        maxConcurrentRuleJobs: Int? = nil
-    ) async throws -> RuleReport {
-        try validateRuleIdentity()
-        let results = await concurrentMap(
-            rules,
-            maxConcurrentJobs: maxConcurrentRuleJobs
-        ) { rule in
-            Result { try Self.violations(of: rule, in: context) }
-        }
-
-        let collected = try results.flatMap { result in
-            try result.get()
         }
         return RuleReport(violations: collected.deterministicallySorted())
     }

@@ -10,8 +10,8 @@ struct RuleEngineTests {
     func ruleSetBuilderAcceptsEveryRuleForm() throws {
         let includeOptional = true
         let ruleSet = RuleSet {
-            CustomRule("closure.repository") { _ in [] }
-            CustomSyntaxRule("closure.syntax") { _ in [] }
+            Rules.repository("closure.repository") { _ in [] }
+            Rules.files("closure.syntax") { _ in [] }
             SyntaxRule(
                 metadata: RuleMetadata(id: "typed.syntax", severity: .error, summary: "typed")
             ) { _ in [] }
@@ -26,7 +26,7 @@ struct RuleEngineTests {
                 RecordingVisitor(file: file)
             }
             if includeOptional {
-                CustomRule("conditional.rule") { _ in [] }
+                Rules.repository("conditional.rule") { _ in [] }
             }
             projectRuleGroup()
         }
@@ -123,7 +123,7 @@ struct RuleEngineTests {
         ]
         let rules = RuleSet {
             for (index, failure) in failures.enumerated() {
-                CustomRule(RuleID(failure.2 + "_\(index)")) { _ in
+                Rules.repository(failure.2 + "_\(index)") { _ in
                     [
                         RuleFailure(
                             path: RuleEngineTests.path(failure.0),
@@ -136,10 +136,8 @@ struct RuleEngineTests {
         }
 
         let context = RuleContext(
-            input: CustomRuleInput(
-                configuration: ArchitectureConfiguration(components: []),
-                files: []
-            )
+            configuration: ArchitectureConfiguration(components: []),
+            repository: RepositorySyntax(files: [])
         )
         let report = try rules.evaluate(in: context)
         #expect(report.violations.map { "\($0.path.rawValue):\($0.location?.line ?? 0)" } == [
@@ -152,8 +150,8 @@ struct RuleEngineTests {
     @Test
     func duplicateRuleIDsAreConfigurationErrors() throws {
         let rules = RuleSet {
-            CustomRule("dup.rule") { _ in [] }
-            CustomRule("dup.rule") { _ in [] }
+            Rules.repository("dup.rule") { _ in [] }
+            Rules.repository("dup.rule") { _ in [] }
         }
 
         #expect(throws: RuleEvaluationError.duplicateRuleID(RuleID("dup.rule"))) {
@@ -169,7 +167,7 @@ struct RuleEngineTests {
     func analysisFailuresAreExplicitErrors() throws {
         struct Underlying: Error {}
         let rules = RuleSet {
-            CustomSyntaxRule("fine.rule") { _ in [] }
+            Rules.files("fine.rule") { _ in [] }
             SyntaxRule(
                 metadata: RuleMetadata(id: "broken.rule", severity: .error, summary: "broken")
             ) { _ in
@@ -208,20 +206,17 @@ struct RuleEngineTests {
 
     @Test
     func queriesPreserveNodeTypesThroughComposition() throws {
-        let file = try #require(
-            SourceFileContext(
-                facts: CustomRuleFileFacts(
-                    path: RuleEngineTests.path("Sources/Core/Q.swift"),
-                    component: "core",
-                    source: """
-                    typealias Alias = Target
-                    func takesTarget(value: Target) {}
-                    func other(value: Int) {}
-                    func recurse(value: Target) { recurse(value: value) }
-                    """,
-                    imports: []
-                )
-            )
+        let file = SourceFileContext(
+            descriptor: SourceFileDescriptor(
+                path: RuleEngineTests.path("Sources/Core/Q.swift"),
+                component: try ComponentID("core")
+            ),
+            source: """
+            typealias Alias = Target
+            func takesTarget(value: Target) {}
+            func other(value: Int) {}
+            func recurse(value: Target) { recurse(value: value) }
+            """
         )
 
         let allFunctions = functions().matches(in: file)
@@ -246,7 +241,7 @@ struct RuleEngineTests {
     @Test
     func factProvidersMemoizeAndSupportDependencies() throws {
         CountingProvider.derivations.reset()
-        let rule = CustomRule("facts.rule") { _ in [] }
+        let rule = Rules.repository("facts.rule") { _ in [] }
         let context = try makeContext(
             source: "struct Counted {}",
             path: "Sources/Core/Counted.swift"
@@ -277,17 +272,16 @@ struct RuleEngineTests {
 
     private func makeContext(source: String, path: String) throws -> RuleContext {
         RuleContext(
-            input: CustomRuleInput(
-                configuration: ArchitectureConfiguration(components: []),
-                files: [
-                    CustomRuleFileFacts(
+            configuration: ArchitectureConfiguration(components: []),
+            repository: RepositorySyntax(files: [
+                SourceFileContext(
+                    descriptor: SourceFileDescriptor(
                         path: try RelativeFilePath(path),
-                        component: "core",
-                        source: source,
-                        imports: []
+                        component: try ComponentID("core")
                     ),
-                ]
-            )
+                    source: source
+                ),
+            ])
         )
     }
 
@@ -306,8 +300,8 @@ private enum EngineTestComponent: String, ComponentKey {
 
 private func projectRuleGroup() -> [any RuleDefinition] {
     RuleSet {
-        CustomRule("grouped.one") { _ in [] }
-        CustomRule("grouped.two") { _ in [] }
+        Rules.repository("grouped.one") { _ in [] }
+        Rules.repository("grouped.two") { _ in [] }
     }.rules
 }
 

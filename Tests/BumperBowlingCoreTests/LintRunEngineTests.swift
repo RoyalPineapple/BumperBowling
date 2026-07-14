@@ -38,12 +38,12 @@ struct LintRunEngineTests {
         let configuration = ArchitectureConfiguration(components: [])
         let rules = try ArchitectureRules(configuration: configuration)
         let preparedRules = LintPreparedRules(configuration: configuration, rules: rules)
-        let repository = RepositoryFacts(files: [])
-        let plan = LintEvaluationPlan(configuration: configuration, rules: rules, repository: repository)
+        let files = [SourceInput(path: try RelativeFilePath("Sources/Core/Thing.swift"), component: try ComponentID("core"), source: "struct Thing {}")]
+        let plan = LintEvaluationPlan(configuration: configuration, rules: rules, files: files)
 
         let transition = LintRunReducer().reduce(
             state: .scanningSources(preparedRules),
-            event: .scannedSources(preparedRules: preparedRules, repository: repository)
+            event: .scannedSources(preparedRules: preparedRules, files: files)
         )
 
         expectEvaluatingRules(transition.state, plan)
@@ -51,23 +51,18 @@ struct LintRunEngineTests {
     }
 
     @Test
-    func `reducer reports after collecting findings`() throws {
+    func `reducer reports after evaluating rules`() throws {
         let configuration = ArchitectureConfiguration(components: [])
         let rules = try ArchitectureRules(configuration: configuration)
-        let repository = RepositoryFacts(files: [])
-        let plan = LintEvaluationPlan(configuration: configuration, rules: rules, repository: repository)
-        let evaluation = LintRuleEvaluation(
-            plan: plan,
-            builtInReport: LintReport(violations: []),
-            customRuleOutput: .empty
-        )
-        let report = LintReport(violations: [])
+        let files = [SourceInput(path: try RelativeFilePath("Sources/Core/Thing.swift"), component: try ComponentID("core"), source: "struct Thing {}")]
+        let plan = LintEvaluationPlan(configuration: configuration, rules: rules, files: files)
+        let report = RuleReport(violations: [])
         let transition = LintRunReducer().reduce(
-            state: .collectingFindings(evaluation),
-            event: .collectedFindings(report)
+            state: .evaluatingRules(plan),
+            event: .evaluatedRules(plan: plan, report: report)
         )
 
-        expectReporting(transition.state, rules: rules, repository: repository, report: report)
+        expectReporting(transition.state, rules: rules, scannedFileCount: files.count, report: report)
         #expect(transition.effect == nil)
     }
 }
@@ -108,14 +103,14 @@ private func expectEvaluatingRules(
 private func expectReporting(
     _ state: LintRunState,
     rules: ArchitectureRules,
-    repository: RepositoryFacts,
-    report: LintReport
+    scannedFileCount: Int,
+    report: RuleReport
 ) {
     guard case .reporting(let result) = state else {
         Issue.record("Expected reporting state")
         return
     }
     #expect(result.rules == rules)
-    #expect(result.repository == repository)
+    #expect(result.scannedFileCount == scannedFileCount)
     #expect(result.report == report)
 }

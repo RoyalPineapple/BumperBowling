@@ -18,7 +18,10 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
     }
 
     public func render() -> String {
-        let enabledRules = RuleRegistry(configuration: rules.ruleConfiguration).enabledRules.uniqueRuleFamilies()
+        let enabledRules = BuiltInRules.families(from: rules.ruleConfiguration)
+            .compactMap { family in
+                family.first(where: \.isEnabled)
+            }
         var lines: [String] = []
         lines.append("# Bumper Bowling Architecture Snapshot")
         lines.append("")
@@ -39,13 +42,13 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
         lines.append("```mermaid")
         lines.append("flowchart LR")
         lines.append("    Config[\"ArchitectureRules\"] --> Scanner[\"RepositoryScanner\"]")
-        lines.append("    Scanner --> SwiftSyntax[\"SwiftFileParser + SwiftSyntax\"]")
-        lines.append("    SwiftSyntax --> Facts[\"RepositoryFacts\"]")
-        lines.append("    Facts --> Graph[\"ArchitectureGraph\"]")
-        lines.append("    Config --> Graph")
-        lines.append("    Graph --> Rules[\"RuleRegistry\"]")
+        lines.append("    Scanner --> Input[\"RepositoryInput\"]")
+        lines.append("    Input --> Runner[\"BumperProjectRunner\"]")
+        lines.append("    Runner --> Syntax[\"RepositorySyntax: parse once\"]")
+        lines.append("    Syntax --> Facts[\"memoized typed facts\"]")
+        lines.append("    Facts --> Rules[\"RuleSet: built-in + project rules\"]")
         lines.append("    Config --> Rules")
-        lines.append("    Rules --> Report[\"LintReport\"]")
+        lines.append("    Rules --> Report[\"RuleReport\"]")
         lines.append("```")
         lines.append("")
         lines.append("## Rule Snapshots")
@@ -113,18 +116,9 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
             lines.append("    Facts[\"Repository facts\"] --> \(ruleNode)[\"\(rule.id.rawValue)\"]")
         }
 
-        lines.append("    \(ruleNode) --> Findings[\"ArchitectureViolation[]\"]")
-        lines.append("    Findings --> Report[\"LintReport\"]")
+        lines.append("    \(ruleNode) --> Findings[\"RuleViolation[]\"]")
+        lines.append("    Findings --> Report[\"RuleReport\"]")
         lines.append("```")
         return lines
-    }
-}
-
-private extension Array where Element == ArchitectureRule {
-    func uniqueRuleFamilies() -> [ArchitectureRule] {
-        var seenRuleIDs = Set<String>()
-        return filter { rule in
-            seenRuleIDs.insert(rule.id.rawValue).inserted
-        }
     }
 }

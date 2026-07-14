@@ -6,69 +6,18 @@ public struct ArchitectureConfiguration: Equatable, Sendable, Codable {
     public let excludedPaths: [String]
     public let components: [ComponentConfiguration]
     public let rules: RuleConfiguration
-    public let customRules: CustomRuleWorkerConfiguration
 
     public init(
         includedPaths: [String] = ["Sources"],
         excludedPaths: [String] = [".build", "DerivedData"],
         components: [ComponentConfiguration],
-        rules: RuleConfiguration = RuleConfiguration(),
-        customRules: CustomRuleWorkerConfiguration = .disabled
+        rules: RuleConfiguration = RuleConfiguration()
     ) {
         self.includedPaths = includedPaths
         self.excludedPaths = excludedPaths
         self.components = components
         self.rules = rules
-        self.customRules = customRules
     }
-
-    enum CodingKeys: String, CodingKey {
-        case includedPaths
-        case excludedPaths
-        case components
-        case rules
-        case customRules
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            includedPaths: try container.decode([String].self, forKey: .includedPaths),
-            excludedPaths: try container.decode([String].self, forKey: .excludedPaths),
-            components: try container.decode([ComponentConfiguration].self, forKey: .components),
-            rules: try container.decode(RuleConfiguration.self, forKey: .rules),
-            customRules: try container.decodeIfPresent(
-                CustomRuleWorkerConfiguration.self,
-                forKey: .customRules
-            ) ?? .disabled
-        )
-    }
-}
-
-public struct CustomRuleWorkerConfiguration: Equatable, Sendable, Codable {
-    public let enabled: Bool
-    public let maxConcurrentRuleJobs: Int?
-
-    public init(enabled: Bool, maxConcurrentRuleJobs: Int? = nil) {
-        self.enabled = enabled
-        self.maxConcurrentRuleJobs = maxConcurrentRuleJobs.map { Swift.max(1, $0) }
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case enabled
-        case maxConcurrentRuleJobs
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            enabled: try container.decode(Bool.self, forKey: .enabled),
-            maxConcurrentRuleJobs: try container.decodeIfPresent(Int.self, forKey: .maxConcurrentRuleJobs)
-        )
-    }
-
-    public static let enabled = CustomRuleWorkerConfiguration(enabled: true)
-    public static let disabled = CustomRuleWorkerConfiguration(enabled: false)
 }
 
 public struct ComponentConfiguration: Equatable, Sendable, Codable {
@@ -585,9 +534,14 @@ public enum ConfigurationLoader {
     private static let sampleDSL = """
     import BumperBowlingCore
 
-    // Bumper Bowling exposes this Swift DSL to the CLI, which loads this file
-    // for shell hooks, CI jobs, and product tests.
-    let configuration = BumperConfiguration {
+    // Bumper Bowling compiles this file into the project runner, like
+    // SwiftPM compiles Package.swift. `bumper` is the one project entry
+    // point: scan paths, architecture, and rules.
+    enum AppComponent: String, ComponentKey {
+        case app
+    }
+
+    let bumper = BumperProject {
         Included {
             "Sources"
         }
@@ -597,7 +551,7 @@ public enum ConfigurationLoader {
             "DerivedData"
         }
 
-        Architecture {
+        Architecture(AppComponent.self) {
             Component(.app) {
                 Owns("Sources")
                 Modules("App")
@@ -611,7 +565,7 @@ public enum ConfigurationLoader {
             }
         }
 
-        Assertions {
+        Rules {
             DependencyBoundaries(.error)
             SingleOwner(.error)
             AcyclicDeclaredDependencies(.error)

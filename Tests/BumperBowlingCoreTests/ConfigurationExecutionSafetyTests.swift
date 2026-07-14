@@ -19,11 +19,11 @@ struct ConfigurationExecutionSafetyTests {
         import BumperBowlingCore
         import Foundation
 
-        private func makeConfiguration() -> BumperConfiguration {
+        private func makeConfiguration() -> BumperProject {
             try? "leaked".write(toFile: \(leakURL.path.debugDescription), atomically: true, encoding: .utf8)
             let injected = ProcessInfo.processInfo.environment["BUMPER_CANARY_SECRET"] ?? "Sources"
 
-            return BumperConfiguration {
+            return BumperProject {
                 Included {
                     injected
                 }
@@ -36,7 +36,7 @@ struct ConfigurationExecutionSafetyTests {
             }
         }
 
-        let configuration = makeConfiguration()
+        let bumper = makeConfiguration()
         """
         try source.write(
             to: root.appendingPathComponent(ConfigurationLoader.fileName),
@@ -85,7 +85,7 @@ struct ConfigurationExecutionSafetyTests {
         let configurationSource = """
         import BumperBowlingCore
 
-        let configuration = BumperConfiguration {
+        let bumper = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
@@ -131,7 +131,7 @@ struct ConfigurationExecutionSafetyTests {
         let configurationSource = """
         import BumperBowlingCore
 
-        let configuration = BumperConfiguration {
+        let bumper = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")
@@ -219,7 +219,7 @@ struct ConfigurationExecutionSafetyTests {
         import BumperBowlingCore
         import BumperRules
 
-        let configuration = BumperConfiguration {
+        let bumper = BumperProject {
             Architecture {
                 Component(.core) {
                     Owns("Sources/Core")

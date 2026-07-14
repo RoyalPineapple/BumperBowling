@@ -17,13 +17,13 @@ Bumper Bowling asserts architecture over SwiftSyntax-observed source facts, conf
 ```mermaid
 flowchart LR
     Config["ArchitectureRules"] --> Scanner["RepositoryScanner"]
-    Scanner --> SwiftSyntax["SwiftFileParser + SwiftSyntax"]
-    SwiftSyntax --> Facts["RepositoryFacts"]
-    Facts --> Graph["ArchitectureGraph"]
-    Config --> Graph
-    Graph --> Rules["RuleRegistry"]
+    Scanner --> Input["RepositoryInput"]
+    Input --> Runner["BumperProjectRunner"]
+    Runner --> Syntax["RepositorySyntax: parse once"]
+    Syntax --> Facts["memoized typed facts"]
+    Facts --> Rules["RuleSet: built-in + project rules"]
     Config --> Rules
-    Rules --> Report["LintReport"]
+    Rules --> Report["RuleReport"]
 ```
 
 ## Rule Snapshots
@@ -36,8 +36,8 @@ Disallows configured imports in linted source files.
 flowchart LR
     Imports["ArchitectureGraph.sourceFiles.imports"] --> ForbiddenImport["forbidden_import"]
     Forbidden["RuleSetting.values"] --> ForbiddenImport
-    ForbiddenImport --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
+    ForbiddenImport --> Findings["RuleViolation[]"]
+    Findings --> Report["RuleReport"]
 ```
 
 ### `component_boundary`
@@ -49,8 +49,8 @@ flowchart LR
     Imports["ArchitectureGraph.componentImportEdges"] --> ComponentBoundary["component_boundary"]
     Modules["componentByModule"] --> ComponentBoundary
     Dependencies["allowed + forbidden dependencies"] --> ComponentBoundary
-    ComponentBoundary --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
+    ComponentBoundary --> Findings["RuleViolation[]"]
+    Findings --> Report["RuleReport"]
 ```
 
 ### `duplicate_ownership`
@@ -61,8 +61,8 @@ Disallows duplicate component path and module ownership.
 flowchart LR
     Paths["ComponentRule.paths"] --> Ownership["path ownership conflicts"]
     Ownership --> DuplicateOwnership["duplicate_ownership"]
-    DuplicateOwnership --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
+    DuplicateOwnership --> Findings["RuleViolation[]"]
+    Findings --> Report["RuleReport"]
 ```
 
 ### `declared_dependency_cycle`
@@ -73,8 +73,8 @@ Disallows cycles in declared component dependencies.
 flowchart LR
     Dependencies["ComponentRule.allowedDependencies"] --> Graph["dependency graph"]
     Graph --> DeclaredDependencyCycle["declared_dependency_cycle"]
-    DeclaredDependencyCycle --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
+    DeclaredDependencyCycle --> Findings["RuleViolation[]"]
+    Findings --> Report["RuleReport"]
 ```
 
 ### `stored_properties`
@@ -85,8 +85,8 @@ Applies configured assertions over SwiftSyntax stored property facts.
 flowchart LR
     Properties["ArchitectureGraph.sourceFiles.storedProperties"] --> StoredProperties["stored_properties"]
     Policy["StoredPropertyRuleConfiguration"] --> StoredProperties
-    StoredProperties --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
+    StoredProperties --> Findings["RuleViolation[]"]
+    Findings --> Report["RuleReport"]
 ```
 
 ### `syntax_constructs`
@@ -97,8 +97,8 @@ Applies configured assertions over SwiftSyntax construct facts.
 flowchart LR
     Constructs["ArchitectureGraph.sourceFiles.imperativeConstructs"] --> SyntaxConstructs["syntax_constructs"]
     Policy["SyntaxConstructRuleConfiguration"] --> SyntaxConstructs
-    SyntaxConstructs --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
+    SyntaxConstructs --> Findings["RuleViolation[]"]
+    Findings --> Report["RuleReport"]
 ```
 
 ### `syntax_kinds`
@@ -109,8 +109,8 @@ Applies configured assertions over observed SwiftSyntax node kinds.
 flowchart LR
     Kinds["ArchitectureGraph.sourceFiles.syntaxNodes.nodeKinds"] --> SyntaxKinds["syntax_kinds"]
     Policy["SyntaxKindRuleConfiguration"] --> SyntaxKinds
-    SyntaxKinds --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
+    SyntaxKinds --> Findings["RuleViolation[]"]
+    Findings --> Report["RuleReport"]
 ```
 
 ### `public_declarations`
@@ -121,6 +121,6 @@ Applies configured assertions over public declaration facts.
 flowchart LR
     Declarations["ArchitectureGraph.sourceFiles.publicDeclarations"] --> PublicDeclarations["public_declarations"]
     Policy["PublicDeclarationRuleConfiguration"] --> PublicDeclarations
-    PublicDeclarations --> Findings["ArchitectureViolation[]"]
-    Findings --> Report["LintReport"]
+    PublicDeclarations --> Findings["RuleViolation[]"]
+    Findings --> Report["RuleReport"]
 ```
