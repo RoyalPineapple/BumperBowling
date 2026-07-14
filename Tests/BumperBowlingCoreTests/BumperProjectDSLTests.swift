@@ -39,8 +39,8 @@ struct BumperProjectDSLTests {
 
         let rules = try ArchitectureRules(configuration: configuration)
 
-        #expect(rules.includes(try RelativeFilePath("Sources/Core/Thing.swift")))
-        #expect(!rules.includes(try RelativeFilePath(".build/debug/Thing.swift")))
+        #expect(rules.includes(RelativeFilePath("Sources/Core/Thing.swift")))
+        #expect(!rules.includes(RelativeFilePath(".build/debug/Thing.swift")))
         #expect(rules.forbiddenImports == Set([try ModuleName("XCTest")]))
         #expect(rules.ruleConfiguration.forbiddenImports.first?.paths == ["Sources/Core"])
         #expect(

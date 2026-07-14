@@ -3,6 +3,13 @@
 
 import PackageDescription
 
+// Swift 6 language mode implies strict concurrency checking and
+// InferSendableFromCaptures; warnings are errors everywhere.
+let strictSwiftSettings: [SwiftSetting] = [
+    .swiftLanguageMode(.v6),
+    .treatAllWarnings(as: .error),
+]
+
 let package = Package(
     name: "BumperBowling",
     platforms: [
@@ -23,7 +30,7 @@ let package = Package(
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
             ],
-            swiftSettings: strictConcurrencySettings
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "BumperBowlingTestSupport",
@@ -31,12 +38,12 @@ let package = Package(
                 "BumperBowlingCore",
                 .product(name: "SwiftParser", package: "swift-syntax"),
             ],
-            swiftSettings: strictConcurrencySettings
+            swiftSettings: strictSwiftSettings
         ),
         .executableTarget(
             name: "BumperBowling",
             dependencies: ["BumperBowlingCore"],
-            swiftSettings: strictConcurrencySettings
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "BumperBowlingCoreTests",
@@ -45,7 +52,7 @@ let package = Package(
                 "BumperBowlingTestSupport",
                 .product(name: "SwiftParser", package: "swift-syntax"),
             ],
-            swiftSettings: strictConcurrencySettings
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "BumperBowlingTestSupportTests",
@@ -54,12 +61,7 @@ let package = Package(
                 "BumperBowlingTestSupport",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
             ],
-            swiftSettings: strictConcurrencySettings
+            swiftSettings: strictSwiftSettings
         ),
     ]
 )
-
-let strictConcurrencySettings: [SwiftSetting] = [
-    .enableUpcomingFeature("StrictConcurrency"),
-    .enableUpcomingFeature("InferSendableFromCaptures"),
-]

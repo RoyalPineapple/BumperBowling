@@ -46,9 +46,9 @@ struct ArchitectureRulesTests {
         let rules = try ArchitectureRules(configuration: configuration)
         let conflict = try #require(rules.pathOwnershipConflicts.first)
 
-        #expect(conflict.path == (try RelativePathPrefix("Sources/Core/Models")))
+        #expect(conflict.path == (RelativePathPrefix("Sources/Core/Models")))
         #expect(conflict.owner == (try ComponentID("Models")))
-        #expect(conflict.overlappingPath == (try RelativePathPrefix("Sources/Core")))
+        #expect(conflict.overlappingPath == (RelativePathPrefix("Sources/Core")))
         #expect(conflict.overlappingOwner == (try ComponentID("Core")))
     }
 

@@ -47,11 +47,11 @@ struct RuleEngineTests {
     func scopesComposeOverPathsAndComponents() throws {
         let core = try ComponentID("core")
         let cli = try ComponentID("cli")
-        let coreFile = SourceFileDescriptor(path: try RelativeFilePath("Sources/Core/A.swift"), component: core)
-        let cliFile = SourceFileDescriptor(path: try RelativeFilePath("Sources/CLI/B.swift"), component: cli)
-        let testFile = SourceFileDescriptor(path: try RelativeFilePath("Tests/CoreTests/C.swift"), component: core)
+        let coreFile = SourceFileDescriptor(path: RelativeFilePath("Sources/Core/A.swift"), component: core)
+        let cliFile = SourceFileDescriptor(path: RelativeFilePath("Sources/CLI/B.swift"), component: cli)
+        let testFile = SourceFileDescriptor(path: RelativeFilePath("Tests/CoreTests/C.swift"), component: core)
 
-        let underSources = RuleScope.under(try RelativePathPrefix("Sources"))
+        let underSources = RuleScope.under(RelativePathPrefix("Sources"))
         #expect(underSources.includes(coreFile))
         #expect(!underSources.includes(testFile))
 
@@ -193,7 +193,7 @@ struct RuleEngineTests {
     func visitorRulesWalkOnlyScopedFiles() throws {
         let rule = VisitorRule(
             metadata: RuleMetadata(id: "visitor.structs", severity: .error, summary: "No structs."),
-            scope: .under(try RelativePathPrefix("Sources/Scoped"))
+            scope: .under(RelativePathPrefix("Sources/Scoped"))
         ) { file in
             StructRecordingVisitor(file: file)
         }

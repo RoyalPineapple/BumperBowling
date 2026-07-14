@@ -7,7 +7,7 @@ import Testing
 struct ProjectRuleTests {
     @Test
     func repositoryRuleEvaluatesDerivedFacts() throws {
-        let path = try RelativeFilePath("Sources/Core/Thing.swift")
+        let path = RelativeFilePath("Sources/Core/Thing.swift")
         let repository = RepositorySyntax(files: [
             SourceFileContext(
                 descriptor: SourceFileDescriptor(path: path, component: try ComponentID("core")),
@@ -50,7 +50,7 @@ struct ProjectRuleTests {
 
     @Test
     func fileRuleEvaluatesRawSwiftSyntax() throws {
-        let path = try RelativeFilePath("Sources/Core/Thing.swift")
+        let path = RelativeFilePath("Sources/Core/Thing.swift")
         let repository = RepositorySyntax(files: [
             SourceFileContext(
                 descriptor: SourceFileDescriptor(path: path, component: try ComponentID("core")),
