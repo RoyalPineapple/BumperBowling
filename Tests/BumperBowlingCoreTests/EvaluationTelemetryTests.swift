@@ -4,14 +4,14 @@ import Testing
 
 @Suite("Evaluation telemetry")
 struct EvaluationTelemetryTests {
-    private func repository() -> RepositorySyntax {
+    private func repository() throws -> RepositorySyntax {
         RepositorySyntax(
             input: RepositoryInput(
                 architecture: ArchitectureConfiguration(components: []),
                 files: [
                     SourceInput(
                         path: "Sources/Core/A.swift",
-                        component: try! ComponentID("core"),
+                        component: try ComponentID("core"),
                         source: "struct A { func run() {} }"
                     ),
                 ]
@@ -28,7 +28,7 @@ struct EvaluationTelemetryTests {
 
         let run = try rules.evaluationRun(
             configuration: ArchitectureConfiguration(components: []),
-            repository: repository()
+            repository: try repository()
         )
 
         #expect(Set(run.telemetry.ruleSeconds.map(\.id)) == ["telemetry.first", "telemetry.second"])
@@ -52,7 +52,7 @@ struct EvaluationTelemetryTests {
 
         let run = try rules.evaluationRun(
             configuration: ArchitectureConfiguration(components: []),
-            repository: repository()
+            repository: try repository()
         )
 
         let declarationMeasurements = run.telemetry.factSeconds.filter { measurement in
@@ -86,7 +86,7 @@ struct EvaluationTelemetryTests {
         }
         let run = try rules.evaluationRun(
             configuration: ArchitectureConfiguration(components: []),
-            repository: repository()
+            repository: try repository()
         )
 
         let encoded = try JSONEncoder().encode(run)
@@ -113,7 +113,7 @@ struct EvaluationTelemetryTests {
             files: [
                 SourceInput(
                     path: "Sources/Core/A.swift",
-                    component: try! ComponentID("core"),
+                    component: try ComponentID("core"),
                     source: "struct A {}"
                 ),
             ]
