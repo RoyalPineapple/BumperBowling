@@ -56,14 +56,50 @@ struct LintRunEngineTests {
         let rules = try ArchitectureRules(configuration: configuration)
         let files = [SourceInput(path: RelativeFilePath("Sources/Core/Thing.swift"), component: try ComponentID("core"), source: "struct Thing {}")]
         let plan = LintEvaluationPlan(configuration: configuration, rules: rules, files: files)
-        let report = RuleReport(violations: [])
+        let run = EvaluationRun(
+            report: RuleReport(violations: []),
+            telemetry: EvaluationTelemetry(ruleSeconds: [], factSeconds: [], totalSeconds: 0.5)
+        )
         let transition = LintRunReducer().reduce(
             state: .evaluatingRules(plan),
-            event: .evaluatedRules(plan: plan, report: report)
+            event: .evaluatedRules(plan: plan, run: run)
         )
 
-        expectReporting(transition.state, rules: rules, scannedFileCount: files.count, report: report)
+        expectReporting(transition.state, rules: rules, scannedFileCount: files.count, report: run.report)
+        guard case .reporting(let result) = transition.state else {
+            return
+        }
+        #expect(result.telemetry == run.telemetry)
         #expect(transition.effect == nil)
+    }
+
+    @Test
+    func `engine run carries telemetry and phase timings`() async throws {
+        // No BumperBowling.swift in the root: built-in rules evaluate in
+        // process, so the run exercises the telemetry path without the runner.
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("Sources/Core"),
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try "struct Thing {}".write(
+            to: root.appendingPathComponent("Sources/Core/Thing.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let configuration = ArchitectureConfiguration(
+            components: [ComponentConfiguration(name: "Core", paths: ["Sources/Core"])]
+        )
+
+        let result = try await LintRunEngine(root: root, configuration: configuration).run()
+
+        let telemetry = try #require(result.telemetry)
+        #expect(telemetry.totalSeconds >= 0)
+        let phases = try #require(result.phases)
+        #expect(phases.evaluateSeconds >= 0)
+        #expect(phases.scanSeconds >= 0)
     }
 }
 

@@ -61,7 +61,7 @@ public struct SwiftFileParser: Sendable {
 
     public func parse(_ source: String) -> SwiftFileSummary {
         let tree = Parser.parse(source: source)
-        let visitor = SourceVisitor(locationConverter: SourceLocationConverter(fileName: "", tree: tree))
+        let visitor = SourceVisitor(source: source, locationConverter: SourceLocationConverter(fileName: "", tree: tree))
         visitor.walk(tree)
 
         return SwiftFileSummary(nodes: visitor.nodes)
@@ -77,7 +77,7 @@ public struct SwiftFileParser: Sendable {
         }
 
         let tree = Parser.parse(source: source)
-        let visitor = SourceVisitor(locationConverter: SourceLocationConverter(fileName: relativePath.rawValue, tree: tree))
+        let visitor = SourceVisitor(source: source, locationConverter: SourceLocationConverter(fileName: relativePath.rawValue, tree: tree))
         visitor.walk(tree)
 
         return SourceFileFacts(
@@ -92,9 +92,11 @@ public struct SwiftFileParser: Sendable {
 final class SourceVisitor: SyntaxAnyVisitor {
     private(set) var nodes: [CollectedSourceFact] = []
     private let locationConverter: SourceLocationConverter
+    private let sourceBytes: [UInt8]
     private var ownerStack: [TypeName?] = []
 
-    init(locationConverter: SourceLocationConverter) {
+    init(source: String, locationConverter: SourceLocationConverter) {
+        self.sourceBytes = Array(source.utf8)
         self.locationConverter = locationConverter
         super.init(viewMode: .sourceAccurate)
     }
@@ -254,7 +256,17 @@ final class SourceVisitor: SyntaxAnyVisitor {
     }
 
     private func recordSyntax(_ node: Syntax) {
-        nodes.append(node.bumper.syntaxNode(location: location(for: node)))
+        nodes.append(node.bumper.syntaxNode(location: location(for: node), spelling: spelling(of: node)))
+    }
+
+    /// The node's source text with surrounding trivia trimmed, sliced from the
+    /// original source bytes instead of re-rendering the subtree — the parse is
+    /// full-fidelity, so the slice equals `trimmedDescription`.
+    private func spelling(of node: Syntax) -> String? {
+        let start = node.positionAfterSkippingLeadingTrivia.utf8Offset
+        let end = node.endPositionBeforeTrailingTrivia.utf8Offset
+        guard start < end, end <= sourceBytes.count else { return nil }
+        return String(decoding: sourceBytes[start..<end], as: UTF8.self)
     }
 
     private var currentOwner: TypeName? {

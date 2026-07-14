@@ -190,15 +190,48 @@ public struct RuleSet: Sendable {
         configuration: ArchitectureConfiguration,
         repository: RepositorySyntax
     ) throws -> RuleReport {
-        try evaluate(in: RuleContext(configuration: configuration, repository: repository))
+        try evaluationRun(configuration: configuration, repository: repository).report
+    }
+
+    /// The same evaluation, keeping its telemetry: per-rule and per-fact
+    /// durations for diagnosing slow project rules.
+    public func evaluationRun(
+        configuration: ArchitectureConfiguration,
+        repository: RepositorySyntax
+    ) throws -> EvaluationRun {
+        try evaluationRun(in: RuleContext(configuration: configuration, repository: repository))
     }
 
     func evaluate(in context: RuleContext) throws -> RuleReport {
+        try evaluationRun(in: context).report
+    }
+
+    func evaluationRun(in context: RuleContext) throws -> EvaluationRun {
+        let clock = ContinuousClock()
+        let runStart = clock.now
         try validateRuleIdentity()
-        let collected = try rules.flatMap { rule in
-            try Self.violations(of: rule, in: context)
+
+        var ruleSeconds: [EvaluationTelemetry.Measurement] = []
+        var collected: [RuleViolation] = []
+        for rule in rules {
+            let ruleStart = clock.now
+            collected += try Self.violations(of: rule, in: context)
+            ruleSeconds.append(
+                EvaluationTelemetry.Measurement(
+                    id: rule.metadata.id.rawValue,
+                    seconds: (clock.now - ruleStart).secondsValue
+                )
+            )
         }
-        return RuleReport(violations: collected.deterministicallySorted())
+
+        return EvaluationRun(
+            report: RuleReport(violations: collected.deterministicallySorted()),
+            telemetry: EvaluationTelemetry(
+                ruleSeconds: ruleSeconds,
+                factSeconds: context.factMeasurements(),
+                totalSeconds: (clock.now - runStart).secondsValue
+            )
+        )
     }
 
     /// Duplicate rule IDs are a configuration error, not last-writer-wins.

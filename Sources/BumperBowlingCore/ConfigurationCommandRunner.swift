@@ -21,9 +21,10 @@ public extension ConfigurationLoader {
     }
 
     /// Runs the same cached runner in `evaluate` mode: the bounded repository
-    /// input goes in over stdin, one canonical report comes back. Built-in
-    /// and project rules execute in the same evaluation invocation.
-    static func evaluateRules(root: URL, input: RepositoryInput) throws -> RuleReport {
+    /// input goes in over stdin, one canonical report plus its telemetry
+    /// comes back. Built-in and project rules execute in the same
+    /// evaluation invocation.
+    static func evaluateRun(root: URL, input: RepositoryInput) throws -> EvaluationRun {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let output = try runProjectRunner(
@@ -34,7 +35,7 @@ public extension ConfigurationLoader {
         guard !output.isEmpty else {
             throw BumperError.configurationOutputMalformed("empty rule report payload")
         }
-        return try JSONDecoder().decode(RuleReport.self, from: Data(output.utf8))
+        return try JSONDecoder().decode(EvaluationRun.self, from: Data(output.utf8))
     }
 }
 
@@ -44,11 +45,114 @@ enum ProjectRunnerMode: String, Sendable {
     case evaluate
 }
 
+extension ConfigurationLoader {
+    /// The default evaluation budget in seconds. Legitimately large projects
+    /// raise it with `BUMPER_EVALUATION_TIMEOUT_SECONDS`; evaluation is
+    /// always bounded.
+    static let configurationEvaluationTimeoutSeconds: TimeInterval = 60
+    static let evaluationTimeoutEnvironmentKey = "BUMPER_EVALUATION_TIMEOUT_SECONDS"
+    /// The runner is a cached artifact built once per configuration change,
+    /// so it builds optimized: evaluation parses every scanned source and
+    /// derives facts, where debug-mode swift-syntax is several times slower.
+    static let projectRunnerBuildConfiguration = "release"
+
+    /// The validated evaluation budget: the documented default when the
+    /// override is absent, a positive finite number of seconds when present,
+    /// and a loud configuration error otherwise. Invalid input can never
+    /// produce an unbounded or zero-length budget.
+    static func configurationEvaluationTimeout(
+        environment: [String: String]
+    ) throws -> TimeInterval {
+        guard let raw = environment[evaluationTimeoutEnvironmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !raw.isEmpty else {
+            return configurationEvaluationTimeoutSeconds
+        }
+        guard let seconds = Double(raw), seconds.isFinite, seconds > 0 else {
+            throw BumperError.invalidEvaluationTimeout(raw)
+        }
+        return seconds
+    }
+
+    static func cachedRunnerBuildArguments(packageRoot: URL) -> [String] {
+        [
+            "swift",
+            "build",
+            "--configuration",
+            projectRunnerBuildConfiguration,
+            "--package-path",
+            packageRoot.path,
+            "--product",
+            projectRunnerProductName,
+        ]
+    }
+
+    static func cachedRunnerExecutableURL(in root: URL, productName: String) -> URL {
+        root.appendingPathComponent(".build/\(projectRunnerBuildConfiguration)/\(productName)")
+    }
+
+    static func makeCachedPackage(
+        configurationURL: URL,
+        bumperPackageRoot: URL
+    ) throws -> CachedPackage {
+        let configurationData = try Data(contentsOf: configurationURL)
+        let repositoryRoot = configurationURL.deletingLastPathComponent()
+        let rulePackages = try rulePackageDependencies(root: repositoryRoot)
+        let consumerSources = try rulePackages.isEmpty ? consumerConfigurationSources(root: repositoryRoot) : []
+        let consumerSourcesHash = consumerConfigurationSourcesHash(consumerSources)
+        let rulePackagesHash = try rulePackageDependenciesHash(rulePackages)
+        let manifest = packageManifest(
+            bumperPackageRoot: bumperPackageRoot,
+            rulePackages: rulePackages,
+            runnerProductName: projectRunnerProductName
+        )
+        let metadata = CachedPackageMetadata(
+            configurationContentHash: sha256Hex(configurationData),
+            consumerSourcesHash: consumerSourcesHash,
+            rulePackagesHash: rulePackagesHash,
+            runnerProductName: projectRunnerProductName,
+            buildConfiguration: projectRunnerBuildConfiguration
+        )
+        let root = try cachedPackageRoot(
+            configurationURL: configurationURL,
+            bumperPackageRoot: bumperPackageRoot,
+            manifest: manifest,
+            consumerSourcesHash: consumerSourcesHash,
+            rulePackagesHash: rulePackagesHash
+        )
+        let sources = root.appendingPathComponent("Sources/\(projectRunnerProductName)")
+
+        if cachedPackageIsCurrent(root: root, metadata: metadata) {
+            return CachedPackage(
+                root: root,
+                executableURL: cachedRunnerExecutableURL(in: root, productName: projectRunnerProductName),
+                productName: projectRunnerProductName,
+                needsBuild: false
+            )
+        }
+
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        try manifest.write(to: root.appendingPathComponent("Package.swift"), atomically: true, encoding: .utf8)
+        try configurationData.write(to: sources.appendingPathComponent("UserConfiguration.swift"), options: .atomic)
+        try writeConsumerConfigurationSources(consumerSources, to: sources.appendingPathComponent("ConsumerSources"))
+        try runnerSource.write(to: sources.appendingPathComponent("main.swift"), atomically: true, encoding: .utf8)
+        try JSONEncoder()
+            .encode(metadata)
+            .write(to: root.appendingPathComponent(CachedPackageMetadata.fileName), options: .atomic)
+
+        return CachedPackage(
+            root: root,
+            executableURL: cachedRunnerExecutableURL(in: root, productName: projectRunnerProductName),
+            productName: projectRunnerProductName,
+            needsBuild: true
+        )
+    }
+}
+
 private extension ConfigurationLoader {
     static let outputBeginMarker = "__BUMPER_OUTPUT_BEGIN__"
     static let outputEndMarker = "__BUMPER_OUTPUT_END__"
-    static let configurationBuildTimeoutSeconds: TimeInterval = 300
-    static let configurationEvaluationTimeoutSeconds: TimeInterval = 60
+    static let configurationBuildTimeoutSeconds: TimeInterval = 600
     static let configurationCommandOutputLimitBytes = 4 * 1024 * 1024
     static let swiftToolchainIdentityTimeoutSeconds: TimeInterval = 10
     static let swiftToolchainIdentityOutputLimitBytes = 16 * 1024
@@ -88,6 +192,9 @@ private extension ConfigurationLoader {
         )
         try buildCachedPackageIfNeeded(cachedPackage)
 
+        let timeoutSeconds = try configurationEvaluationTimeout(
+            environment: ProcessInfo.processInfo.environment
+        )
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
         process.arguments = [
@@ -100,7 +207,7 @@ private extension ConfigurationLoader {
 
         let result = try runProcess(
             process,
-            timeoutSeconds: configurationEvaluationTimeoutSeconds,
+            timeoutSeconds: timeoutSeconds,
             outputLimitBytes: configurationCommandOutputLimitBytes,
             stdin: input
         )
@@ -108,7 +215,7 @@ private extension ConfigurationLoader {
         if result.timedOut {
             throw BumperError.configurationExecutionTimedOut(
                 configurationURL.path,
-                Int(configurationEvaluationTimeoutSeconds)
+                Int(timeoutSeconds)
             )
         }
 
@@ -233,62 +340,6 @@ private extension ConfigurationLoader {
         return text
     }
 
-    static func makeCachedPackage(
-        configurationURL: URL,
-        bumperPackageRoot: URL
-    ) throws -> CachedPackage {
-        let configurationData = try Data(contentsOf: configurationURL)
-        let repositoryRoot = configurationURL.deletingLastPathComponent()
-        let rulePackages = try rulePackageDependencies(root: repositoryRoot)
-        let consumerSources = try rulePackages.isEmpty ? consumerConfigurationSources(root: repositoryRoot) : []
-        let consumerSourcesHash = consumerConfigurationSourcesHash(consumerSources)
-        let rulePackagesHash = try rulePackageDependenciesHash(rulePackages)
-        let manifest = packageManifest(
-            bumperPackageRoot: bumperPackageRoot,
-            rulePackages: rulePackages,
-            runnerProductName: projectRunnerProductName
-        )
-        let metadata = CachedPackageMetadata(
-            configurationContentHash: sha256Hex(configurationData),
-            consumerSourcesHash: consumerSourcesHash,
-            rulePackagesHash: rulePackagesHash,
-            runnerProductName: projectRunnerProductName
-        )
-        let root = try cachedPackageRoot(
-            configurationURL: configurationURL,
-            bumperPackageRoot: bumperPackageRoot,
-            manifest: manifest,
-            consumerSourcesHash: consumerSourcesHash,
-            rulePackagesHash: rulePackagesHash
-        )
-        let sources = root.appendingPathComponent("Sources/\(projectRunnerProductName)")
-
-        if cachedPackageIsCurrent(root: root, metadata: metadata) {
-            return CachedPackage(
-                root: root,
-                executableURL: cachedRunnerExecutableURL(in: root, productName: projectRunnerProductName),
-                productName: projectRunnerProductName,
-                needsBuild: false
-            )
-        }
-
-        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
-        try manifest.write(to: root.appendingPathComponent("Package.swift"), atomically: true, encoding: .utf8)
-        try configurationData.write(to: sources.appendingPathComponent("UserConfiguration.swift"), options: .atomic)
-        try writeConsumerConfigurationSources(consumerSources, to: sources.appendingPathComponent("ConsumerSources"))
-        try runnerSource.write(to: sources.appendingPathComponent("main.swift"), atomically: true, encoding: .utf8)
-        try JSONEncoder()
-            .encode(metadata)
-            .write(to: root.appendingPathComponent(CachedPackageMetadata.fileName), options: .atomic)
-
-        return CachedPackage(
-            root: root,
-            executableURL: cachedRunnerExecutableURL(in: root, productName: projectRunnerProductName),
-            productName: projectRunnerProductName,
-            needsBuild: true
-        )
-    }
-
     static func cachedPackageRoot(
         configurationURL: URL,
         bumperPackageRoot: URL,
@@ -297,8 +348,9 @@ private extension ConfigurationLoader {
         rulePackagesHash: String
     ) throws -> URL {
         let key = [
-            "v3",
+            "v4",
             projectRunnerProductName,
+            projectRunnerBuildConfiguration,
             configurationURL.standardizedFileURL.path,
             bumperPackageRoot.standardizedFileURL.path,
             try packageRootFingerprint(bumperPackageRoot),
@@ -420,14 +472,7 @@ private extension ConfigurationLoader {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [
-            "swift",
-            "build",
-            "--package-path",
-            package.root.path,
-            "--product",
-            package.productName,
-        ]
+        process.arguments = cachedRunnerBuildArguments(packageRoot: package.root)
 
         let result = try runProcess(
             process,
@@ -464,10 +509,6 @@ private extension ConfigurationLoader {
         guard FileManager.default.isExecutableFile(atPath: package.executableURL.path) else {
             throw BumperError.configurationOutputMalformed("\(package.productName) build did not produce an executable")
         }
-    }
-
-    static func cachedRunnerExecutableURL(in root: URL, productName: String) -> URL {
-        root.appendingPathComponent(".build/debug/\(productName)")
     }
 
     static func cachedPackageIsCurrent(
@@ -671,7 +712,7 @@ private extension ConfigurationLoader {
             case "evaluate":
                 let inputData = FileHandle.standardInput.readDataToEndOfFile()
                 let input = try JSONDecoder().decode(RepositoryInput.self, from: inputData)
-                payloadData = try encoder.encode(bumper.evaluate(input))
+                payloadData = try encoder.encode(bumper.evaluationRun(input))
             default:
                 FileHandle.standardError.write(Data(("unknown runner mode: " + mode + "\\n").utf8))
                 exit(64)
@@ -730,16 +771,17 @@ private struct CapturedProcessOutput {
     let outputTooLargeStream: String?
 }
 
-private struct CachedPackageMetadata: Codable, Equatable {
+struct CachedPackageMetadata: Codable, Equatable {
     static let fileName = ".bumper-cache.json"
 
     let configurationContentHash: String
     let consumerSourcesHash: String
     let rulePackagesHash: String
     let runnerProductName: String
+    let buildConfiguration: String
 }
 
-private struct CachedPackage {
+struct CachedPackage {
     let root: URL
     let executableURL: URL
     let productName: String

@@ -88,4 +88,8 @@ public final class RuleContext: Sendable {
     public func facts<Provider: FactProvider>(_ provider: Provider) throws -> Provider.Facts {
         try factStore.facts(provider, repository: repository, configuration: configuration)
     }
+
+    func factMeasurements() -> [EvaluationTelemetry.Measurement] {
+        factStore.measurements()
+    }
 }

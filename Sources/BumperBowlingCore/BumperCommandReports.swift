@@ -65,11 +65,34 @@ public struct LintRunResult: Sendable {
     public let rules: ArchitectureRules
     public let scannedFileCount: Int
     public let report: RuleReport
+    /// Per-rule and per-fact durations from the evaluation, for diagnosing
+    /// slow project rules.
+    public let telemetry: EvaluationTelemetry?
+    /// Host-side phase durations for the whole run.
+    public let phases: LintPhaseTimings?
 
-    public init(rules: ArchitectureRules, scannedFileCount: Int, report: RuleReport) {
+    public init(
+        rules: ArchitectureRules,
+        scannedFileCount: Int,
+        report: RuleReport,
+        telemetry: EvaluationTelemetry? = nil,
+        phases: LintPhaseTimings? = nil
+    ) {
         self.rules = rules
         self.scannedFileCount = scannedFileCount
         self.report = report
+        self.telemetry = telemetry
+        self.phases = phases
+    }
+
+    func withPhases(_ phases: LintPhaseTimings) -> LintRunResult {
+        LintRunResult(
+            rules: rules,
+            scannedFileCount: scannedFileCount,
+            report: report,
+            telemetry: telemetry,
+            phases: phases
+        )
     }
 
     public var enabledRuleCount: Int {
@@ -82,6 +105,47 @@ public struct LintRunResult: Sendable {
             rules: rules,
             baselineComparison: baseline.map { LintBaselineComparison(report: report, baseline: $0) }
         )
+    }
+}
+
+/// Wall-clock seconds per lint phase, measured by the host around each
+/// engine effect.
+public struct LintPhaseTimings: Equatable, Sendable, Codable {
+    public let prepareRulesSeconds: Double
+    public let scanSeconds: Double
+    public let evaluateSeconds: Double
+
+    public init(
+        prepareRulesSeconds: Double = 0,
+        scanSeconds: Double = 0,
+        evaluateSeconds: Double = 0
+    ) {
+        self.prepareRulesSeconds = prepareRulesSeconds
+        self.scanSeconds = scanSeconds
+        self.evaluateSeconds = evaluateSeconds
+    }
+
+    func recording(_ effect: LintRunEffect, seconds: Double) -> LintPhaseTimings {
+        switch effect {
+        case .prepareRules:
+            return LintPhaseTimings(
+                prepareRulesSeconds: prepareRulesSeconds + seconds,
+                scanSeconds: scanSeconds,
+                evaluateSeconds: evaluateSeconds
+            )
+        case .scanSources:
+            return LintPhaseTimings(
+                prepareRulesSeconds: prepareRulesSeconds,
+                scanSeconds: scanSeconds + seconds,
+                evaluateSeconds: evaluateSeconds
+            )
+        case .evaluateRules:
+            return LintPhaseTimings(
+                prepareRulesSeconds: prepareRulesSeconds,
+                scanSeconds: scanSeconds,
+                evaluateSeconds: evaluateSeconds + seconds
+            )
+        }
     }
 }
 

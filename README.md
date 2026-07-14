@@ -20,7 +20,7 @@ directly from this repository, pinned to a release tag:
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/RoyalPineapple/BumperBowling.git", from: "0.5.1")
+    .package(url: "https://github.com/RoyalPineapple/BumperBowling.git", from: "0.5.2")
 ]
 ```
 
@@ -307,9 +307,10 @@ rules in one engine, and prints one `RuleReport` as JSON. The sealed-off
 process has no network, nowhere to write, and an empty environment; scanning
 stays in the `bumper` process itself.
 
-The compile is cached against the file's contents, so it happens once per
-change to `BumperBowling.swift`, not once per lint. An unchanged
-configuration loads from cache with no build at all.
+The compile is cached against the file's contents and built optimized
+(release configuration), so the one-time build cost is paid once per change
+to `BumperBowling.swift`, not once per lint — and evaluation runs at full
+speed. An unchanged configuration loads from cache with no build at all.
 
 By default that cache lives under the system temporary directory. Set
 `BUMPER_CACHE_DIR` when CI should persist it between runs:
@@ -317,6 +318,20 @@ By default that cache lives under the system temporary directory. Set
 ```bash
 BUMPER_CACHE_DIR=.build/bumper-cache swift run bumper lint .
 ```
+
+Evaluation is always bounded: the runner gets 60 seconds by default. A
+legitimately large repository can raise the budget — the value must be a
+positive, finite number of seconds, and anything else is a loud
+configuration error:
+
+```bash
+BUMPER_EVALUATION_TIMEOUT_SECONDS=300 swift run bumper lint .
+```
+
+When evaluation is slow, `bumper lint --timings` prints the host phases
+(prepare, scan, evaluate) and the slowest rules and fact providers to
+stderr, so a slow project rule is attributable before the budget needs
+raising.
 
 `bumper config` loads your configuration and tells you whether it is valid.
 

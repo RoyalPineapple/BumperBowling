@@ -192,7 +192,7 @@ Requires(DisallowSyntax(.forceUnwrapExpr), severity: .warning)
 Bumper Bowling does not maintain a parallel enum of SwiftSyntax nodes. Facts that need typed access to syntax fields are computed from real SwiftSyntax node types through `node.bumper` views.
 
 ```text
-BumperProject -> ArchitectureConfiguration -> scanner -> RepositoryInput -> project runner -> RepositorySyntax -> facts -> RuleSet -> RuleReport
+BumperProject -> ArchitectureConfiguration -> scanner -> RepositoryInput -> project runner -> RepositorySyntax -> facts -> RuleSet -> RuleReport (+ EvaluationTelemetry)
 ```
 
 ## Design Goals
