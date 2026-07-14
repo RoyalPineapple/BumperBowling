@@ -8,7 +8,7 @@ struct SyntaxNodeRuleTests {
     func evaluatesGenericSwiftSyntaxNodeRules() throws {
         let matcher = SyntaxNodeMatcher(kind: .attribute, spelling: .exact("available"))
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Thing.swift"),
+            path: RelativeFilePath("Sources/Core/Thing.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [],

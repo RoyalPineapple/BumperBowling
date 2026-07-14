@@ -7,7 +7,7 @@ struct ArchitectureLinterTests {
     @Test
     func graphCarriesSourceFactsAndDerivedEdges() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/UI/ViewModel.swift"),
+            path: RelativeFilePath("Sources/UI/ViewModel.swift"),
             component: try ComponentID("ui"),
             imports: [try ModuleName("DomainKit")],
             publicDeclarations: [
@@ -38,7 +38,7 @@ struct ArchitectureLinterTests {
                 sourceComponent: try ComponentID("ui"),
                 targetComponent: try ComponentID("domain"),
                 importedModule: try ModuleName("DomainKit"),
-                sourcePath: try RelativeFilePath("Sources/UI/ViewModel.swift")
+                sourcePath: RelativeFilePath("Sources/UI/ViewModel.swift")
             ),
         ])
     }
@@ -46,7 +46,7 @@ struct ArchitectureLinterTests {
     @Test
     func graphQueriesFactsInScope() throws {
         let uiFile = SourceFileFacts(
-            path: try RelativeFilePath("Sources/UI/ViewModel.swift"),
+            path: RelativeFilePath("Sources/UI/ViewModel.swift"),
             component: try ComponentID("ui"),
             imports: [try ModuleName("DomainKit")],
             publicDeclarations: [
@@ -65,7 +65,7 @@ struct ArchitectureLinterTests {
             )
         )
         let domainFile = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Domain/Model.swift"),
+            path: RelativeFilePath("Sources/Domain/Model.swift"),
             component: try ComponentID("domain"),
             imports: [],
             publicDeclarations: [
@@ -81,9 +81,9 @@ struct ArchitectureLinterTests {
             )
         )
         let graph = ArchitectureGraph(nodes: RepositoryFacts(files: [uiFile, domainFile]), rules: rules)
-        let uiScope = GraphScope(paths: [try RelativePathPrefix("Sources/UI")])
+        let uiScope = GraphScope(paths: [RelativePathPrefix("Sources/UI")])
 
-        #expect(graph.files(in: uiScope).map(\.path) == [try RelativeFilePath("Sources/UI/ViewModel.swift")])
+        #expect(graph.files(in: uiScope).map(\.path) == [RelativeFilePath("Sources/UI/ViewModel.swift")])
         #expect(graph.imports(in: uiScope).map(\.module) == [try ModuleName("DomainKit")])
         #expect(graph.declarations(in: uiScope).map(\.declaration.name) == [try DeclarationName("ViewModel")])
         #expect(graph.storedProperties(in: uiScope).map(\.property.name) == [try DeclarationName("state")])
@@ -94,7 +94,7 @@ struct ArchitectureLinterTests {
     @Test
     func sourceFileFactsNormalizeCollectedFacts() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Model.swift"),
+            path: RelativeFilePath("Sources/Core/Model.swift"),
             component: try ComponentID("core"),
             nodes: [
                 .importModule(try ModuleName("Zed")),
@@ -134,7 +134,7 @@ struct ArchitectureLinterTests {
 
         let nodes = RepositoryFacts(files: [
             SourceFileFacts(
-                path: try RelativeFilePath("Sources/Recording/Recorder.swift"),
+                path: RelativeFilePath("Sources/Recording/Recorder.swift"),
                 component: try ComponentID("Recording"),
                 imports: [try ModuleName("CoreKit"), try ModuleName("PlaybackKit"), try ModuleName("XCTest")],
                 publicDeclarations: []
@@ -151,7 +151,7 @@ struct ArchitectureLinterTests {
     @Test
     func warningSeverityDoesNotFailReport() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Thing.swift"),
+            path: RelativeFilePath("Sources/Core/Thing.swift"),
             component: try ComponentID("core"),
             imports: [try ModuleName("XCTest")],
             publicDeclarations: []
@@ -175,7 +175,7 @@ struct ArchitectureLinterTests {
     @Test
     func flagsStoredPropertyFactViolations() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
+            path: RelativeFilePath("Sources/Core/Domain/Model.swift"),
             component: try ComponentID("core"),
             imports: [],
             nominalTypes: [
@@ -231,7 +231,7 @@ struct ArchitectureLinterTests {
     @Test
     func violationReceiptsCarryObservedFactEvidence() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
+            path: RelativeFilePath("Sources/Core/Domain/Model.swift"),
             component: try ComponentID("core"),
             imports: [],
             nominalTypes: [
@@ -281,7 +281,7 @@ struct ArchitectureLinterTests {
     @Test
     func flagsStoredPropertiesWhenComputedStateIsRequired() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Domain/Model.swift"),
+            path: RelativeFilePath("Sources/Core/Domain/Model.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [],
@@ -311,7 +311,7 @@ struct ArchitectureLinterTests {
     @Test
     func flagsImperativeConstructsWhenFunctionalCoreIsRequired() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Domain/Reducer.swift"),
+            path: RelativeFilePath("Sources/Core/Domain/Reducer.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [],
@@ -341,7 +341,7 @@ struct ArchitectureLinterTests {
     @Test
     func skipsExcludedSyntaxConstructPaths() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/BumperBowlingCore/StringMatcher.swift"),
+            path: RelativeFilePath("Sources/BumperBowlingCore/StringMatcher.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [],
@@ -374,7 +374,7 @@ struct ArchitectureLinterTests {
     @Test
     func flagsParserWithoutEnumStateMachine() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/FooParser.swift"),
+            path: RelativeFilePath("Sources/Core/FooParser.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [],
@@ -401,7 +401,7 @@ struct ArchitectureLinterTests {
     @Test
     func evaluatesGenericSwiftSyntaxKindRules() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Thing.swift"),
+            path: RelativeFilePath("Sources/Core/Thing.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [],
@@ -435,7 +435,7 @@ struct ArchitectureLinterTests {
     @Test
     func flagsDisallowedPublicDeclarations() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/BumperBowlingCore/ArchitectureConfiguration.swift"),
+            path: RelativeFilePath("Sources/BumperBowlingCore/ArchitectureConfiguration.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [
@@ -469,7 +469,7 @@ struct ArchitectureLinterTests {
     @Test
     func flagsMissingRequiredPublicDeclarations() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/BumperBowlingCore/Reducer.swift"),
+            path: RelativeFilePath("Sources/BumperBowlingCore/Reducer.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [
@@ -532,7 +532,7 @@ struct ArchitectureLinterTests {
         let violation = try #require(report.violations.first)
         #expect(violation.ruleID == .duplicateOwnership)
         #expect(violation.severity == .warning)
-        #expect(violation.path == (try RelativeFilePath("Sources/Core/Models")))
+        #expect(violation.path == (RelativeFilePath("Sources/Core/Models")))
         #expect(violation.message == "models path Sources/Core/Models overlaps core path Sources/Core")
         #expect(!report.hasErrors)
     }

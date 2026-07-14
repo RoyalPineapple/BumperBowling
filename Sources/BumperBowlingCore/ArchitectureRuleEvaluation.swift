@@ -120,7 +120,7 @@ extension ArchitectureRule {
         graph: ArchitectureGraph,
         configuration: StoredPropertyRuleConfiguration
     ) -> [RuleFailure] {
-        let excludedPaths = (try? configuration.excludedPaths.map(RelativePathPrefix.init)) ?? []
+        let excludedPaths = (try? configuration.excludedPaths.map { try RelativePathPrefix($0) }) ?? []
 
         return graph.storedProperties(in: scope(paths: configuration.paths)).flatMap { propertyFact -> [RuleFailure] in
             guard !excludedPaths.contains(where: { $0.contains(propertyFact.file.path) }) else {
@@ -140,7 +140,7 @@ extension ArchitectureRule {
         graph: ArchitectureGraph,
         configuration: SyntaxConstructRuleConfiguration
     ) -> [RuleFailure] {
-        let excludedPaths = (try? configuration.excludedPaths.map(RelativePathPrefix.init)) ?? []
+        let excludedPaths = (try? configuration.excludedPaths.map { try RelativePathPrefix($0) }) ?? []
 
         return graph.constructs(in: scope(paths: configuration.paths)).compactMap { constructFact -> RuleFailure? in
             guard !excludedPaths.contains(where: { $0.contains(constructFact.file.path) }) else {
@@ -489,7 +489,7 @@ extension ArchitectureRule {
     }
 
     func scope(paths: [String]) -> GraphScope {
-        GraphScope(paths: (try? paths.map(RelativePathPrefix.init)) ?? [])
+        GraphScope(paths: (try? paths.map { try RelativePathPrefix($0) }) ?? [])
     }
 
     func firstPath(in scope: GraphScope) -> RelativeFilePath? {
@@ -502,10 +502,7 @@ extension ArchitectureRule {
     }
 
     private var fallbackPath: RelativeFilePath {
-        guard let path = try? RelativeFilePath("Package.swift") else {
-            preconditionFailure("Invalid built-in fallback path")
-        }
-        return path
+        "Package.swift"
     }
 
     func violation(

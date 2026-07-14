@@ -22,7 +22,7 @@ struct SwiftSyntaxWrapperTests {
 
         let nodes = try SwiftFileParser().parseFile(
             at: file,
-            relativePath: try RelativeFilePath("Sources/Core/Thing.swift"),
+            relativePath: RelativeFilePath("Sources/Core/Thing.swift"),
             component: try ComponentID("core")
         )
 

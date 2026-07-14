@@ -38,7 +38,7 @@ struct LintRunEngineTests {
         let configuration = ArchitectureConfiguration(components: [])
         let rules = try ArchitectureRules(configuration: configuration)
         let preparedRules = LintPreparedRules(configuration: configuration, rules: rules)
-        let files = [SourceInput(path: try RelativeFilePath("Sources/Core/Thing.swift"), component: try ComponentID("core"), source: "struct Thing {}")]
+        let files = [SourceInput(path: RelativeFilePath("Sources/Core/Thing.swift"), component: try ComponentID("core"), source: "struct Thing {}")]
         let plan = LintEvaluationPlan(configuration: configuration, rules: rules, files: files)
 
         let transition = LintRunReducer().reduce(
@@ -54,7 +54,7 @@ struct LintRunEngineTests {
     func `reducer reports after evaluating rules`() throws {
         let configuration = ArchitectureConfiguration(components: [])
         let rules = try ArchitectureRules(configuration: configuration)
-        let files = [SourceInput(path: try RelativeFilePath("Sources/Core/Thing.swift"), component: try ComponentID("core"), source: "struct Thing {}")]
+        let files = [SourceInput(path: RelativeFilePath("Sources/Core/Thing.swift"), component: try ComponentID("core"), source: "struct Thing {}")]
         let plan = LintEvaluationPlan(configuration: configuration, rules: rules, files: files)
         let report = RuleReport(violations: [])
         let transition = LintRunReducer().reduce(

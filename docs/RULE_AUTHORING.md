@@ -50,24 +50,23 @@ rule, fact, and query interfaces. Each accepts an optional `id:` and
 
 | Shaper | Asserts |
 | --- | --- |
-| `Rules.singleDeclaration(symbol:owner:)` | Exactly one declaration of the symbol, under the owner path. A configured owner with no files is a configuration error. |
-| `Rules.constructionOwnership(symbol:allowed:)` | The type is constructed only inside the allowed scope. |
-| `Rules.canonicalConstruction(symbol:owners:)` | Same check, spelled for canonical-value ownership. |
-| `Rules.boundaryOnly(symbol:allowed:)` | Calls to the function occur only inside the boundary scope. |
-| `Rules.noAlternateAliases(symbol:allowing:)` | No `typealias` re-exposes the symbol outside the allowing scope. |
+| `Rules.singleDeclaration(_:owner:)` | Exactly one declaration of the symbol, under the owner path. A configured owner with no files is a configuration error. |
+| `Rules.constructionOwnership(_:allowed:)` | The type is constructed only inside the allowed scope. |
+| `Rules.canonicalConstruction(_:owners:)` | Same check, spelled for canonical-value ownership. |
+| `Rules.boundaryOnly(function:allowed:)` | Calls to the function occur only inside the boundary scope. |
+| `Rules.noAlternateAliases(_:allowing:)` | No `typealias` re-exposes the symbol outside the allowing scope. |
 | `Rules.canonicalTraversal(root:structuralCase:owners:)` | Recursive traversal of the type — direct or mutual, over locally dispatched calls — stays with its owners. |
 | `Rules.singleNominalSpelling(suffix:owner:)` | Every nominal declaration named with the suffix lives in the owner scope, using typed declaration facts. |
 
+Symbols and paths are `ExpressibleByStringLiteral`, so authoring stays plain:
+
 ```swift
-Rules.singleDeclaration(
-    symbol: NominalSymbol("AccessibilityTarget"),
-    owner: try RelativePathPrefix("Sources/Plans")
-)
+Rules.singleDeclaration("AccessibilityTarget", owner: "Sources/Plans")
 
 Rules.canonicalTraversal(
-    root: NominalSymbol("AccessibilityHierarchy"),
-    structuralCase: EnumCaseSymbol("container"),
-    owners: .under(try RelativePathPrefix("Sources/Traversal"))
+    root: "AccessibilityHierarchy",
+    structuralCase: "container",
+    owners: .under("Sources/Traversal")
 )
 ```
 
@@ -190,10 +189,7 @@ let bumper = BumperProject {
 
     Rules {
         DependencyBoundaries(.error)
-        Rules.singleDeclaration(
-            symbol: NominalSymbol("AccessibilityTarget"),
-            owner: try! RelativePathPrefix("Sources/Core")
-        )
+        Rules.singleDeclaration("AccessibilityTarget", owner: "Sources/Core")
         projectRules
     }
 }
@@ -271,10 +267,7 @@ import Testing
 
 @Test
 func flagsForeignDeclarations() throws {
-    let rule = Rules.singleDeclaration(
-        symbol: NominalSymbol("AccessibilityTarget"),
-        owner: try RelativePathPrefix("Sources/Plans")
-    )
+    let rule = Rules.singleDeclaration("AccessibilityTarget", owner: "Sources/Plans")
 
     let report = try RuleTestHarness(rule).evaluate(
         VirtualRepository {

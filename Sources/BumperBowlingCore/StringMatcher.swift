@@ -10,6 +10,7 @@ public struct StringMatcher: Hashable, Sendable, CustomStringConvertible, Expres
         case contains
         case prefix
         case suffix
+        case regex
     }
 
     public let mode: Mode
@@ -18,6 +19,9 @@ public struct StringMatcher: Hashable, Sendable, CustomStringConvertible, Expres
     public init(mode: Mode, pattern: String) {
         guard !pattern.isEmpty else {
             preconditionFailure("String matchers cannot be empty.")
+        }
+        if mode == .regex, !StringMatcher.isValidRegularExpression(pattern) {
+            preconditionFailure("Invalid regular expression pattern: \(pattern)")
         }
 
         self.mode = mode
@@ -44,6 +48,13 @@ public struct StringMatcher: Hashable, Sendable, CustomStringConvertible, Expres
         StringMatcher(mode: .suffix, pattern: pattern)
     }
 
+    /// Regular-expression matching is explicit, never inferred from a
+    /// literal. The pattern is validated at construction; an invalid pattern
+    /// is a loud configuration error, not an empty match set.
+    public static func regex(_ pattern: String) -> StringMatcher {
+        StringMatcher(mode: .regex, pattern: pattern)
+    }
+
     public func matches(_ candidate: String) -> Bool {
         switch mode {
         case .exact:
@@ -54,7 +65,23 @@ public struct StringMatcher: Hashable, Sendable, CustomStringConvertible, Expres
             candidate.hasPrefix(pattern)
         case .suffix:
             candidate.hasSuffix(pattern)
+        case .regex:
+            matchesRegularExpression(candidate)
         }
+    }
+
+    // ponytail: recompiles per call; cache compiled expressions if a profile
+    // ever shows matcher-bound lint time.
+    private func matchesRegularExpression(_ candidate: String) -> Bool {
+        guard let expression = try? NSRegularExpression(pattern: pattern) else {
+            preconditionFailure("Invalid regular expression pattern: \(pattern)")
+        }
+        let range = NSRange(candidate.startIndex..<candidate.endIndex, in: candidate)
+        return expression.firstMatch(in: candidate, range: range) != nil
+    }
+
+    static func isValidRegularExpression(_ pattern: String) -> Bool {
+        (try? NSRegularExpression(pattern: pattern)) != nil
     }
 
     public func matches<Value: StringMatchable>(_ candidate: Value) -> Bool {
@@ -71,6 +98,8 @@ public struct StringMatcher: Hashable, Sendable, CustomStringConvertible, Expres
             ".prefix(\(pattern))"
         case .suffix:
             ".suffix(\(pattern))"
+        case .regex:
+            ".regex(\(pattern))"
         }
     }
 }
@@ -90,6 +119,13 @@ extension StringMatcher: Codable {
                 forKey: .pattern,
                 in: container,
                 debugDescription: "String matchers cannot be empty."
+            )
+        }
+        if mode == .regex, !StringMatcher.isValidRegularExpression(pattern) {
+            throw DecodingError.dataCorruptedError(
+                forKey: .pattern,
+                in: container,
+                debugDescription: "Invalid regular expression pattern."
             )
         }
         self.init(mode: mode, pattern: pattern)

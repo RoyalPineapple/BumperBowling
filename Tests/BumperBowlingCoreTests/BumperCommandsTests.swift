@@ -123,7 +123,7 @@ struct BumperCommandsTests {
             violations: [
                 RuleViolation(
                     rule: RuleMetadata(id: .forbiddenImport, severity: .warning, summary: "Forbidden import."),
-                    path: try RelativeFilePath("Sources/Core/Thing.swift"),
+                    path: RelativeFilePath("Sources/Core/Thing.swift"),
                     message: "warning"
                 )
             ]

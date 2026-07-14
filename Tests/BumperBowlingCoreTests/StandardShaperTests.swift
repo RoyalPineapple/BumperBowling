@@ -8,8 +8,8 @@ struct StandardShaperTests {
     @Test
     func singleDeclarationPassesForOneOwnedDeclaration() throws {
         let rule = Rules.singleDeclaration(
-            symbol: NominalSymbol("AccessibilityTarget"),
-            owner: try RelativePathPrefix("Sources/Plans")
+            NominalSymbol("AccessibilityTarget"),
+            owner: RelativePathPrefix("Sources/Plans")
         )
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -24,8 +24,8 @@ struct StandardShaperTests {
     @Test
     func singleDeclarationFlagsDuplicatesAndForeignOwners() throws {
         let rule = Rules.singleDeclaration(
-            symbol: NominalSymbol("AccessibilityTarget"),
-            owner: try RelativePathPrefix("Sources/Plans")
+            NominalSymbol("AccessibilityTarget"),
+            owner: RelativePathPrefix("Sources/Plans")
         )
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -46,8 +46,8 @@ struct StandardShaperTests {
     @Test
     func singleDeclarationMissingOwnerFilesIsConfigurationFailure() throws {
         let rule = Rules.singleDeclaration(
-            symbol: NominalSymbol("AccessibilityTarget"),
-            owner: try RelativePathPrefix("Sources/Missing")
+            NominalSymbol("AccessibilityTarget"),
+            owner: RelativePathPrefix("Sources/Missing")
         )
 
         #expect(throws: RuleEvaluationError.self) {
@@ -62,8 +62,8 @@ struct StandardShaperTests {
     @Test
     func constructionOwnershipFlagsOutsideBuilders() throws {
         let rule = Rules.constructionOwnership(
-            symbol: NominalSymbol("InterfaceObservation"),
-            allowed: .under(try RelativePathPrefix("Sources/Builders"))
+            NominalSymbol("InterfaceObservation"),
+            allowed: .under(RelativePathPrefix("Sources/Builders"))
         )
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -88,8 +88,8 @@ struct StandardShaperTests {
     @Test
     func boundaryOnlyFlagsCallsOutsideBoundary() throws {
         let rule = Rules.boundaryOnly(
-            symbol: FunctionSymbol("JSONDecoder.decode"),
-            allowed: .under(try RelativePathPrefix("Sources/Boundary"))
+            function: FunctionSymbol("JSONDecoder.decode"),
+            allowed: .under(RelativePathPrefix("Sources/Boundary"))
         )
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -113,8 +113,8 @@ struct StandardShaperTests {
     @Test
     func noAlternateAliasesFlagsAliasesOutsideFacade() throws {
         let rule = Rules.noAlternateAliases(
-            symbol: NominalSymbol("AccessibilityTarget"),
-            allowing: .under(try RelativePathPrefix("Sources/DSL"))
+            NominalSymbol("AccessibilityTarget"),
+            allowing: .under(RelativePathPrefix("Sources/DSL"))
         )
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -138,7 +138,7 @@ struct StandardShaperTests {
         let rule = Rules.canonicalTraversal(
             root: NominalSymbol("AccessibilityHierarchy"),
             structuralCase: EnumCaseSymbol("container"),
-            owners: .under(try RelativePathPrefix("Sources/Traversal")),
+            owners: .under(RelativePathPrefix("Sources/Traversal")),
             id: "canonical_hierarchy_traversal"
         )
 
@@ -158,7 +158,7 @@ struct StandardShaperTests {
         let rule = Rules.canonicalTraversal(
             root: NominalSymbol("AccessibilityHierarchy"),
             structuralCase: EnumCaseSymbol("container"),
-            owners: .under(try RelativePathPrefix("Sources/Traversal"))
+            owners: .under(RelativePathPrefix("Sources/Traversal"))
         )
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -202,8 +202,8 @@ struct StandardShaperTests {
     @Test
     func canonicalConstructionFlagsConstructionOutsideOwners() throws {
         let rule = Rules.canonicalConstruction(
-            symbol: NominalSymbol("InterfaceGraph"),
-            owners: .under(try RelativePathPrefix("Sources/Builders"))
+            NominalSymbol("InterfaceGraph"),
+            owners: .under(RelativePathPrefix("Sources/Builders"))
         )
 
         let report = try RuleTestHarness(rule).evaluate(
@@ -229,7 +229,7 @@ struct StandardShaperTests {
     func singleNominalSpellingFlagsSuffixedDeclarationsOutsideOwner() throws {
         let rule = Rules.singleNominalSpelling(
             suffix: "Expr",
-            owner: .under(try RelativePathPrefix("Sources/Plans"))
+            owner: .under(RelativePathPrefix("Sources/Plans"))
         )
 
         let report = try RuleTestHarness(rule).evaluate(

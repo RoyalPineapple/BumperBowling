@@ -6,7 +6,7 @@ struct ScopedRuleSettingsTests {
     @Test
     func evaluatesComposedStoredPropertyRequirementsAsScopedSettings() throws {
         let file = SourceFileFacts(
-            path: try RelativeFilePath("Sources/Core/Runtime/Session.swift"),
+            path: RelativeFilePath("Sources/Core/Runtime/Session.swift"),
             component: try ComponentID("core"),
             imports: [],
             publicDeclarations: [],
