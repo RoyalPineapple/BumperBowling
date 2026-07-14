@@ -62,6 +62,11 @@ struct BumperCLI {
             root: options.root,
             progress: progressReporter(enabled: options.progress)
         )
+        if options.timings {
+            for line in timingsSummary(run) {
+                writeError("[bumper] \(line)")
+            }
+        }
         let baseline = try options.baselinePath.map(loadBaseline)
         let comparison = baseline.map { LintBaselineComparison(report: run.report, baseline: $0) }
         let effectiveReport = comparison?.effectiveReport ?? run.report
@@ -159,12 +164,47 @@ struct BumperCLI {
         FileHandle.standardError.write(Data((message + "\n").utf8))
     }
 
+    private static func timingsSummary(_ run: LintRunResult) -> [String] {
+        var lines: [String] = []
+        if let phases = run.phases {
+            lines.append(
+                "Phases: prepare \(seconds(phases.prepareRulesSeconds)), "
+                    + "scan \(seconds(phases.scanSeconds)), "
+                    + "evaluate \(seconds(phases.evaluateSeconds))"
+            )
+        }
+        guard let telemetry = run.telemetry else {
+            return lines
+        }
+        lines.append("Evaluation total: \(seconds(telemetry.totalSeconds))")
+        lines += measurementLines(label: "Slowest rules", measurements: telemetry.ruleSeconds)
+        lines += measurementLines(label: "Slowest facts", measurements: telemetry.factSeconds)
+        return lines
+    }
+
+    private static func measurementLines(
+        label: String,
+        measurements: [EvaluationTelemetry.Measurement]
+    ) -> [String] {
+        guard !measurements.isEmpty else {
+            return []
+        }
+        let entries = measurements.prefix(10).map { measurement in
+            "\(measurement.id) \(seconds(measurement.seconds))"
+        }
+        return ["\(label): \(entries.joined(separator: ", "))"]
+    }
+
+    private static func seconds(_ value: Double) -> String {
+        String(format: "%.3fs", value)
+    }
+
     private static let help = """
     Bumper Bowling
 
     Usage:
       bumper init [root]
-      bumper lint [root] [--format markdown|json] [--fail-on none|note|warning|error] [--baseline path] [--progress]
+      bumper lint [root] [--format markdown|json] [--fail-on none|note|warning|error] [--baseline path] [--progress] [--timings]
       bumper scan [root] [--format markdown|json] [--progress]
       bumper baseline create [root] --output path [--format markdown|json] [--progress]
       bumper snapshot [root]
@@ -172,7 +212,13 @@ struct BumperCLI {
       bumper explain <path>
 
     Environment:
-      BUMPER_CACHE_DIR    Directory for cached project runner packages.
+      BUMPER_CACHE_DIR                    Directory for cached project runner packages.
+      BUMPER_EVALUATION_TIMEOUT_SECONDS   Evaluation budget for the project runner
+                                          (default 60; positive finite seconds).
+                                          `--timings` shows where evaluation time goes.
+      BUMPER_RUNNER_BUILD_CONFIGURATION   Runner build configuration: release
+                                          (default) or debug, for hosts where the
+                                          one-time optimized build is too expensive.
 
     Security:
       BumperBowling.swift is a program, like Package.swift. Bumper compiles it
@@ -196,6 +242,7 @@ private struct CommandOptions {
     let baselinePath: String?
     let outputPath: String?
     let progress: Bool
+    let timings: Bool
 
     static func parse(_ arguments: [String]) throws -> CommandOptions {
         var positionals: [String] = []
@@ -204,6 +251,7 @@ private struct CommandOptions {
         var baselinePath: String?
         var outputPath: String?
         var progress = false
+        var timings = false
         var index = arguments.startIndex
 
         while index < arguments.endIndex {
@@ -227,6 +275,8 @@ private struct CommandOptions {
                 outputPath = try value(after: argument, in: arguments, index: &index)
             case "--progress":
                 progress = true
+            case "--timings":
+                timings = true
             default:
                 if argument.hasPrefix("--") {
                     throw ExitCode.usage("Unknown option: \(argument)")
@@ -242,7 +292,8 @@ private struct CommandOptions {
             failOn: failOn,
             baselinePath: baselinePath,
             outputPath: outputPath,
-            progress: progress
+            progress: progress,
+            timings: timings
         )
     }
 

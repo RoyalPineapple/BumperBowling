@@ -30,7 +30,8 @@ struct SourceFactSummary: Sendable {
         var storedProperties: [StoredProperty] = []
         var enums: [DeclarationName] = []
         var observedImperativeConstructs: [ObservedImperativeConstruct] = []
-        var syntaxNodes = SwiftSyntaxNodeCatalog()
+        var syntaxNodeKinds = Set<SyntaxKind>()
+        var observedSyntaxNodes = Set<ObservedSyntaxNode>()
 
         for fact in facts {
             switch fact {
@@ -49,7 +50,8 @@ struct SourceFactSummary: Sendable {
             case .imperativeConstruct(let construct):
                 observedImperativeConstructs.append(construct)
             case .syntax(let node):
-                syntaxNodes = syntaxNodes.adding(node)
+                syntaxNodeKinds.insert(node.kind)
+                observedSyntaxNodes.insert(node)
             }
         }
 
@@ -60,7 +62,10 @@ struct SourceFactSummary: Sendable {
         self.storedProperties = storedProperties
         self.enums = enums
         self.observedImperativeConstructs = observedImperativeConstructs
-        self.syntaxNodes = syntaxNodes
+        self.syntaxNodes = SwiftSyntaxNodeCatalog(
+            nodeKinds: syntaxNodeKinds,
+            nodes: observedSyntaxNodes
+        )
     }
 }
 

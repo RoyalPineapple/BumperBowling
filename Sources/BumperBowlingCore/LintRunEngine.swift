@@ -19,6 +19,8 @@ struct LintRunEngine: Sendable {
         let reducer = LintRunReducer()
         var state = LintRunState.idle
         var event = LintRunEvent.start(configuration)
+        let clock = ContinuousClock()
+        var phases = LintPhaseTimings()
 
         while true {
             let transition = reducer.reduce(state: state, event: event)
@@ -26,7 +28,7 @@ struct LintRunEngine: Sendable {
             progress.report(state.progressMessage)
 
             if case .reporting(let result) = state {
-                return result
+                return result.withPhases(phases)
             }
 
             guard let effect = transition.effect else {
@@ -34,7 +36,9 @@ struct LintRunEngine: Sendable {
             }
 
             do {
+                let effectStart = clock.now
                 event = try await perform(effect)
+                phases = phases.recording(effect, seconds: (clock.now - effectStart).secondsValue)
             } catch {
                 let failure = LintRunFailure(message: String(describing: error))
                 let failedTransition = reducer.reduce(state: state, event: .failed(failure))
@@ -62,18 +66,18 @@ struct LintRunEngine: Sendable {
             let root = root
             let input = RepositoryInput(architecture: plan.configuration, files: plan.files)
             let configurationURL = root.appendingPathComponent(ConfigurationLoader.fileName)
-            let report: RuleReport
+            let run: EvaluationRun
             if FileManager.default.fileExists(atPath: configurationURL.path) {
-                report = try await Task.detached {
-                    try ConfigurationLoader.evaluateRules(root: root, input: input)
+                run = try await Task.detached {
+                    try ConfigurationLoader.evaluateRun(root: root, input: input)
                 }.value
             } else {
                 // No authored BumperBowling.swift means no project rules, so
                 // built-in rules evaluate in process without the runner.
-                report = try RuleSet(rules: BuiltInRules.rules(from: input.architecture.rules))
-                    .evaluate(configuration: input.architecture, repository: RepositorySyntax(input: input))
+                run = try RuleSet(rules: BuiltInRules.rules(from: input.architecture.rules))
+                    .evaluationRun(configuration: input.architecture, repository: RepositorySyntax(input: input))
             }
-            return .evaluatedRules(plan: plan, report: report)
+            return .evaluatedRules(plan: plan, run: run)
         }
     }
 }
@@ -104,11 +108,12 @@ struct LintRunReducer: Sendable {
                 effect: .evaluateRules(plan)
             )
 
-        case (.evaluatingRules, .evaluatedRules(let plan, let report)):
+        case (.evaluatingRules, .evaluatedRules(let plan, let run)):
             let result = LintRunResult(
                 rules: plan.rules,
                 scannedFileCount: plan.files.count,
-                report: report
+                report: run.report,
+                telemetry: run.telemetry
             )
             return LintRunTransition(state: .reporting(result), effect: nil)
 
@@ -152,7 +157,7 @@ enum LintRunEvent: Equatable, Sendable {
     case start(ArchitectureConfiguration)
     case preparedRules(LintPreparedRules)
     case scannedSources(preparedRules: LintPreparedRules, files: [SourceInput])
-    case evaluatedRules(plan: LintEvaluationPlan, report: RuleReport)
+    case evaluatedRules(plan: LintEvaluationPlan, run: EvaluationRun)
     case failed(LintRunFailure)
 }
 

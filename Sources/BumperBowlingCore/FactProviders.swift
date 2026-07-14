@@ -87,6 +87,7 @@ final class FactStore: @unchecked Sendable {
     private let lock = NSRecursiveLock()
     private var cache: [FactProviderID: Result<any Sendable, Error>] = [:]
     private var derivationPath: [FactProviderID] = []
+    private var derivationMeasurements: [EvaluationTelemetry.Measurement] = []
 
     func facts<Provider: FactProvider>(
         _ provider: Provider,
@@ -109,9 +110,20 @@ final class FactStore: @unchecked Sendable {
         defer { derivationPath.removeLast() }
 
         let context = FactDerivationContext(repository: repository, configuration: configuration, store: self)
+        let clock = ContinuousClock()
+        let start = clock.now
         let result = Result<any Sendable, Error> { try provider.derive(in: context) }
+        derivationMeasurements.append(
+            EvaluationTelemetry.Measurement(id: id.rawValue, seconds: (clock.now - start).secondsValue)
+        )
         cache[id] = result
         return try typedFacts(from: result.get(), id: id)
+    }
+
+    func measurements() -> [EvaluationTelemetry.Measurement] {
+        lock.lock()
+        defer { lock.unlock() }
+        return derivationMeasurements
     }
 
     private func typedFacts<Facts>(from value: any Sendable, id: FactProviderID) throws -> Facts {

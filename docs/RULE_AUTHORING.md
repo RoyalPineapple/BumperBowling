@@ -284,6 +284,27 @@ func flagsForeignDeclarations() throws {
 or your project's `ComponentKey` enum. The harness is framework-neutral — it
 works under Swift Testing and XCTest alike.
 
+## Profiling Rules
+
+Every evaluation measures itself. `bumper lint --timings` prints the host
+phases (prepare, scan, evaluate) plus the slowest rules and fact providers to
+stderr, so a slow project rule is attributable by ID. Programmatically, the
+same numbers come from `evaluationRun`:
+
+```swift
+let run = try ruleSet.evaluationRun(configuration: configuration, repository: repository)
+run.telemetry.ruleSeconds.first  // the slowest rule, by ID
+run.telemetry.factSeconds        // per-provider derivation cost, slowest first
+```
+
+Fact durations are inclusive: a provider that derives other facts is charged
+for its dependencies. Providers derive at most once per run, so a fact
+appearing here cost exactly what it shows.
+
+Evaluation runs under a bounded budget (60 seconds by default). Raise it for
+legitimately large repositories with `BUMPER_EVALUATION_TIMEOUT_SECONDS`;
+profile with `--timings` before reaching for a bigger budget.
+
 ## Built-In DSL Primitives
 
 Bumper Bowling includes a small set of reusable requirement values. Treat these

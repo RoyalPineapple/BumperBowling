@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.5.2 - 2026-07-14
+
+Large valid projects no longer time out during rule evaluation
+([#41](https://github.com/RoyalPineapple/BumperBowling/issues/41)).
+
+### Fixed
+
+- Source-file fact derivation was accidentally quadratic: every syntax node
+  re-rendered its whole subtree to produce its spelling
+  (`trimmedDescription`), and the per-file syntax catalog copied its full
+  `Set` for each node it added. Spellings are now sliced directly from the
+  original source bytes and the catalog is built with in-place insertion.
+  Evaluation of a representative 300-file repository drops from over 60
+  seconds (timeout) to seconds.
+
+### Changed
+
+- The cached `BumperProjectRunner` builds in release configuration and is
+  resolved from the matching release path. The runner is a cached artifact,
+  so the one-time optimized build cost is paid once per configuration
+  change. Cache identity records the build configuration; existing caches
+  rebuild once.
+- The runner build budget rose from 300 to 600 seconds to cover optimized
+  cold builds on slow CI hosts. The evaluation default stays 60 seconds.
+- `ConfigurationLoader.evaluateRules(root:input:)` is now
+  `evaluateRun(root:input:)` and returns `EvaluationRun` (the canonical
+  `RuleReport` plus its telemetry). `RuleReport` itself is unchanged.
+
+### Added
+
+- `BUMPER_EVALUATION_TIMEOUT_SECONDS`: a documented override for the
+  evaluation budget, validated at the process boundary. It accepts positive,
+  finite seconds; zero, negative, non-numeric, NaN, or infinite values fail
+  with `BumperError.invalidEvaluationTimeout`. Evaluation is always bounded.
+- `BUMPER_RUNNER_BUILD_CONFIGURATION`: a documented override for the runner
+  build configuration on hosts where cold optimized builds are too
+  expensive (small CI runners). Only `release` and `debug` are accepted;
+  anything else fails with `BumperError.invalidRunnerBuildConfiguration`.
+  Cache identity records the configuration.
+- Evaluation telemetry for rule authors: `RuleSet.evaluationRun(...)`,
+  `BumperProject.evaluationRun(_:)`, and `EvaluationTelemetry` report
+  per-rule and per-fact-provider durations. `bumper lint --timings` prints
+  host phase timings (prepare, scan, evaluate) and the slowest rules and
+  facts to stderr.
+
 ## 0.5.1 - 2026-07-14
 
 Closes the remaining letter-of-spec gaps from the open shaper architecture

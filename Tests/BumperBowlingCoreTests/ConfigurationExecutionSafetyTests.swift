@@ -154,6 +154,61 @@ struct ConfigurationExecutionSafetyTests {
         #expect(configuration.components.map(\.name) == ["core"])
     }
 
+    /// The override must reach the runner's process budget, and the budget
+    /// must still terminate a stuck evaluator instead of waiting forever.
+    @Test
+    func evaluationTimeoutOverrideBoundsStuckEvaluator() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let originalTimeout = ProcessInfo.processInfo.environment["BUMPER_EVALUATION_TIMEOUT_SECONDS"]
+        defer {
+            restoreEnvironmentValue(named: "BUMPER_EVALUATION_TIMEOUT_SECONDS", to: originalTimeout)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        let source = """
+        import BumperBowlingCore
+        import Foundation
+
+        let bumper = BumperProject {
+            Architecture {
+                Component(.core) {
+                    Owns("Sources/Core")
+                }
+            }
+
+            Rules {
+                Rules.repository("stuck.rule") { _ in
+                    Thread.sleep(forTimeInterval: 300)
+                    return []
+                }
+            }
+        }
+        """
+        try source.write(
+            to: root.appendingPathComponent(ConfigurationLoader.fileName),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let configuration = try ConfigurationLoader.loadConfiguration(root: root)
+        setenv("BUMPER_EVALUATION_TIMEOUT_SECONDS", "2", 1)
+
+        do {
+            _ = try ConfigurationLoader.evaluateRun(
+                root: root,
+                input: RepositoryInput(architecture: configuration, files: [])
+            )
+            Issue.record("a stuck evaluator must be terminated by the configured budget")
+        } catch let error as BumperError {
+            guard case .configurationExecutionTimedOut(_, let seconds) = error else {
+                throw error
+            }
+            #expect(seconds == 2)
+        }
+    }
+
     @Test
     func configurationRunnerCacheDirectoryCanBeCustomized() {
         let temp = URL(fileURLWithPath: NSTemporaryDirectory())

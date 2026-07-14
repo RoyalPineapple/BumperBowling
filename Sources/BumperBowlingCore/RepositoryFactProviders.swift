@@ -13,7 +13,7 @@ public struct SourceFileFactsProvider: FactProvider {
 
     public func derive(in context: FactDerivationContext) throws -> [SourceFileFacts] {
         context.repository.files.map { file in
-            let visitor = SourceVisitor(locationConverter: file.locationConverter)
+            let visitor = SourceVisitor(source: file.source, locationConverter: file.locationConverter)
             visitor.walk(file.syntax)
             return SourceFileFacts(
                 path: file.path,

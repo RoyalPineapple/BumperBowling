@@ -68,11 +68,17 @@ public struct BumperProject: Sendable {
     }
 
     /// Evaluates built-in and project rules over one bounded repository
-    /// input, parsing each file exactly once. The runner's `evaluate` mode
-    /// calls this; tests can call it directly.
+    /// input, parsing each file exactly once. Tests can call it directly.
     public func evaluate(_ input: RepositoryInput) throws -> RuleReport {
+        try evaluationRun(input).report
+    }
+
+    /// The same evaluation, keeping its telemetry. The runner's `evaluate`
+    /// mode emits this value so `bumper lint --timings` can attribute time
+    /// to individual rules and fact providers.
+    public func evaluationRun(_ input: RepositoryInput) throws -> EvaluationRun {
         let ruleSet = RuleSet(rules: BuiltInRules.rules(from: input.architecture.rules) + rules.rules)
-        return try ruleSet.evaluate(
+        return try ruleSet.evaluationRun(
             configuration: input.architecture,
             repository: RepositorySyntax(input: input)
         )
