@@ -56,12 +56,12 @@ jobs:
       - name: Run Swift package tests
         run: swift test
         env:
-          # Fixture runners build per-test on constrained CI hosts; the
-          # optimized default is exercised by the policy tests and the CLI
-          # self-lint step below.
+          # Configuration runners are disposable CI tools. Keep their cold
+          # compile out of the optimized path on constrained hosts.
           BUMPER_RUNNER_BUILD_CONFIGURATION: debug
 
       - name: Run Bumper CLI lint
         run: swift run bumper lint .
         env:
           BUMPER_CACHE_DIR: ${{ github.workspace }}/.bumper-ci-cache
+          BUMPER_RUNNER_BUILD_CONFIGURATION: debug
