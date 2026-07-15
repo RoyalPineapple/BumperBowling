@@ -20,7 +20,7 @@ directly from this repository, pinned to a release tag:
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/RoyalPineapple/BumperBowling.git", from: "0.5.2")
+    .package(url: "https://github.com/RoyalPineapple/BumperBowling.git", from: "0.6.0")
 ]
 ```
 

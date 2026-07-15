@@ -5,14 +5,35 @@ public struct ArchitectureSnapshot: Equatable, Sendable {
     public let rules: ArchitectureRules
 
     public init(
-        commands: [String] = ["init", "lint", "scan", "snapshot", "explain"],
+        commands: [String] = [
+            "init",
+            "lint",
+            "test",
+            "scan",
+            "baseline",
+            "snapshot",
+            "config",
+            "explain",
+        ],
         configuration: ArchitectureConfiguration
     ) throws {
         self.commands = commands
         self.rules = try ArchitectureRules(configuration: configuration)
     }
 
-    public init(commands: [String] = ["init", "lint", "scan", "snapshot", "explain"], rules: ArchitectureRules) {
+    public init(
+        commands: [String] = [
+            "init",
+            "lint",
+            "test",
+            "scan",
+            "baseline",
+            "snapshot",
+            "config",
+            "explain",
+        ],
+        rules: ArchitectureRules
+    ) {
         self.commands = commands
         self.rules = rules
     }
