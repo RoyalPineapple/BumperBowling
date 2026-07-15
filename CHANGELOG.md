@@ -2,11 +2,17 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-07-15
+
 ### Breaking
 
 - `Rules.repository`, `Rules.files`, and `Rules.visitor` now require an
   explicit `summary:`. Project-defined rules can no longer compile with a
   generic runtime explanation.
+- `CallGraphFunction.parameterTypeNames` and its matching initializer argument
+  were replaced by `parameters: [CallGraphParameterEvidence]` and the required
+  `casePatterns: [CasePatternEvidence]`, preserving the subject evidence needed
+  for honest traversal checks.
 
 ### Changed
 
@@ -16,6 +22,26 @@
 - SwiftLint now has a zero-warning strict baseline. Its checked-in contract
   excludes punctuation and size metrics, retains correctness/API hygiene
   rules, and CI promotes every enabled warning to a failure.
+- Configuration and consumer-test caches now validate their generated files
+  byte-for-byte and rebuild missing or stale executables. Source-mode consumer
+  tests use stable fixture roots and an interprocess lock, so SwiftPM can reuse
+  compiled work without concurrent runs replacing each other's test target.
+- `Rules.canonicalTraversal` now accepts structural case evidence only when the
+  case subject is an exact root-typed parameter or `self`. Unrelated enum case
+  patterns no longer make a recursive function look like a root traversal.
+
+### Added
+
+- `bumper test`, which runs repository-owned rule tests through ordinary
+  SwiftPM discovery. Source-mode repositories can place tests under
+  `.bumper/Tests`; package-mode repositories retain their own test-target paths
+  and `@testable` visibility.
+- Generic syntax evidence for consumer rules: `SyntaxScope`, `LexicalContext`,
+  `TypeShape`, qualified type references, outer function attributes, and
+  subject-aware case-pattern evidence.
+- `Rules.importOwnership` and `Rules.memberReferenceOwnership`, reusable
+  shapers for expressing component ownership without embedding a consumer's
+  architecture in Bumper Bowling.
 
 ## 0.5.2 - 2026-07-14
 

@@ -8,8 +8,11 @@ Bumper Bowling asserts architecture over SwiftSyntax-observed source facts, conf
 
 - `bumper init`
 - `bumper lint`
+- `bumper test`
 - `bumper scan`
+- `bumper baseline`
 - `bumper snapshot`
+- `bumper config`
 - `bumper explain`
 
 ## Pipeline
