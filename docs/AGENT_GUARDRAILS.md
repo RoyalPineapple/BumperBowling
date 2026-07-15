@@ -6,7 +6,7 @@
 - Keep changes scoped to the component named by the task.
 - Update `BumperBowling.swift` only when the architectural contract intentionally changes.
 - Update `docs/ARCHITECTURE_SNAPSHOT.md` when command flow, core pipeline types, or rule IDs change.
-- Run `swift test` before reporting implementation work complete.
+- Run `BUMPER_RUNNER_BUILD_CONFIGURATION=debug swift test` before reporting implementation work complete; dedicated policy tests lock the production `release` default.
 - Run `swift run bumper lint .` before shipping changes that affect config loading, scanning, or linting.
 - Run `swiftlint lint` when SwiftLint is available.
 - Make sure Bumper Bowling's self-lint product test still passes after architectural model or rule changes.

@@ -114,7 +114,10 @@ struct DownstreamExtensibilityTests {
 
     @Test
     func harnessReturnsCanonicalReportForConsumption() throws {
-        let rule = Rules.repository("project.no_uikit") { context in
+        let rule = Rules.repository(
+            "project.no_uikit",
+            summary: "UIKit imports are forbidden in the downstream fixture."
+        ) { context in
             try context.facts(BuiltInFacts.imports).occurrences
                 .filter { $0.module.rawValue == "UIKit" }
                 .map { occurrence in
@@ -137,8 +140,14 @@ struct DownstreamExtensibilityTests {
 
 private func projectRules() -> [any RuleDefinition] {
     RuleSet {
-        Rules.repository("project.first") { _ in [] }
-        Rules.repository("project.second") { _ in [] }
+        Rules.repository(
+            "project.first",
+            summary: "First downstream rule used to verify grouped rule composition."
+        ) { _ in [] }
+        Rules.repository(
+            "project.second",
+            summary: "Second downstream rule used to verify grouped rule composition."
+        ) { _ in [] }
     }.rules
 }
 

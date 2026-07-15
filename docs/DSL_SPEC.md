@@ -131,7 +131,11 @@ Fact-based project rules evaluate memoized typed facts:
 import BumperBowlingCore
 
 let projectRules = RuleSet {
-    Rules.repository("the_score.import_allow_list", severity: .error) { context in
+    Rules.repository(
+        "the_score.import_allow_list",
+        severity: .error,
+        summary: "TheScore imports only its value-layer dependencies."
+    ) { context in
         let allowedImports = Set(["Foundation"])
         return try context.facts(BuiltInFacts.imports).occurrences
             .filter { !allowedImports.contains($0.module.rawValue) }
@@ -162,7 +166,11 @@ import BumperBowlingCore
 import SwiftSyntax
 
 let projectRules = RuleSet {
-    Rules.files("core.no_tuple_api", severity: .error) { file in
+    Rules.files(
+        "core.no_tuple_api",
+        severity: .error,
+        summary: "Public core APIs use named result types."
+    ) { file in
         let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
 

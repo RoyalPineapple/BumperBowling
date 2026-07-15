@@ -10,8 +10,14 @@ struct RuleEngineTests {
     func ruleSetBuilderAcceptsEveryRuleForm() throws {
         let includeOptional = true
         let ruleSet = RuleSet {
-            Rules.repository("closure.repository") { _ in [] }
-            Rules.files("closure.syntax") { _ in [] }
+            Rules.repository(
+                "closure.repository",
+                summary: "Exercises repository closure rule construction."
+            ) { _ in [] }
+            Rules.files(
+                "closure.syntax",
+                summary: "Exercises per-file closure rule construction."
+            ) { _ in [] }
             SyntaxRule(
                 metadata: RuleMetadata(id: "typed.syntax", severity: .error, summary: "typed")
             ) { _ in [] }
@@ -20,13 +26,17 @@ struct RuleEngineTests {
                 id: "query.rule",
                 summary: "no calls"
             ) { _ in "call" }
-            VisitorRule(
-                metadata: RuleMetadata(id: "visitor.rule", severity: .error, summary: "visitor")
+            Rules.visitor(
+                "visitor.rule",
+                summary: "Exercises visitor-backed rule construction."
             ) { file in
                 RecordingVisitor(file: file)
             }
             if includeOptional {
-                Rules.repository("conditional.rule") { _ in [] }
+                Rules.repository(
+                    "conditional.rule",
+                    summary: "Exercises conditional rule-builder composition."
+                ) { _ in [] }
             }
             projectRuleGroup()
         }
@@ -127,7 +137,10 @@ struct RuleEngineTests {
         ]
         let rules = RuleSet {
             for (index, failure) in failures.enumerated() {
-                Rules.repository(failure.2 + "_\(index)") { _ in
+                Rules.repository(
+                    failure.2 + "_\(index)",
+                    summary: "Emits a positioned failure to verify deterministic report ordering."
+                ) { _ in
                     [
                         RuleFailure(
                             path: RuleEngineTests.path(failure.0),
@@ -154,8 +167,14 @@ struct RuleEngineTests {
     @Test
     func duplicateRuleIDsAreConfigurationErrors() throws {
         let rules = RuleSet {
-            Rules.repository("dup.rule") { _ in [] }
-            Rules.repository("dup.rule") { _ in [] }
+            Rules.repository(
+                "dup.rule",
+                summary: "First declaration used to verify duplicate rule IDs are rejected."
+            ) { _ in [] }
+            Rules.repository(
+                "dup.rule",
+                summary: "Second declaration used to verify duplicate rule IDs are rejected."
+            ) { _ in [] }
         }
 
         #expect(throws: RuleEvaluationError.duplicateRuleID(RuleID("dup.rule"))) {
@@ -171,7 +190,10 @@ struct RuleEngineTests {
     func analysisFailuresAreExplicitErrors() throws {
         struct Underlying: Error {}
         let rules = RuleSet {
-            Rules.files("fine.rule") { _ in [] }
+            Rules.files(
+                "fine.rule",
+                summary: "Provides a successful file rule before a failing evaluator."
+            ) { _ in [] }
             SyntaxRule(
                 metadata: RuleMetadata(id: "broken.rule", severity: .error, summary: "broken")
             ) { _ in
@@ -245,7 +267,10 @@ struct RuleEngineTests {
     @Test
     func factProvidersMemoizeAndSupportDependencies() throws {
         CountingProvider.derivations.reset()
-        let rule = Rules.repository("facts.rule") { _ in [] }
+        let rule = Rules.repository(
+            "facts.rule",
+            summary: "Exercises rule construction alongside fact-provider memoization."
+        ) { _ in [] }
         let context = try makeContext(
             source: "struct Counted {}",
             path: "Sources/Core/Counted.swift"
@@ -304,8 +329,14 @@ private enum EngineTestComponent: String, ComponentKey {
 
 private func projectRuleGroup() -> [any RuleDefinition] {
     RuleSet {
-        Rules.repository("grouped.one") { _ in [] }
-        Rules.repository("grouped.two") { _ in [] }
+        Rules.repository(
+            "grouped.one",
+            summary: "First rule in a reusable rule group."
+        ) { _ in [] }
+        Rules.repository(
+            "grouped.two",
+            summary: "Second rule in a reusable rule group."
+        ) { _ in [] }
     }.rules
 }
 

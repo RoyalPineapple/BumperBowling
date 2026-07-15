@@ -22,8 +22,14 @@ struct EvaluationTelemetryTests {
     @Test
     func evaluationRunMeasuresEveryRule() throws {
         let rules = RuleSet {
-            Rules.repository("telemetry.first") { _ in [] }
-            Rules.repository("telemetry.second") { _ in [] }
+            Rules.repository(
+                "telemetry.first",
+                summary: "First no-op rule used to verify per-rule timing."
+            ) { _ in [] }
+            Rules.repository(
+                "telemetry.second",
+                summary: "Second no-op rule used to verify per-rule timing."
+            ) { _ in [] }
         }
 
         let run = try rules.evaluationRun(
@@ -40,11 +46,17 @@ struct EvaluationTelemetryTests {
     @Test
     func factDerivationsAreMeasuredOncePerRun() throws {
         let rules = RuleSet {
-            Rules.repository("telemetry.facts.one") { context in
+            Rules.repository(
+                "telemetry.facts.one",
+                summary: "First rule reading declarations to verify shared fact timing."
+            ) { context in
                 _ = try context.facts(BuiltInFacts.declarations)
                 return []
             }
-            Rules.repository("telemetry.facts.two") { context in
+            Rules.repository(
+                "telemetry.facts.two",
+                summary: "Second rule reading declarations to verify shared fact timing."
+            ) { context in
                 _ = try context.facts(BuiltInFacts.declarations)
                 return []
             }
@@ -79,7 +91,10 @@ struct EvaluationTelemetryTests {
     @Test
     func evaluationRunRoundTripsThroughJSON() throws {
         let rules = RuleSet {
-            Rules.repository("telemetry.codable") { context in
+            Rules.repository(
+                "telemetry.codable",
+                summary: "Derives declarations so encoded telemetry includes fact timing."
+            ) { context in
                 _ = try context.facts(BuiltInFacts.declarations)
                 return []
             }
@@ -105,7 +120,10 @@ struct EvaluationTelemetryTests {
             }
 
             Rules {
-                Rules.repository("telemetry.project") { _ in [] }
+                Rules.repository(
+                    "telemetry.project",
+                    summary: "No-op project rule used to compare evaluation entry points."
+                ) { _ in [] }
             }
         }
         let input = RepositoryInput(

@@ -1,106 +1,178 @@
-# Bumper Vocabulary
+# Bumper Bowling 0.5.2 Vocabulary
 
-## Terms
+## Contents
 
-- `ComponentRequirement`: a reusable set of source-fact rules.
-- `ComponentShape`: a reusable bundle of component DSL elements.
-- `AssertionShape`: a reusable bundle of repo-level rule configuration.
-- `RuleConfiguration`: the evaluated/scoped policy Bumper Bowling runs.
-- `Scope`: paths, components, or exclusions where a rule applies.
+- [Core Types](#core-types)
+- [Architecture DSL](#architecture-dsl)
+- [Standard Rules Shapers](#standard-rules-shapers)
+- [Typed Facts](#typed-facts)
+- [Typed Queries And Per-File Rules](#typed-queries-and-per-file-rules)
+- [Raw Visitor Escape Hatch](#raw-visitor-escape-hatch)
 
-## Core Pattern
+## Core Types
+
+- `RuleDefinition`: metadata, scope, and `evaluate(in:)`.
+- `RuleContext`: immutable configuration, parse-once repository syntax, and
+  memoized facts.
+- `RuleFailure`: one project-rule finding; the engine attaches metadata to
+  produce a `RuleViolation` in a `RuleReport`.
+- `RuleSet`: ordered `RuleDefinition` values.
+- `FactProvider`: typed, memoized repository derivation.
+- `RuleScope`: `.repository`, `.under(path)`, `.component(id)`,
+  `.files(paths)`, or a predicate.
+- `ComponentShape` / `AssertionShape`: reusable Architecture DSL policy.
+
+## Architecture DSL
 
 ```swift
 import BumperBowlingCore
 
-extension ComponentRequirement {
-    static let domainCore = ComponentRequirement(
-        .explicitDomainSurfaces,
-        .typedIdentity,
-        .immutableStoredState
-    )
+enum AppComponent: String, ComponentKey {
+    case core
 }
 
-extension ComponentShape {
-    static let domain = ComponentShape {
-        MayUse(.foundation)
-        DoesNotUse(.uiKit, .swiftUI)
-        Requires(.domainCore, severity: .error)
-        DoesNot(
-            ContainSyntaxNode(
-                SyntaxNodeMatcher(
-                    kind: .attribute,
-                    spelling: .exact("available")
-                )
-            ),
-            severity: .warning
-        )
-    }
-}
-
-extension AssertionShape {
-    static let global = AssertionShape {
-        DependencyBoundaries(.error)
-        SingleOwner(.error)
-        AcyclicDeclaredDependencies(.error)
-    }
-}
-```
-
-Then apply it:
-
-```swift
 let bumper = BumperProject {
-    Architecture {
+    Architecture(AppComponent.self) {
         Component(.core) {
             Owns("Sources/Core")
-            Applies(.domain)
+            Modules("Core")
+            MayUse(.foundation)
+            Requires(.immutableStoredState, severity: .error)
         }
     }
 
     Rules {
-        ApplyAssertions(.global)
+        DependencyBoundaries(.error)
+        Rules.singleDeclaration("AppModel", owner: "Sources/Core")
     }
 }
 ```
 
-## Syntax Node Predicates
+## Standard `Rules` Shapers
 
-Use `ContainSyntax(_:)` when only SwiftSyntax kind membership matters:
+Prefer these before writing a closure rule. Each accepts optional `id:` and
+`severity:` arguments.
+
+| Shaper | Purpose |
+| --- | --- |
+| `Rules.singleDeclaration(_:owner:)` | One declaration under its owner path. |
+| `Rules.constructionOwnership(_:allowed:)` | Construction only in the allowed scope. |
+| `Rules.canonicalConstruction(_:owners:)` | Canonical-value construction ownership. |
+| `Rules.boundaryOnly(function:allowed:)` | Function calls only in a boundary scope. |
+| `Rules.noAlternateAliases(_:allowing:)` | No aliases outside the allowing scope. |
+| `Rules.canonicalTraversal(root:structuralCase:owners:)` | Recursive traversal stays with its owners. |
+| `Rules.singleNominalSpelling(suffix:owner:)` | Suffixed nominal declarations stay under one owner. |
+
+Symbols and paths are typed values with string-literal authoring:
 
 ```swift
-DoesNot(ContainSyntax(.forceUnwrapExpr), severity: .error)
-```
-
-Use `ContainSyntaxNode(_:)` when the repo needs policy Bumper Bowling does not
-name as a built-in requirement:
-
-```swift
-DoesNot(
-    ContainSyntaxNode(
-        SyntaxNodeMatcher(
-            kind: .attribute,
-            spelling: .exact("available")
-        )
-    ),
-    severity: .warning
+Rules.canonicalTraversal(
+    root: "AccessibilityHierarchy",
+    structuralCase: "container",
+    owners: .under("Sources/Traversal")
 )
 ```
 
-`SyntaxNodeMatcher` composes with SwiftSyntax instead of duplicating it:
+## Typed Facts
 
-- `kind`: `SyntaxKind`, such as `.attribute` or `.structDecl`
-- `spelling`: `StringMatcher`, such as `.exact("available")`
-- `parentKind`: immediate parent `SyntaxKind`
-- `ancestorKind`: any recorded ancestor `SyntaxKind`
+Use `Rules.repository(_:severity:summary:_:)`. Request facts with
+`context.facts(_:)`; providers derive at most once per evaluation.
 
-Do not use or invent `family`, `nodeKind`, `SyntaxFact`, or JSON rule schemas.
+```swift
+Rules.repository(
+    "project.no_uikit",
+    severity: .error,
+    summary: "UIKit imports stay at the application boundary."
+) { context in
+    try context.facts(BuiltInFacts.imports).occurrences
+        .filter { $0.module.rawValue == "UIKit" }
+        .map {
+            RuleFailure(path: $0.path, message: "UIKit is not allowed here.")
+        }
+}
+```
 
-## Guardrails
+Current `BuiltInFacts` providers:
 
-- Do not promise facts SwiftSyntax cannot observe.
-- Do not auto-apply rules from a package. Importing only makes values available.
-- Do not make consumer vocabulary sound canonical for every repo.
-- Prefer one clear shape over many tiny speculative shapes.
-- Prefer generic syntax node predicates over upstreaming repo-specific named
-  rules.
+- `sourceFiles`, `imports`, `declarations`, `nominalTypes`, `extensions`
+- `storedProperties`, `syntaxNodes`, `functionCalls`, `directRecursion`
+- `recursiveCallGroups`, `effectiveAccess`, `enclosingDeclarations`
+- `memberReferences`, `componentDependencies`
+
+Define a provider only when no built-in provider or composition supplies the
+fact:
+
+```swift
+struct DeclarationsPerFile: FactProvider {
+    let id: FactProviderID = "project.declarations_per_file"
+
+    func derive(in context: FactDerivationContext) throws
+        -> [RelativeFilePath: Int] {
+        let occurrences = try context.facts(BuiltInFacts.declarations).occurrences
+        return Dictionary(grouping: occurrences, by: \.path).mapValues(\.count)
+    }
+}
+```
+
+## Typed Queries And Per-File Rules
+
+`Rules.files(_:severity:summary:_:)` evaluates each selected parsed file. Query roots
+are `functions()`, `initializers()`, `variables()`, `typeAliases()`,
+`nominalDeclarations()`, and `functionCalls()`.
+
+```swift
+Rules.files(
+    "project.no_target_alias",
+    summary: "AccessibilityTarget has one spelling."
+) { file in
+    typeAliases()
+        .aliasing(NominalSymbol("AccessibilityTarget"))
+        .matches(in: file)
+        .map { match in
+            match.failure(message: "AccessibilityTarget must not be aliased.")
+        }
+}
+```
+
+Use query operations such as `taking(_:)`, `callingSelf()`, `aliasing(_:)`, and
+`excluding(_:)` to retain the concrete SwiftSyntax node type.
+
+## Raw Visitor Escape Hatch
+
+Use `Rules.visitor(...)` when the visitor owns arbitrary analysis and failure
+collection. The visitor must conform to `RuleFailureSource`.
+
+```swift
+import SwiftSyntax
+
+let noForceUnwrap = Rules.visitor(
+    "project.no_force_unwrap",
+    severity: .error,
+    scope: .under("Sources"),
+    summary: "Production code handles optional absence explicitly."
+) { file in
+    ForceUnwrapVisitor(file: file)
+}
+
+final class ForceUnwrapVisitor: SyntaxVisitor, RuleFailureSource {
+    private let file: SourceFileContext
+    private(set) var failures: [RuleFailure] = []
+
+    init(file: SourceFileContext) {
+        self.file = file
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    override func visit(
+        _ node: ForceUnwrapExprSyntax
+    ) -> SyntaxVisitorContinueKind {
+        failures.append(
+            file.failure(at: node, message: "Force unwrap is not allowed.")
+        )
+        return .visitChildren
+    }
+}
+```
+
+`VisitorRule` is the concrete rule type returned by this factory. Raw visitors
+remain supported; the escalation gate controls when to use them.
