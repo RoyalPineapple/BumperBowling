@@ -2,15 +2,32 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling is a Swift architecture linter.
+Bumper Bowling turns Swift architecture into tests.
 
-[SwiftLint](https://github.com/realm/swiftlint) owns local style; Bumper
-Bowling owns repo shape: which components exist, what paths they own, who may
-depend on whom, and what each component must prove.
+The compiler checks whether code is valid. Tests check how it behaves. Bumper
+Bowling checks whether your repository still follows its own architecture.
 
-Declare your intended structure in familiar Swift. Bumper Bowling parses your
-source with SwiftSyntax, turns what it sees into a graph of facts, and checks
-that graph against your intent.
+Define repository-specific rules in Swift, prove them with focused fixtures,
+and enforce them in CI. Bumper Bowling parses source with SwiftSyntax and gives
+your rules typed evidence about imports, scopes, types, declarations,
+references, and ownership.
+
+Your rules stay in your repository. Bumper Bowling supplies the engine, not
+the policy.
+
+| Tool | What it protects |
+|------|------------------|
+| Swift compiler | Language, type, and concurrency correctness |
+| [SwiftLint](https://github.com/realm/swiftlint) | Shared style and local source conventions |
+| Runtime tests | Application behavior |
+| Bumper Bowling | Repository-specific architectural source invariants |
+
+Use Bumper Bowling to express rules such as:
+
+- Only designated components may import a framework.
+- Dependencies must follow the declared component graph.
+- Unsafe concurrency escape hatches must remain inside named boundaries.
+- Stored callbacks must declare their isolation.
 
 ## Quick Start
 
@@ -32,10 +49,12 @@ The package exposes:
 ```bash
 swift run bumper init .
 swift run bumper lint .
+swift run bumper test .
 ```
 
-`bumper init` writes a starter `BumperBowling.swift`. `bumper lint` loads it,
-scans the repo, and exits nonzero for `error` findings.
+`bumper init` writes a starter `BumperBowling.swift`. `bumper lint` checks the
+repository against it. `bumper test` runs the repository-owned tests for your
+rules.
 
 For CI rollouts, Bumper Bowling can emit JSON, run advisory, and compare against
 a checked-in baseline:
@@ -45,6 +64,13 @@ swift run bumper lint . --format json --fail-on none
 swift run bumper baseline create . --output .bumper-baseline.json
 swift run bumper lint . --baseline .bumper-baseline.json --fail-on error
 ```
+
+## Bumper Bowling Checks Itself
+
+This repository defines its own component boundaries and project rules with
+Bumper Bowling. CI runs `swift run bumper lint .` alongside the package tests,
+so the repository uses the same public engine and rule APIs it ships to
+consumers.
 
 ## Configuration
 
