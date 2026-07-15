@@ -1,7 +1,5 @@
 import SwiftSyntax
 
-import SwiftSyntax
-
 public struct BumperSyntaxView<Node: SyntaxProtocol>: Sendable {
     public let node: Node
 

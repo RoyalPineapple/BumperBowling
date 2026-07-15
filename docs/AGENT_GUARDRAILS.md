@@ -8,7 +8,7 @@
 - Update `docs/ARCHITECTURE_SNAPSHOT.md` when command flow, core pipeline types, or rule IDs change.
 - Run `BUMPER_RUNNER_BUILD_CONFIGURATION=debug swift test` before reporting implementation work complete; dedicated policy tests lock the production `release` default.
 - Run `swift run bumper lint .` before shipping changes that affect config loading, scanning, or linting.
-- Run `swiftlint lint` when SwiftLint is available.
+- Run `swiftlint lint --strict` when SwiftLint is available.
 - Make sure Bumper Bowling's self-lint product test still passes after architectural model or rule changes.
 - Do not make `BumperBowlingCore` depend on the CLI target.
 - Keep `BumperBowling` dumb. It is a shipped interface over the core engine, not a separate engine.

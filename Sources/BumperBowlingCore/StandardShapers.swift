@@ -148,9 +148,9 @@ extension Rules {
         }
     }
 
-    /// No typealias re-exposes `symbol` outside the allowing scope.
     // ponytail: inspects aliases only; duplicate nominal currencies and
     // wrapper declarations can extend this rule without changing its contract.
+    /// No typealias re-exposes `symbol` outside the allowing scope.
     public static func noAlternateAliases(
         _ symbol: NominalSymbol,
         allowing: RuleScope = RuleScope { _ in false },

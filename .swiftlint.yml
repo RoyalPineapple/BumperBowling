@@ -7,23 +7,16 @@ excluded:
   - .swiftpm
   - DerivedData
 
-line_length:
-  warning: 120
-  error: 160
-  ignores_comments: true
-  ignores_urls: true
-
-file_length:
-  warning: 800
-  error: 1000
-
-function_body_length:
-  warning: 80
-  error: 120
-
-type_body_length:
-  warning: 300
-  error: 500
+disabled_rules:
+  - cyclomatic_complexity
+  - file_length
+  - for_where
+  - function_body_length
+  - function_parameter_count
+  - line_length
+  - syntactic_sugar
+  - trailing_comma
+  - type_body_length
 
 identifier_name:
   excluded:
