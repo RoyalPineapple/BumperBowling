@@ -321,6 +321,7 @@ Disallows(.assignment, .loop, .mutableBinding)
 ```bash
 bumper init [root]
 bumper lint [root]
+bumper test [root]
 bumper scan [root]
 bumper snapshot [root]
 bumper config [root]

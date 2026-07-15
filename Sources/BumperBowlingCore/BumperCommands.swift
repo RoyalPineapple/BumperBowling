@@ -56,6 +56,12 @@ public enum BumperCommands {
         try await lintRun(root: root, configuration: configuration).report
     }
 
+    /// Runs the repository-owned rule tests under `.bumper/Tests` and returns
+    /// the underlying SwiftPM exit status.
+    public static func test(root: URL) throws -> Int32 {
+        try ConfigurationLoader.runConsumerTests(root: root)
+    }
+
     public static func lintRun(
         root: URL,
         progress: BumperProgressReporter = .disabled

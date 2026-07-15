@@ -143,43 +143,183 @@ extension ConfigurationLoader {
             buildConfiguration: buildConfiguration,
             manifest: manifest,
             consumerSourcesHash: consumerSourcesHash,
-            rulePackagesHash: rulePackagesHash
+            rulePackagesHash: rulePackagesHash,
+            cacheRoot: configurationCacheRoot(environment: environment)
         )
         let sources = root.appendingPathComponent("Sources/\(projectRunnerProductName)")
+        let consumerTests = root.appendingPathComponent("Tests/\(consumerTestTargetName)")
+        let executableURL = cachedRunnerExecutableURL(
+            in: root,
+            productName: projectRunnerProductName,
+            buildConfiguration: buildConfiguration
+        )
 
-        if cachedPackageIsCurrent(root: root, metadata: metadata) {
+        if cachedPackageIsCurrent(
+            root: root,
+            metadata: metadata,
+            manifest: manifest,
+            configurationData: configurationData,
+            consumerSources: consumerSources
+        ) {
             return CachedPackage(
                 root: root,
-                executableURL: cachedRunnerExecutableURL(
-                    in: root,
-                    productName: projectRunnerProductName,
-                    buildConfiguration: buildConfiguration
-                ),
+                executableURL: executableURL,
                 productName: projectRunnerProductName,
                 buildConfiguration: buildConfiguration,
-                needsBuild: false
+                needsBuild: !cachedExecutableIsCurrent(
+                    executableURL,
+                    metadataURL: root.appendingPathComponent(CachedPackageMetadata.fileName)
+                )
             )
         }
 
+        if FileManager.default.fileExists(atPath: sources.path) {
+            try FileManager.default.removeItem(at: sources)
+        }
         try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: consumerTests, withIntermediateDirectories: true)
         try manifest.write(to: root.appendingPathComponent("Package.swift"), atomically: true, encoding: .utf8)
         try configurationData.write(to: sources.appendingPathComponent("UserConfiguration.swift"), options: .atomic)
         try writeConsumerConfigurationSources(consumerSources, to: sources.appendingPathComponent("ConsumerSources"))
         try runnerSource.write(to: sources.appendingPathComponent("main.swift"), atomically: true, encoding: .utf8)
+        try consumerTestPlaceholder.write(
+            to: consumerTests.appendingPathComponent("Placeholder.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
         try JSONEncoder()
             .encode(metadata)
             .write(to: root.appendingPathComponent(CachedPackageMetadata.fileName), options: .atomic)
 
         return CachedPackage(
             root: root,
-            executableURL: cachedRunnerExecutableURL(
-                in: root,
-                productName: projectRunnerProductName,
-                buildConfiguration: buildConfiguration
-            ),
+            executableURL: executableURL,
             productName: projectRunnerProductName,
             buildConfiguration: buildConfiguration,
             needsBuild: true
+        )
+    }
+
+    static func runConsumerTests(root: URL) throws -> Int32 {
+        try runConsumerTests(
+            root: root,
+            bumperPackageRoot: bumperPackageRoot(),
+            environment: ProcessInfo.processInfo.environment
+        )
+    }
+
+    static func runConsumerTests(
+        root: URL,
+        bumperPackageRoot: URL,
+        environment: [String: String]
+    ) throws -> Int32 {
+        let root = root.standardizedFileURL
+        let configurationURL = root.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: configurationURL.path) else {
+            throw BumperError.configurationMissing(configurationURL.path)
+        }
+
+        let consumerPackageRoot = root.appendingPathComponent(consumerPackageDirectory)
+        if FileManager.default.fileExists(atPath: consumerPackageRoot.appendingPathComponent("Package.swift").path) {
+            return try runSwiftTests(packageRoot: consumerPackageRoot)
+        }
+
+        let testSources = try consumerTestSources(root: root)
+        guard !testSources.isEmpty else {
+            throw BumperError.consumerTestsMissing(
+                root.appendingPathComponent(consumerTestDirectory).path
+            )
+        }
+
+        return try withConsumerTestLock(root: root, environment: environment) {
+            let consumerTests = try makeCachedConsumerTestPackage(
+                root: root,
+                bumperPackageRoot: bumperPackageRoot,
+                environment: environment
+            )
+            return try runSwiftTests(packageRoot: consumerTests.package.root)
+        }
+    }
+
+    static func runSwiftTests(packageRoot: URL) throws -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = consumerTestArguments(packageRoot: packageRoot)
+        process.standardInput = FileHandle.standardInput
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        try process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
+    }
+
+    static func consumerTestArguments(packageRoot: URL) -> [String] {
+        [
+            "swift",
+            "test",
+            "--package-path",
+            packageRoot.path,
+        ]
+    }
+
+    static func makeCachedConsumerTestPackage(
+        root: URL,
+        bumperPackageRoot: URL,
+        environment: [String: String]
+    ) throws -> CachedConsumerTestPackage {
+        let root = root.standardizedFileURL
+        let configurationURL = root.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: configurationURL.path) else {
+            throw BumperError.configurationMissing(configurationURL.path)
+        }
+
+        let testSources = try consumerTestSources(root: root)
+        guard !testSources.isEmpty else {
+            throw BumperError.consumerTestsMissing(
+                root.appendingPathComponent(consumerTestDirectory).path
+            )
+        }
+
+        let rulePackages = try rulePackageDependencies(root: root)
+        let consumerSources = try rulePackages.isEmpty ? consumerConfigurationSources(root: root) : []
+        let configurationData = try Data(contentsOf: configurationURL)
+        let package = try makeCachedPackage(
+            configurationURL: configurationURL,
+            bumperPackageRoot: bumperPackageRoot,
+            environment: environment
+        )
+        let metadata = CachedConsumerTestMetadata(
+            configurationContentHash: sha256Hex(configurationData),
+            consumerSourcesHash: consumerConfigurationSourcesHash(consumerSources),
+            testSourcesHash: consumerConfigurationSourcesHash(testSources)
+        )
+        let targetRoot = package.root.appendingPathComponent("Tests/\(consumerTestTargetName)")
+
+        guard !cachedConsumerTestsAreCurrent(
+            packageRoot: package.root,
+            targetRoot: targetRoot,
+            metadata: metadata,
+            configurationData: configurationData,
+            consumerSources: consumerSources,
+            testSources: testSources
+        ) else {
+            return CachedConsumerTestPackage(
+                package: package,
+                testSourcesChanged: false
+            )
+        }
+
+        try writeCachedConsumerTests(
+            packageRoot: package.root,
+            targetRoot: targetRoot,
+            configurationData: configurationData,
+            consumerSources: consumerSources,
+            testSources: testSources,
+            metadata: metadata
+        )
+        return CachedConsumerTestPackage(
+            package: package,
+            testSourcesChanged: true
         )
     }
 }
@@ -193,10 +333,44 @@ private extension ConfigurationLoader {
     static let swiftToolchainIdentityOutputLimitBytes = 16 * 1024
     static let consumerPackageDirectory = ".bumper"
     static let consumerSourceDirectory = ".bumper/Sources"
+    static let consumerTestDirectory = ".bumper/Tests"
     static let consumerRulePackageName = ".bumper"
     static let consumerRuleProductName = "BumperRules"
+    static let consumerTestTargetName = "BumperRuleTests"
     static let configurationCacheEnvironmentKey = "BUMPER_CACHE_DIR"
     static let projectRunnerProductName = "BumperProjectRunner"
+    static let consumerTestPlaceholder = "enum BumperGeneratedTestTargetPlaceholder {}\n"
+
+    static func withConsumerTestLock<Value>(
+        root: URL,
+        environment: [String: String],
+        operation: () throws -> Value
+    ) throws -> Value {
+        let lockRoot = configurationCacheRoot(environment: environment).appendingPathComponent("Locks")
+        try FileManager.default.createDirectory(at: lockRoot, withIntermediateDirectories: true)
+        let identity = sha256Hex(Data(root.standardizedFileURL.path.utf8))
+        let lockURL = lockRoot.appendingPathComponent("\(identity).consumer-tests.lock")
+        let descriptor = Darwin.open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else {
+            throw BumperError.consumerTestLockFailed(lockURL.path)
+        }
+        defer { _ = Darwin.close(descriptor) }
+        var lock = flock(
+            l_start: 0,
+            l_len: 0,
+            l_pid: 0,
+            l_type: Int16(F_WRLCK),
+            l_whence: Int16(SEEK_SET)
+        )
+        guard Darwin.fcntl(descriptor, F_SETLKW, &lock) == 0 else {
+            throw BumperError.consumerTestLockFailed(lockURL.path)
+        }
+        defer {
+            lock.l_type = Int16(F_UNLCK)
+            _ = Darwin.fcntl(descriptor, F_SETLK, &lock)
+        }
+        return try operation()
+    }
 
     /// The configuration runner computes a pure value: it evaluates the
     /// repository's `BumperBowling.swift` into an `ArchitectureConfiguration`
@@ -381,7 +555,8 @@ private extension ConfigurationLoader {
         buildConfiguration: String,
         manifest: String,
         consumerSourcesHash: String,
-        rulePackagesHash: String
+        rulePackagesHash: String,
+        cacheRoot: URL
     ) throws -> URL {
         let key = [
             "v4",
@@ -397,13 +572,24 @@ private extension ConfigurationLoader {
             rulePackagesHash,
         ].joined(separator: "\n")
 
-        let root = configurationCacheRoot()
+        let root = cacheRoot
             .appendingPathComponent(sha256Hex(Data(key.utf8)))
         return root
     }
 
     static func consumerConfigurationSources(root: URL) throws -> [ConsumerConfigurationSource] {
-        let sourceRoot = root.appendingPathComponent(consumerSourceDirectory)
+        try consumerSwiftSources(root: root, directory: consumerSourceDirectory)
+    }
+
+    static func consumerTestSources(root: URL) throws -> [ConsumerConfigurationSource] {
+        try consumerSwiftSources(root: root, directory: consumerTestDirectory)
+    }
+
+    static func consumerSwiftSources(
+        root: URL,
+        directory: String
+    ) throws -> [ConsumerConfigurationSource] {
+        let sourceRoot = root.appendingPathComponent(directory)
         guard FileManager.default.fileExists(atPath: sourceRoot.path) else {
             return []
         }
@@ -424,12 +610,15 @@ private extension ConfigurationLoader {
                 continue
             }
 
-            let relativePath = fileURL.path
-                .replacingOccurrences(of: sourceRoot.path + "/", with: "")
+            guard let relativePath = relativeSourcePath(of: fileURL, under: sourceRoot) else {
+                throw BumperError.configurationOutputMalformed(
+                    "consumer Swift source is outside its source root: \(fileURL.path)"
+                )
+            }
             guard !relativePath.isEmpty,
                   !relativePath.split(separator: "/").contains(where: isUnsafeRelativePathComponent) else {
                 throw BumperError.configurationOutputMalformed(
-                    "consumer configuration source has unsafe path: \(relativePath)"
+                    "consumer Swift source has unsafe path: \(relativePath)"
                 )
             }
 
@@ -472,6 +661,120 @@ private extension ConfigurationLoader {
             )
             try source.data.write(to: destination, options: .atomic)
         }
+    }
+
+    static func cachedConsumerTestsAreCurrent(
+        packageRoot: URL,
+        targetRoot: URL,
+        metadata: CachedConsumerTestMetadata,
+        configurationData: Data,
+        consumerSources: [ConsumerConfigurationSource],
+        testSources: [ConsumerConfigurationSource]
+    ) -> Bool {
+        let metadataURL = packageRoot.appendingPathComponent(CachedConsumerTestMetadata.fileName)
+        var expectedFiles = [
+            "Placeholder.swift": Data(consumerTestPlaceholder.utf8),
+            "Configuration/BumperBowling.swift": configurationData,
+        ]
+        for source in consumerSources {
+            expectedFiles["ConsumerSources/\(source.relativePath)"] = source.data
+        }
+        for source in testSources {
+            expectedFiles["ConsumerTests/\(source.relativePath)"] = source.data
+        }
+
+        guard let copiedFiles = cachedFileContents(in: targetRoot),
+              copiedFiles == expectedFiles,
+              let data = try? Data(contentsOf: metadataURL),
+              let cached = try? JSONDecoder().decode(CachedConsumerTestMetadata.self, from: data) else {
+            return false
+        }
+        return cached == metadata
+    }
+
+    static func cachedFileContents(in root: URL) -> [String: Data]? {
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+        ) else {
+            return nil
+        }
+
+        var contents: [String: Data] = [:]
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+                  values.isSymbolicLink != true else {
+                return nil
+            }
+            guard values.isRegularFile == true else {
+                continue
+            }
+
+            guard let relativePath = relativeSourcePath(of: fileURL, under: root),
+                  !relativePath.isEmpty,
+                  let data = try? Data(contentsOf: fileURL) else {
+                return nil
+            }
+            contents[relativePath] = data
+        }
+        return contents
+    }
+
+    static func relativeSourcePath(of file: URL, under root: URL) -> String? {
+        let rootComponents = root.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        let fileComponents = file.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        guard fileComponents.count > rootComponents.count,
+              fileComponents.starts(with: rootComponents) else {
+            return nil
+        }
+        return fileComponents.dropFirst(rootComponents.count).joined(separator: "/")
+    }
+
+    static func writeCachedConsumerTests(
+        packageRoot: URL,
+        targetRoot: URL,
+        configurationData: Data,
+        consumerSources: [ConsumerConfigurationSource],
+        testSources: [ConsumerConfigurationSource],
+        metadata: CachedConsumerTestMetadata
+    ) throws {
+        let testsRoot = packageRoot.appendingPathComponent("Tests")
+        let stagingRoot = testsRoot.appendingPathComponent(
+            ".\(consumerTestTargetName)-\(UUID().uuidString)"
+        )
+        try FileManager.default.createDirectory(at: stagingRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: stagingRoot) }
+
+        try consumerTestPlaceholder.write(
+            to: stagingRoot.appendingPathComponent("Placeholder.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let configurationDestination = stagingRoot.appendingPathComponent("Configuration/BumperBowling.swift")
+        try FileManager.default.createDirectory(
+            at: configurationDestination.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try configurationData.write(to: configurationDestination, options: .atomic)
+        try writeConsumerConfigurationSources(
+            consumerSources,
+            to: stagingRoot.appendingPathComponent("ConsumerSources")
+        )
+        try writeConsumerConfigurationSources(
+            testSources,
+            to: stagingRoot.appendingPathComponent("ConsumerTests")
+        )
+
+        if FileManager.default.fileExists(atPath: targetRoot.path) {
+            try FileManager.default.removeItem(at: targetRoot)
+        }
+        try FileManager.default.moveItem(at: stagingRoot, to: targetRoot)
+        try JSONEncoder()
+            .encode(metadata)
+            .write(
+                to: packageRoot.appendingPathComponent(CachedConsumerTestMetadata.fileName),
+                options: .atomic
+            )
     }
 
     static func rulePackageDependencies(root: URL) throws -> [RulePackageDependency] {
@@ -550,19 +853,35 @@ private extension ConfigurationLoader {
         }
     }
 
+    static func cachedExecutableIsCurrent(_ executableURL: URL, metadataURL: URL) -> Bool {
+        guard FileManager.default.isExecutableFile(atPath: executableURL.path),
+              let executableValues = try? executableURL.resourceValues(forKeys: [.contentModificationDateKey]),
+              let executableDate = executableValues.contentModificationDate,
+              let metadataValues = try? metadataURL.resourceValues(forKeys: [.contentModificationDateKey]),
+              let metadataDate = metadataValues.contentModificationDate else {
+            return false
+        }
+        return executableDate >= metadataDate
+    }
+
     static func cachedPackageIsCurrent(
         root: URL,
-        metadata: CachedPackageMetadata
+        metadata: CachedPackageMetadata,
+        manifest: String,
+        configurationData: Data,
+        consumerSources: [ConsumerConfigurationSource]
     ) -> Bool {
         let sources = root.appendingPathComponent("Sources/\(projectRunnerProductName)")
-        let requiredFiles = [
-            root.appendingPathComponent("Package.swift"),
-            sources.appendingPathComponent("UserConfiguration.swift"),
-            sources.appendingPathComponent("main.swift"),
-            root.appendingPathComponent(CachedPackageMetadata.fileName),
+        var expectedSources = [
+            "UserConfiguration.swift": configurationData,
+            "main.swift": Data(runnerSource.utf8),
         ]
+        for source in consumerSources {
+            expectedSources["ConsumerSources/\(source.relativePath)"] = source.data
+        }
 
-        guard requiredFiles.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }),
+        guard (try? Data(contentsOf: root.appendingPathComponent("Package.swift"))) == Data(manifest.utf8),
+              cachedFileContents(in: sources) == expectedSources,
               let data = try? Data(contentsOf: root.appendingPathComponent(CachedPackageMetadata.fileName)),
               let existingMetadata = try? JSONDecoder().decode(CachedPackageMetadata.self, from: data) else {
             return false
@@ -702,6 +1021,14 @@ private extension ConfigurationLoader {
         ] + rulePackages.map { package in
             ".product(name: \(swiftStringLiteral(package.product)), package: \(swiftStringLiteral(package.package)))"
         }).joined(separator: ",\n                        ")
+        let testTargetDependencies = ([
+            ".product(name: \"BumperBowlingCore\", package: \"BumperBowling\")",
+            ".product(name: \"BumperBowlingTestSupport\", package: \"BumperBowling\")",
+            ".product(name: \"SwiftParser\", package: \"swift-syntax\")",
+            ".product(name: \"SwiftSyntax\", package: \"swift-syntax\")",
+        ] + rulePackages.map { package in
+            ".product(name: \(swiftStringLiteral(package.product)), package: \(swiftStringLiteral(package.package)))"
+        }).joined(separator: ",\n                        ")
 
         return """
         // swift-tools-version: 6.2
@@ -722,8 +1049,16 @@ private extension ConfigurationLoader {
                         \(targetDependencies),
                     ],
                     swiftSettings: [
-                        .enableUpcomingFeature("StrictConcurrency"),
-                        .enableUpcomingFeature("InferSendableFromCaptures"),
+                        .swiftLanguageMode(.v6),
+                    ]
+                ),
+                .testTarget(
+                    name: \(swiftStringLiteral(consumerTestTargetName)),
+                    dependencies: [
+                        \(testTargetDependencies),
+                    ],
+                    swiftSettings: [
+                        .swiftLanguageMode(.v6),
                     ]
                 ),
             ]
@@ -826,6 +1161,19 @@ struct CachedPackage {
     let productName: String
     let buildConfiguration: String
     let needsBuild: Bool
+}
+
+struct CachedConsumerTestPackage {
+    let package: CachedPackage
+    let testSourcesChanged: Bool
+}
+
+struct CachedConsumerTestMetadata: Codable, Equatable {
+    static let fileName = ".bumper-tests.json"
+
+    let configurationContentHash: String
+    let consumerSourcesHash: String
+    let testSourcesHash: String
 }
 
 private struct ConsumerConfigurationSource {
