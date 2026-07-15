@@ -29,6 +29,9 @@
 - `Rules.canonicalTraversal` now accepts structural case evidence only when the
   case subject is an exact root-typed parameter or `self`. Unrelated enum case
   patterns no longer make a recursive function look like a root traversal.
+- The SwiftSyntax dependency accepts both the 602 and 603 release lines, so
+  adding Bumper Bowling does not downgrade consumers already using SwiftSyntax
+  603.
 
 ### Added
 
