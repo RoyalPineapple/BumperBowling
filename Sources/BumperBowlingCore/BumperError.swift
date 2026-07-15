@@ -8,6 +8,8 @@ public enum BumperError: Error, CustomStringConvertible {
     case configurationOutputTooLarge(String, String, Int)
     case configurationOutputMalformed(String)
     case configurationPackageUnavailable(String)
+    case consumerTestLockFailed(String)
+    case consumerTestsMissing(String)
     case invalidEvaluationTimeout(String)
     case invalidRunnerBuildConfiguration(String)
     case noComponentForFile(String)
@@ -34,6 +36,10 @@ public enum BumperError: Error, CustomStringConvertible {
             "Configuration runner produced malformed output: \(message)"
         case .configurationPackageUnavailable(let path):
             "Could not locate the BumperBowling package at \(path). Set BUMPER_PACKAGE_PATH to the package root."
+        case .consumerTestLockFailed(let path):
+            "Could not acquire the consumer test cache lock at \(path)."
+        case .consumerTestsMissing(let path):
+            "No consumer rule tests found under \(path). Add Swift tests under .bumper/Tests."
         case .invalidEvaluationTimeout(let value):
             "BUMPER_EVALUATION_TIMEOUT_SECONDS must be a positive, finite number of seconds; found '\(value)'."
         case .invalidRunnerBuildConfiguration(let value):

@@ -80,6 +80,18 @@ public struct SyntaxQuery<Node: SyntaxProtocol>: SyntaxPattern, Sendable {
             scope.includes(file) ? [] : extract(file)
         }
     }
+
+    public func lexically(within scope: SyntaxScope) -> Self {
+        filter { match in
+            scope.includes(match.node.bumper.lexicalContext)
+        }
+    }
+
+    public func lexically(excluding scope: SyntaxScope) -> Self {
+        filter { match in
+            !scope.includes(match.node.bumper.lexicalContext)
+        }
+    }
 }
 
 // MARK: - Query roots

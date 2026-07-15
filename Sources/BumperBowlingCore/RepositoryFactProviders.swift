@@ -355,11 +355,36 @@ public struct ComponentDependencyProvider: FactProvider {
 
 // MARK: - Call graph and strongly connected components
 
+/// One function parameter as spelled at the declaration boundary. These are
+/// syntax facts; Bumper does not resolve aliases or inferred types.
+public struct CallGraphParameterEvidence: Hashable, Sendable {
+    public let localName: String
+    public let typeSpelling: String
+
+    public init(localName: String, typeSpelling: String) {
+        self.localName = localName
+        self.typeSpelling = typeSpelling
+    }
+}
+
+/// One enum-like member pattern and the expression matched by that pattern.
+/// For example, `if case .branch = tree` records (`branch`, `tree`).
+public struct CasePatternEvidence: Hashable, Sendable {
+    public let memberName: String
+    public let subjectExpression: String
+
+    public init(memberName: String, subjectExpression: String) {
+        self.memberName = memberName
+        self.subjectExpression = subjectExpression
+    }
+}
+
 /// One function declaration as a call-graph node.
 public struct CallGraphFunction: Hashable, Sendable {
     public let function: FunctionSymbol
     public let enclosingType: NominalSymbol?
-    public let parameterTypeNames: [String]
+    public let parameters: [CallGraphParameterEvidence]
+    public let casePatterns: [CasePatternEvidence]
     public let path: RelativeFilePath
     public let component: ComponentID
     public let location: SourcePosition?
@@ -367,14 +392,16 @@ public struct CallGraphFunction: Hashable, Sendable {
     public init(
         function: FunctionSymbol,
         enclosingType: NominalSymbol?,
-        parameterTypeNames: [String],
+        parameters: [CallGraphParameterEvidence],
+        casePatterns: [CasePatternEvidence],
         path: RelativeFilePath,
         component: ComponentID,
         location: SourcePosition?
     ) {
         self.function = function
         self.enclosingType = enclosingType
-        self.parameterTypeNames = parameterTypeNames
+        self.parameters = parameters
+        self.casePatterns = casePatterns
         self.path = path
         self.component = component
         self.location = location
@@ -415,9 +442,8 @@ public struct CallGraphSCCProvider: FactProvider {
                     CallGraphFunction(
                         function: FunctionSymbol(match.node.name.text),
                         enclosingType: match.node.enclosingNominalName.map { NominalSymbol($0) },
-                        parameterTypeNames: match.node.signature.parameterClause.parameters.map { parameter in
-                            parameter.type.trimmedDescription
-                        },
+                        parameters: match.node.callGraphParameterEvidence,
+                        casePatterns: match.node.casePatternEvidence,
                         path: file.path,
                         component: file.component,
                         location: file.position(of: match.node)
@@ -455,6 +481,57 @@ public struct CallGraphSCCProvider: FactProvider {
                 component.map { index in nodes[index] }
             }
         )
+    }
+}
+
+private extension FunctionDeclSyntax {
+    var callGraphParameterEvidence: [CallGraphParameterEvidence] {
+        signature.parameterClause.parameters.compactMap { parameter in
+            let localName = parameter.secondName?.text ?? parameter.firstName.text
+            guard !StringMatcher.exact("_").matches(localName) else {
+                return nil
+            }
+            return CallGraphParameterEvidence(
+                localName: localName,
+                typeSpelling: parameter.type.trimmedDescription
+            )
+        }
+    }
+
+    var casePatternEvidence: [CasePatternEvidence] {
+        guard let body else {
+            return []
+        }
+        return body.descendants(of: ExpressionPatternSyntax.self).flatMap { pattern -> [CasePatternEvidence] in
+            guard let subjectExpression = pattern.matchedSubjectExpression else {
+                return []
+            }
+            return pattern.expression.descendants(of: MemberAccessExprSyntax.self).map { reference in
+                CasePatternEvidence(
+                    memberName: reference.declName.baseName.text,
+                    subjectExpression: subjectExpression
+                )
+            }
+        }
+    }
+}
+
+private extension ExpressionPatternSyntax {
+    var matchedSubjectExpression: String? {
+        if let condition = ancestors.compactMap({ ancestor in
+            ancestor.as(MatchingPatternConditionSyntax.self)
+        }).first {
+            return condition.initializer.value.trimmedDescription
+        }
+
+        guard ancestors.contains(where: { ancestor in
+            ancestor.is(SwitchCaseItemSyntax.self)
+        }), let switchExpression = ancestors.compactMap({ ancestor in
+            ancestor.as(SwitchExprSyntax.self)
+        }).first else {
+            return nil
+        }
+        return switchExpression.subject.trimmedDescription
     }
 }
 

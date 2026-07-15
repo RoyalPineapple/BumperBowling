@@ -15,6 +15,75 @@ public struct Rules: Sendable {
 }
 
 extension Rules {
+    /// Imports of `modules` may only occur inside the allowed scope.
+    public static func importOwnership(
+        _ modules: Set<StringMatcher>,
+        allowed: RuleScope,
+        id: RuleID = RuleID("import_ownership"),
+        severity: Severity = .error
+    ) -> RepositoryRule {
+        RepositoryRule(
+            metadata: RuleMetadata(
+                id: id,
+                severity: severity,
+                summary: "Selected module imports stay inside their allowed owners."
+            )
+        ) { context in
+            try context.facts(BuiltInFacts.imports).occurrences
+                .filter { occurrence in
+                    modules.contains { $0.matches(occurrence.module) }
+                        && !allowed.includes(
+                            SourceFileDescriptor(path: occurrence.path, component: occurrence.component)
+                        )
+                }
+                .map { occurrence in
+                    RuleFailure(
+                        path: occurrence.path,
+                        message: "\(occurrence.module.rawValue) is imported outside its allowed owners.",
+                        evidence: ViolationEvidence(
+                            observed: "import \(occurrence.module.rawValue) in \(occurrence.path.rawValue)",
+                            expectation: "imports only inside the allowed scope"
+                        )
+                    )
+                }
+        }
+    }
+
+    /// References to `member` may only occur inside the allowed scope.
+    public static func memberReferenceOwnership(
+        _ member: StringMatcher,
+        allowed: RuleScope,
+        id: RuleID = RuleID("member_reference_ownership"),
+        severity: Severity = .error
+    ) -> RepositoryRule {
+        RepositoryRule(
+            metadata: RuleMetadata(
+                id: id,
+                severity: severity,
+                summary: "\(member) is referenced only inside its allowed owners."
+            )
+        ) { context in
+            try context.facts(BuiltInFacts.memberReferences)
+                .filter { occurrence in
+                    member.matches(occurrence.member)
+                        && !allowed.includes(
+                            SourceFileDescriptor(path: occurrence.path, component: occurrence.component)
+                        )
+                }
+                .map { occurrence in
+                    RuleFailure(
+                        path: occurrence.path,
+                        location: occurrence.location,
+                        message: "\(member) is referenced outside its allowed owners.",
+                        evidence: ViolationEvidence(
+                            observed: occurrence.base.map { "\($0).\(occurrence.member)" } ?? occurrence.member,
+                            expectation: "references only inside the allowed scope"
+                        )
+                    )
+                }
+        }
+    }
+
     /// Exactly one declaration of `symbol`, owned by files under `owner`.
     /// A configured owner path with no files is a configuration failure.
     public static func singleDeclaration(
@@ -181,9 +250,11 @@ extension Rules {
         }
     }
 
-    /// Traversal of `root`'s recursive structure belongs to its owners.
+    /// Traversal of `root`'s recursive `structuralCase` belongs to its owners.
     /// Detects direct and mutual recursion over the locally-dispatched call
-    /// graph; calls on another receiver never count as recursion.
+    /// graph when a function in the recursive group matches the configured case
+    /// against an exact root-typed parameter, or against `self` in a root method.
+    /// Calls on another receiver never count as recursion.
     public static func canonicalTraversal(
         root: NominalSymbol,
         structuralCase: EnumCaseSymbol,
@@ -200,23 +271,31 @@ extension Rules {
         ) { context in
             try context.facts(BuiltInFacts.recursiveCallGroups)
                 .groups
-                .filter { group in
-                    group.contains { function in function.traverses(root) }
+                .compactMap { group -> ([CallGraphFunction], CasePatternEvidence)? in
+                    guard let evidence = group.compactMap({ function in
+                        function.traversalEvidence(root: root, structuralCase: structuralCase)
+                    }).first else {
+                        return nil
+                    }
+                    return (group, evidence)
                 }
-                .flatMap { $0 }
-                .filter { function in
-                    !owners.includes(SourceFileDescriptor(path: function.path, component: function.component))
-                }
-                .map { function in
-                    RuleFailure(
-                        path: function.path,
-                        location: function.location,
-                        message: "\(function.function.name) recursively traverses \(root.name) outside its owners.",
-                        evidence: ViolationEvidence(
-                            observed: "recursive function \(function.function.name) over \(root.name)",
-                            expectation: "traversal implemented only by the owner scope"
-                        )
-                    )
+                .flatMap { qualifiedGroup in
+                    let (group, traversalEvidence) = qualifiedGroup
+                    return group
+                        .filter { function in
+                            !owners.includes(SourceFileDescriptor(path: function.path, component: function.component))
+                        }
+                        .map { function in
+                            RuleFailure(
+                                path: function.path,
+                                location: function.location,
+                                message: "\(function.function.name) recursively traverses \(root.name).\(structuralCase.name) outside its owners.",
+                                evidence: ViolationEvidence(
+                                    observed: "recursive call group over \(root.name) matches .\(structuralCase.name) against \(traversalEvidence.subjectExpression)",
+                                    expectation: "traversal implemented only by the owner scope"
+                                )
+                            )
+                        }
                 }
         }
     }
@@ -267,15 +346,23 @@ extension Rules {
 }
 
 private extension CallGraphFunction {
-    /// The function participates in traversal of `root`: it is declared on
-    /// the type or takes it as a parameter.
-    func traverses(_ root: NominalSymbol) -> Bool {
-        let matcher = StringMatcher.exact(root.name)
-        if let enclosingType, matcher.matches(enclosingType.name) {
-            return true
+    /// Case-pattern evidence is syntax-only. The pattern must match either an
+    /// exact root-typed parameter or `self` in a function enclosed by `root`.
+    func traversalEvidence(
+        root: NominalSymbol,
+        structuralCase: EnumCaseSymbol
+    ) -> CasePatternEvidence? {
+        let rootMatcher = StringMatcher.exact(root.name)
+        var rootSubjects = Set(parameters.compactMap { parameter in
+            rootMatcher.matches(parameter.typeSpelling) ? parameter.localName : nil
+        })
+        if let enclosingType, rootMatcher.matches(enclosingType.name) {
+            rootSubjects.insert("self")
         }
-        return parameterTypeNames.contains { name in
-            matcher.matches(name)
+
+        return casePatterns.first { evidence in
+            StringMatcher.exact(structuralCase.name).matches(evidence.memberName)
+                && rootSubjects.contains(evidence.subjectExpression)
         }
     }
 }

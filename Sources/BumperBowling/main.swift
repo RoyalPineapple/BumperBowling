@@ -34,6 +34,8 @@ struct BumperCLI {
             FileHandle.standardOutput.write(Data(snapshot.utf8))
         case "lint":
             try await runLint(Array(arguments.dropFirst()))
+        case "test":
+            try runTest(Array(arguments.dropFirst()))
         case "baseline":
             try await runBaseline(Array(arguments.dropFirst()))
         case "config":
@@ -74,6 +76,25 @@ struct BumperCLI {
         try write(markdown, orJSON: run.output(baseline: baseline), format: options.format)
         if options.failOn.shouldFail(effectiveReport) {
             throw ExitCode.validationFailed
+        }
+    }
+
+    private static func runTest(_ arguments: [String]) throws {
+        if arguments == ["--help"] || arguments == ["-h"] {
+            print(Self.testHelp)
+            return
+        }
+        guard arguments.count <= 1 else {
+            throw ExitCode.usage(Self.testHelp)
+        }
+        if let argument = arguments.first, argument.hasPrefix("-") {
+            throw ExitCode.usage("Unknown option: \(argument)\n\n\(Self.testHelp)")
+        }
+
+        let root = URL(fileURLWithPath: arguments.first ?? FileManager.default.currentDirectoryPath)
+        let status = try BumperCommands.test(root: root)
+        guard status == 0 else {
+            throw ExitCode.consumerTestsFailed(status)
         }
     }
 
@@ -205,6 +226,7 @@ struct BumperCLI {
     Usage:
       bumper init [root]
       bumper lint [root] [--format markdown|json] [--fail-on none|note|warning|error] [--baseline path] [--progress] [--timings]
+      bumper test [root]
       bumper scan [root] [--format markdown|json] [--progress]
       bumper baseline create [root] --output path [--format markdown|json] [--progress]
       bumper snapshot [root]
@@ -230,8 +252,19 @@ struct BumperCLI {
 
       `bumper config` loads the configuration and tells you whether it is valid.
 
+      `bumper test` runs repository-owned Swift tests with normal process access,
+      the same trust boundary as `swift test`.
+
       Compiling a stranger's configuration runs their build. Lint repositories
       you trust.
+    """
+
+    private static let testHelp = """
+    Usage: bumper test [root]
+
+    Runs repository-owned rule tests. Source-mode tests under `.bumper/Tests`
+    use Bumper's generated test target; a `.bumper` Swift package runs through
+    that package's ordinary `swift test` targets.
     """
 }
 
@@ -320,6 +353,7 @@ enum ExitCode: Error, CustomStringConvertible {
     case usage(String)
     case validationFailed
     case invalidConfiguration
+    case consumerTestsFailed(Int32)
 
     var description: String {
         switch self {
@@ -329,6 +363,8 @@ enum ExitCode: Error, CustomStringConvertible {
             "Architecture validation failed."
         case .invalidConfiguration:
             "Configuration is invalid."
+        case .consumerTestsFailed(let status):
+            "Consumer rule tests failed with exit status \(status)."
         }
     }
 
@@ -338,6 +374,8 @@ enum ExitCode: Error, CustomStringConvertible {
             64
         case .validationFailed, .invalidConfiguration:
             1
+        case .consumerTestsFailed(let status):
+            status > 0 && status <= 255 ? status : 1
         }
     }
 }

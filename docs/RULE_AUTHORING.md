@@ -66,6 +66,8 @@ rule, fact, and query interfaces. Each accepts an optional `id:` and
 
 | Shaper | Asserts |
 | --- | --- |
+| `Rules.importOwnership(_:allowed:)` | Matching module imports occur only inside the allowed scope. |
+| `Rules.memberReferenceOwnership(_:allowed:)` | Matching member-access spellings occur only inside the allowed scope; this is syntax, not property or method resolution. |
 | `Rules.singleDeclaration(_:owner:)` | Exactly one declaration of the symbol, under the owner path. A configured owner with no files is a configuration error. |
 | `Rules.constructionOwnership(_:allowed:)` | The type is constructed only inside the allowed scope. |
 | `Rules.canonicalConstruction(_:owners:)` | Same check, spelled for canonical-value ownership. |
@@ -164,10 +166,20 @@ Rules.files(
 ```
 
 Query roots: `functions()`, `initializers()`, `variables()`, `typeAliases()`,
-`nominalDeclarations()`, `functionCalls()`. Capability-specific operations —
-`taking(_:)`, `callingSelf()`, `aliasing(_:)`, `excluding(_:)` — narrow matches
-while keeping the concrete SwiftSyntax node type, so `match.node` needs no
-casting.
+`nominalDeclarations()`, `functionCalls()`. Queries filter files with
+`within(_:)` and filter nodes with `lexically(within:)` or
+`lexically(excluding:)`. `SyntaxScope`
+composes file, type-member, local, protocol, enclosing-type, and
+enclosing-function predicates without coupling them to repository paths.
+
+Typed syntax views expose value-only `LexicalContext` and `TypeShape` facts.
+Type shapes describe explicit binding and typealias syntax, including
+referenced type names, the outer type spelling, function-type shape, and
+attributes. Bumper deliberately does not claim type or alias resolution.
+
+Capability-specific operations such as `taking(_:)`, `callingSelf()`,
+`aliasing(_:)`, and `excluding(_:)` narrow matches while keeping the concrete
+SwiftSyntax node type, so `match.node` needs no casting.
 
 ### Raw Visitor Escape Hatch
 
@@ -293,6 +305,28 @@ Every project-defined closure, query, or visitor rule needs a positive fixture
 and a minimal mutation fixture. Assert the exact rule ID, path, message,
 available location, and promised evidence. Standard shapers are tested by
 Bumper Bowling; consumers test their own configuration and project rationale.
+
+Put repository-owned rule tests under `.bumper/Tests` and run them from the
+repository root:
+
+```text
+.bumper/
+  Sources/ProjectRules.swift
+  Tests/ProjectRulesTests.swift
+```
+
+```bash
+bumper test
+```
+
+`bumper test [root]` compiles `BumperBowling.swift`, repo-local rule sources,
+and the test files into one cached SwiftPM test target in source mode. When
+`.bumper` is a Swift package, Bumper runs ordinary `swift test` with
+`--package-path .bumper` instead, so the package owns its test targets and
+`@testable` imports have normal package-test visibility. Swift Testing and
+XCTest discovery work normally, and their exit status is returned by `bumper`.
+These tests are ordinary trusted project code and run with the same access as
+`swift test`; the configuration evaluation sandbox is not a test sandbox.
 
 `BumperBowlingTestSupport` tests exactly one rule (or one `RuleSet`) in memory,
 with no checkout and no filesystem, returning the same `RuleReport` the engine

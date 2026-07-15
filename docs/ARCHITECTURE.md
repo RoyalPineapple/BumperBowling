@@ -46,6 +46,19 @@ The project runner generates a small package that links `BumperBowlingCore`, com
 
 The build is cached against the configuration's content hash (plus the toolchain identity and the runner's own hashes), so the compile happens once per change to `BumperBowling.swift`, not once per lint. An unchanged configuration loads from the cached binary with no build. `bumper config` loads the configuration and reports whether it is valid.
 
+In source mode, the cached package also owns one generated `BumperRuleTests`
+target. `bumper test` fills that target from `BumperBowling.swift`,
+`.bumper/Sources`, and `.bumper/Tests`, then delegates discovery and execution
+to `swift test`. Test source identity is tracked separately from runner
+identity: changing only a test refreshes and recompiles the test target without
+invalidating the lint runner. When `.bumper` is a Swift package, `bumper test`
+runs that package's ordinary test targets directly, preserving package-owned
+`@testable` visibility. The test process is ordinary trusted SwiftPM test code,
+not sandboxed configuration evaluation. It uses SwiftPM's ordinary debug test
+default and does not prebuild the optimized lint runner. Source-mode cache
+updates and test execution share an interprocess lock so concurrent invocations
+cannot replace the generated target underneath one another.
+
 A configuration should declare the architecture the repository wants, then lower into assertions over observed facts. Prefer `Component`, `Owns`, `MayDependOn`, `MayUse`, and scoped fact assertions over free-floating negative rules.
 
 `scan` and `snapshot` expose the observed graph Bumper Bowling can build from

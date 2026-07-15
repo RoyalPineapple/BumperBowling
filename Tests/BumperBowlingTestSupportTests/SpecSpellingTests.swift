@@ -96,7 +96,9 @@ struct SpecSpellingTests {
     func harnessAndMatchersAcceptSpecSpellings() throws {
         let recursiveSource = """
         func walk(hierarchy: AccessibilityHierarchy) {
-            walk(hierarchy: hierarchy)
+            if case .container = hierarchy {
+                walk(hierarchy: hierarchy)
+            }
         }
         """
 

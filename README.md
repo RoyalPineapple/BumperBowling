@@ -289,6 +289,7 @@ cp -R skills/compose-bumper-rules ~/.codex/skills/
 ```bash
 bumper init [root]             # write a starter configuration
 bumper lint [root]             # check the repo against it
+bumper test [root]             # run the repository's Bumper rule tests
 bumper scan [root]             # show the architecture graph the code expresses
 bumper baseline create [root]  # write a JSON baseline for current violations
 bumper snapshot [root]         # render the configured architecture
@@ -298,6 +299,8 @@ bumper explain <path>          # what bumper sees in one file
 
 `lint` and `scan` accept `--format markdown|json`. `lint` also accepts
 `--fail-on none|note|warning|error`, `--baseline <path>`, and `--progress`.
+`test` runs Swift tests from `.bumper/Tests`, or the package's own test targets
+when `.bumper/Package.swift` is present.
 Use `BUMPER_CACHE_DIR` to put compiled configuration and custom rule runners in
 a stable CI cache location.
 
