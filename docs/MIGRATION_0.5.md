@@ -24,8 +24,8 @@ enum so `Component(.core)` / `MayDependOn(.core)` are compiler-checked.
 | Removed | Replacement |
 | --- | --- |
 | `CustomRuleSet { ... }` | `RuleSet { ... }` |
-| `CustomRule("id", severity:) { context in ... }` | `Rules.repository("id", severity:) { context in ... }` |
-| `CustomSyntaxRule("id", severity:) { file in ... }` | `Rules.files("id", severity:) { file in ... }` |
+| `CustomRule("id", severity:) { context in ... }` | `Rules.repository("id", severity:, summary:) { context in ... }` |
+| `CustomSyntaxRule("id", severity:) { file in ... }` | `Rules.files("id", severity:, summary:) { file in ... }` |
 | `CustomRuleFailure` | `RuleFailure` |
 | `CustomRuleInput` | `RepositoryInput` (host-to-runner wire type; rule code receives `RuleContext`) |
 | `CustomRuleOutput` / `CustomRuleFinding` | `RuleReport` / `RuleViolation` |

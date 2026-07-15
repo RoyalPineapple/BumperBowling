@@ -71,6 +71,7 @@ struct SpecSpellingTests {
         let rule = Rules.repository(
             "app.import_allow_list",
             severity: .error,
+            summary: "UIKit imports are forbidden in the core component.",
             scope: .component(AppComponent.core)
         ) { context in
             try context.facts(uikitImports).map { occurrence in

@@ -8,11 +8,12 @@ public protocol RuleFailureSource: AnyObject {
 
 extension Rules {
     /// The visitor escape hatch as an authored factory. The rule owns file
-    /// selection, walking, and collection; the visitor owns the analysis.
+    /// selection, walking, and collection; the visitor owns the analysis. The
+    /// required summary explains the invariant this escape hatch protects.
     public static func visitor<Visitor: SyntaxVisitor & RuleFailureSource>(
         _ id: String,
         severity: Severity = .error,
-        summary: String = "Project-defined visitor rule.",
+        summary: String,
         scope: RuleScope = .repository,
         _ makeVisitor: @escaping @Sendable (SourceFileContext) -> Visitor
     ) -> VisitorRule<Visitor> {

@@ -1,81 +1,156 @@
-# Shape Examples
+# Placement And Test Examples
 
-## Inline
+## Contents
 
-Use for tiny one-off rule names:
+- [Repo-Owned Vocabulary](#repo-owned-vocabulary)
+- [Positive And Mutation Tests](#positive-and-mutation-tests)
+- [Review Record](#review-record)
 
-```swift
-extension ComponentRequirement {
-    static let noStateBags = ComponentRequirement(
-        .noOptionalStoredProperties,
-        .noBoolStoredProperties
-    )
-}
-```
+## Repo-Owned Vocabulary
 
-## Repo-Local `.bumper/Sources`
+Put reusable policy for one repository under `.bumper/Sources`:
 
 ```text
 .bumper/
   Sources/
-    HouseStyle.swift
+    ArchitectureVocabulary.swift
+    ProjectRules.swift
+BumperBowling.swift
 ```
 
-`HouseStyle.swift`:
-
 ```swift
+// .bumper/Sources/ArchitectureVocabulary.swift
 import BumperBowlingCore
 
+extension ComponentRequirement {
+    static let domainCore = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState
+    )
+}
+
 extension ComponentShape {
-    static let appBoundary = ComponentShape {
-        MayUse(.foundation, .swiftUI)
-        DoesNotUse(.testing)
-        Requires(.explicitDomainSurfaces, severity: .warning)
+    static let domain = ComponentShape {
+        MayUse(.foundation)
+        DoesNotUse(.uiKit, .testing)
+        Requires(.domainCore, severity: .error)
     }
 }
 ```
 
-## SwiftPM `.bumper/Package.swift`
-
-Use when rule vocabulary should be reusable as a package:
-
-```text
-.bumper/
-  Package.swift
-  Sources/
-    BumperRules/
-      Rules.swift
-```
-
-`Package.swift` must expose a `BumperRules` library product:
+Apply all vocabulary explicitly from `BumperBowling.swift`:
 
 ```swift
-// swift-tools-version: 6.2
-import PackageDescription
+let bumper = BumperProject {
+    Architecture(AppComponent.self) {
+        Component(.core) {
+            Owns("Sources/Core")
+            Modules("Core")
+            Applies(.domain)
+        }
+    }
 
-let package = Package(
-    name: "BumperRules",
-    platforms: [.macOS(.v15)],
-    products: [
-        .library(name: "BumperRules", targets: ["BumperRules"])
-    ],
-    dependencies: [
-        .package(path: "../path/to/BumperBowling")
-    ],
-    targets: [
-        .target(
-            name: "BumperRules",
-            dependencies: [
-                .product(name: "BumperBowlingCore", package: "BumperBowling")
-            ]
-        )
-    ]
-)
+    Rules {
+        DependencyBoundaries(.error)
+        projectRules
+    }
+}
 ```
 
-Then in `BumperBowling.swift`:
+Use inline values for one-off policy. Use `.bumper/Package.swift` only when the
+vocabulary is shared across repositories; it must expose a `BumperRules`
+library product. A package that names AST types declares its own SwiftSyntax
+dependency. Importing the product does not apply any rules.
+
+## Positive And Mutation Tests
+
+Every project-defined closure, query, or visitor rule starts with a valid
+fixture. The mutation test changes only the source fact the rule forbids.
 
 ```swift
 import BumperBowlingCore
-import BumperRules
+import BumperBowlingTestSupport
+import SwiftSyntax
+import Testing
+
+private let rawInputBoundary = Rules.files(
+    "project.repository_input_boundary",
+    summary: "RepositoryInput is admitted only at the process boundary."
+) { file in
+    functions()
+        .taking(NominalSymbol("RepositoryInput"))
+        .excluding(.under("Sources/Boundary"))
+        .matches(in: file)
+        .map { match in
+            match.failure(
+                message: "RepositoryInput belongs at the process boundary.",
+                evidence: ViolationEvidence(
+                    observed: "RepositoryInput parameter",
+                    expectation: "boundary-owned signature"
+                )
+            )
+        }
+}
+
+@Test
+func acceptsOrdinaryApplicationInput() throws {
+    let report = try RuleTestHarness(rawInputBoundary).evaluate(
+        VirtualRepository {
+            VirtualSourceFile.swift(
+                "Sources/App/Handler.swift",
+                component: "app",
+                source: "func handle(_ input: Int) {}"
+            )
+        }
+    )
+
+    #expect(report.violations.isEmpty)
+}
+
+@Test
+func flagsRepositoryInputMutation() throws {
+    let report = try RuleTestHarness(rawInputBoundary).evaluate(
+        VirtualRepository {
+            VirtualSourceFile.swift(
+                "Sources/App/Handler.swift",
+                component: "app",
+                source: "func handle(_ input: RepositoryInput) {}"
+            )
+        }
+    )
+
+    let violation = try #require(report.violations.first)
+    #expect(report.violations.count == 1)
+    #expect(violation.rule.id == RuleID("project.repository_input_boundary"))
+    #expect(violation.path.rawValue == "Sources/App/Handler.swift")
+    #expect(violation.location != nil)
+    #expect(violation.message == "RepositoryInput belongs at the process boundary.")
+    #expect(
+        violation.evidence == ViolationEvidence(
+            observed: "RepositoryInput parameter",
+            expectation: "boundary-owned signature"
+        )
+    )
+}
+```
+
+Keep the mutation minimal so a passing test proves the intended predicate, not
+an incidental difference between fixtures.
+
+## Review Record
+
+For every new rule below the standard-shaper rung, include this information in
+the change summary:
+
+```text
+Invariant: <observed fact + scope = mismatch>
+Runtime summary: <specific sentence shown with violations>
+Catalog entry: <rationale, scope, repair, proof, and deletion condition>
+Highest viable rung: <typed facts | typed query/per-file | raw visitor>
+Higher rung rejected because: <specific missing fact or traversal>
+Existing lower-level rule audited: <rule ID or none exists>
+Audit outcome: <deleted | promoted | consolidated | retained with reason>
+Deletion test: <not historical, not compiler-enforced, still constructible>
+Tests: <positive fixture and minimal mutation fixture>
 ```

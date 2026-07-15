@@ -27,6 +27,22 @@ the level above cannot:
 5. **Raw `SyntaxVisitor`** — `VisitorRule` when nothing above fits. This is a
    permanent escape hatch, not a deprecation lane.
 
+Before admitting a rule, state the observed fact, scope, and mismatch. Reject
+rules for historical spellings, malformed Swift, and states the compiler
+already makes unconstructible. For a rule below the standard-shaper rung,
+explain why the next higher rung cannot express the invariant and audit an
+existing rule at that rung or lower for deletion or promotion.
+
+Every project rule has two explanations:
+
+- Its explicit `summary` is the concise runtime explanation attached to a
+  violation. Do not rely on a generic factory default.
+- The consumer's rule catalog records rationale, scope, repair, proof, and the
+  condition that will let the project delete the rule.
+
+When one visitor shares a parse pass across several checks, catalog every
+sub-invariant. One umbrella rule ID must not hide undocumented policy.
+
 ## Terms
 
 - `RuleDefinition`: one rule — identity (`RuleMetadata`), scope (`RuleScope`),
@@ -72,12 +88,16 @@ Rules.canonicalTraversal(
 
 ## Closure Rules Over Typed Facts
 
-`Rules.repository(_:severity:_:)` evaluates once over the whole repository.
+`Rules.repository(_:severity:summary:_:)` evaluates once over the whole repository.
 Request facts through `context.facts(_:)`; providers are derived once per run
 and memoized:
 
 ```swift
-Rules.repository("project.no_uikit", severity: .error) { context in
+Rules.repository(
+    "project.no_uikit",
+    severity: .error,
+    summary: "UIKit imports stay at the application boundary."
+) { context in
     try context.facts(BuiltInFacts.imports).occurrences
         .filter { $0.module.rawValue == "UIKit" }
         .map { RuleFailure(path: $0.path, message: "UIKit is not allowed here.") }
@@ -124,13 +144,16 @@ run — an analysis error is never an empty match set.
 
 ## Per-File Syntax Rules and Typed Queries
 
-`Rules.files(_:severity:_:)` runs once per parsed file. The whole run parses
+`Rules.files(_:severity:summary:_:)` runs once per parsed file. The whole run parses
 each file exactly once; every rule shares the same trees.
 
 Typed queries compose over the parsed file and preserve node types:
 
 ```swift
-Rules.files("project.no_alternate_aliases") { file in
+Rules.files(
+    "project.no_alternate_aliases",
+    summary: "AccessibilityTarget has one spelling."
+) { file in
     typeAliases()
         .aliasing(NominalSymbol("AccessibilityTarget"))
         .matches(in: file)
@@ -153,21 +176,28 @@ When nothing typed fits, walk the tree yourself:
 ```swift
 import SwiftSyntax
 
-final class ForceUnwrapCollector: SyntaxVisitor {
-    private(set) var nodes: [ForceUnwrapExprSyntax] = []
+final class ForceUnwrapVisitor: SyntaxVisitor, RuleFailureSource {
+    private let file: SourceFileContext
+    private(set) var failures: [RuleFailure] = []
+
+    init(file: SourceFileContext) {
+        self.file = file
+        super.init(viewMode: .sourceAccurate)
+    }
 
     override func visit(_ node: ForceUnwrapExprSyntax) -> SyntaxVisitorContinueKind {
-        nodes.append(node)
+        failures.append(file.failure(at: node, message: "Force unwrapping is not allowed here."))
         return .skipChildren
     }
 }
 
-Rules.files("project.no_force_unwrap") { file in
-    let visitor = ForceUnwrapCollector(viewMode: .sourceAccurate)
-    visitor.walk(file.syntax)
-    return visitor.nodes.map { node in
-        file.failure(at: node, message: "Force unwrapping is not allowed here.")
-    }
+Rules.visitor(
+    "project.no_force_unwrap",
+    severity: .error,
+    scope: .under("Sources"),
+    summary: "Production code handles optional absence explicitly."
+) { file in
+    ForceUnwrapVisitor(file: file)
 }
 ```
 
@@ -199,6 +229,9 @@ Rule IDs must be unique across built-in and project rules; a duplicate is a
 configuration error. Rules evaluate sequentially in declaration order, and the
 final report is sorted by path, line, column, rule ID, then message — so
 declaration order never changes the report.
+
+Add or update the consumer's rule-catalog entry in the same change that wires
+the rule into the project.
 
 ## Where To Define Vocabulary
 
@@ -255,6 +288,11 @@ applies rules by convention; the project still opts in explicitly inside
 dependency when it names AST types.
 
 ## Testing Rules
+
+Every project-defined closure, query, or visitor rule needs a positive fixture
+and a minimal mutation fixture. Assert the exact rule ID, path, message,
+available location, and promised evidence. Standard shapers are tested by
+Bumper Bowling; consumers test their own configuration and project rationale.
 
 `BumperBowlingTestSupport` tests exactly one rule (or one `RuleSet`) in memory,
 with no checkout and no filesystem, returning the same `RuleReport` the engine

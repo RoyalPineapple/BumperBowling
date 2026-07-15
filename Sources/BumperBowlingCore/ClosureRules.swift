@@ -22,11 +22,12 @@ public struct RepositoryRule: RuleDefinition {
 }
 
 extension Rules {
-    /// A closure rule over the whole repository context.
+    /// A closure rule over the whole repository context. The required summary
+    /// explains the invariant in reports and generated documentation.
     public static func repository(
         _ id: String,
         severity: Severity = .error,
-        summary: String = "Project-defined repository rule.",
+        summary: String,
         scope: RuleScope = .repository,
         _ evaluate: @escaping @Sendable (RuleContext) throws -> [RuleFailure]
     ) -> RepositoryRule {
@@ -37,11 +38,12 @@ extension Rules {
         )
     }
 
-    /// A closure rule over each parsed source file in scope.
+    /// A closure rule over each parsed source file in scope. The required
+    /// summary explains the invariant in reports and generated documentation.
     public static func files(
         _ id: String,
         severity: Severity = .error,
-        summary: String = "Project-defined per-file rule.",
+        summary: String,
         scope: RuleScope = .repository,
         _ evaluate: @escaping @Sendable (SourceFileContext) throws -> [RuleFailure]
     ) -> SyntaxRule {

@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- `Rules.repository`, `Rules.files`, and `Rules.visitor` now require an
+  explicit `summary:`. Project-defined rules can no longer compile with a
+  generic runtime explanation.
+
+### Changed
+
+- The rule-authoring guide and Codex skill now require the highest viable
+  authoring rung, a positive and mutation test, and a consumer-owned catalog
+  entry recording rationale, repair, proof, and deletion condition.
+- SwiftLint now has a zero-warning strict baseline. Its checked-in contract
+  excludes punctuation and size metrics, retains correctness/API hygiene
+  rules, and CI promotes every enabled warning to a failure.
+
 ## 0.5.2 - 2026-07-14
 
 Large valid projects no longer time out during rule evaluation

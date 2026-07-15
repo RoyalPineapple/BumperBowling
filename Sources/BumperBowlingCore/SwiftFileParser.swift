@@ -266,7 +266,7 @@ final class SourceVisitor: SyntaxAnyVisitor {
         let start = node.positionAfterSkippingLeadingTrivia.utf8Offset
         let end = node.endPositionBeforeTrailingTrivia.utf8Offset
         guard start < end, end <= sourceBytes.count else { return nil }
-        return String(decoding: sourceBytes[start..<end], as: UTF8.self)
+        return String(bytes: sourceBytes[start..<end], encoding: .utf8)
     }
 
     private var currentOwner: TypeName? {

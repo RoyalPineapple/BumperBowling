@@ -51,7 +51,7 @@ jobs:
           if ! command -v swiftlint >/dev/null; then
             brew install swiftlint
           fi
-          swiftlint lint
+          swiftlint lint --strict
 
       - name: Run Swift package tests
         run: swift test

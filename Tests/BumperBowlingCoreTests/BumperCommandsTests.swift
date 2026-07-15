@@ -350,7 +350,11 @@ struct BumperCommandsTests {
         import BumperBowlingCore
 
         let projectRules = RuleSet {
-            Rules.repository("custom.import_allow_list", severity: .error) { context in
+            Rules.repository(
+                "custom.import_allow_list",
+                severity: .error,
+                summary: "Only Foundation imports are allowed."
+            ) { context in
                 let allowedImports = Set(["Foundation"])
                 return try context.facts(BuiltInFacts.imports).occurrences
                     .filter { !allowedImports.contains($0.module.rawValue) }
@@ -382,7 +386,11 @@ struct BumperCommandsTests {
         import SwiftSyntax
 
         let projectRules = RuleSet {
-            Rules.files("custom.no_tuple_types", severity: .error) { file in
+            Rules.files(
+                "custom.no_tuple_types",
+                severity: .error,
+                summary: "Tuple types must be replaced by named types."
+            ) { file in
                 let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
                 visitor.walk(file.syntax)
 

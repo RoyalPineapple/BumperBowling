@@ -179,7 +179,10 @@ struct ConfigurationExecutionSafetyTests {
             }
 
             Rules {
-                Rules.repository("stuck.rule") { _ in
+                Rules.repository(
+                    "stuck.rule",
+                    summary: "Blocks indefinitely to verify evaluator timeout enforcement."
+                ) { _ in
                     Thread.sleep(forTimeInterval: 300)
                     return []
                 }

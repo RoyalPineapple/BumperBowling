@@ -18,7 +18,11 @@ struct ProjectRuleTests {
             ),
         ])
 
-        let rule = Rules.repository("project.import_allow_list", severity: .error) { context in
+        let rule = Rules.repository(
+            "project.import_allow_list",
+            severity: .error,
+            summary: "Only Foundation imports are allowed."
+        ) { context in
             let allowedImports = Set(["Foundation"])
             return try context.facts(BuiltInFacts.imports).occurrences
                 .filter { !allowedImports.contains($0.module.rawValue) }
@@ -64,7 +68,11 @@ struct ProjectRuleTests {
             ),
         ])
 
-        let rule = Rules.files("project.no_tuple_api", severity: .error) { file in
+        let rule = Rules.files(
+            "project.no_tuple_api",
+            severity: .error,
+            summary: "Public tuple APIs must use named result types."
+        ) { file in
             let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
             visitor.walk(file.syntax)
 
