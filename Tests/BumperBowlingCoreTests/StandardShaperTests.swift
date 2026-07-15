@@ -6,6 +6,58 @@ import BumperBowlingTestSupport
 @Suite("Standard architectural shapers")
 struct StandardShaperTests {
     @Test
+    func importOwnershipFlagsImportsOutsideOwners() throws {
+        let rule = Rules.importOwnership(
+            ["UIKit", "Network"],
+            allowed: .component(try ComponentID("boundary"))
+        )
+
+        let report = try RuleTestHarness(rule).evaluate(
+            VirtualRepository {
+                VirtualSourceFile.swift(
+                    "Sources/Boundary/Adapter.swift",
+                    component: "boundary",
+                    source: "import UIKit"
+                )
+                VirtualSourceFile.swift(
+                    "Sources/Core/Feature.swift",
+                    component: "core",
+                    source: "import Network\nimport Foundation"
+                )
+            }
+        )
+
+        #expect(report.violations.map(\.path.rawValue) == ["Sources/Core/Feature.swift"])
+        #expect(report.violations.first?.evidence?.observed == "import Network in Sources/Core/Feature.swift")
+    }
+
+    @Test
+    func memberReferenceOwnershipFlagsReferencesOutsideOwners() throws {
+        let rule = Rules.memberReferenceOwnership(
+            .prefix("unsafe"),
+            allowed: .under("Sources/Boundary")
+        )
+
+        let report = try RuleTestHarness(rule).evaluate(
+            VirtualRepository {
+                VirtualSourceFile.swift(
+                    "Sources/Boundary/Adapter.swift",
+                    component: "boundary",
+                    source: "func bridge(_ value: Resource) { _ = value.unsafeHandle }"
+                )
+                VirtualSourceFile.swift(
+                    "Sources/Core/Feature.swift",
+                    component: "core",
+                    source: "func leak(_ value: Resource) { _ = value.unsafeHandle }"
+                )
+            }
+        )
+
+        #expect(report.violations.map(\.path.rawValue) == ["Sources/Core/Feature.swift"])
+        #expect(report.violations.first?.evidence?.observed == "value.unsafeHandle")
+    }
+
+    @Test
     func singleDeclarationPassesForOneOwnedDeclaration() throws {
         let rule = Rules.singleDeclaration(
             NominalSymbol("AccessibilityTarget"),
@@ -132,7 +184,9 @@ struct StandardShaperTests {
     func canonicalTraversalFlagsRecursionOutsideOwners() throws {
         let recursiveSource = """
         func walk(hierarchy: AccessibilityHierarchy) {
-            walk(hierarchy: hierarchy)
+            if case .container = hierarchy {
+                walk(hierarchy: hierarchy)
+            }
         }
         """
         let rule = Rules.canonicalTraversal(
@@ -151,6 +205,119 @@ struct StandardShaperTests {
 
         #expect(report.violations.map(\.rule.id) == ["canonical_hierarchy_traversal"])
         #expect(report.violations.map(\.path.rawValue) == ["Sources/Score/Invalid.swift"])
+        #expect(report.violations.first?.evidence?.observed.contains(".container") == true)
+    }
+
+    @Test
+    func canonicalTraversalRequiresTheConfiguredStructuralCase() throws {
+        let source = """
+        func visit(tree: Tree) {
+            if case .branch = tree {
+                visit(tree: tree)
+            }
+        }
+        """
+        let branchRule = Rules.canonicalTraversal(
+            root: "Tree",
+            structuralCase: "branch",
+            owners: .under("Sources/Traversal")
+        )
+        let leafRule = Rules.canonicalTraversal(
+            root: "Tree",
+            structuralCase: "leaf",
+            owners: .under("Sources/Traversal")
+        )
+        let repository = VirtualRepository {
+            VirtualSourceFile.swift("Sources/Feature/Walk.swift", component: "core", source: source)
+        }
+
+        let branchReport = try RuleTestHarness(branchRule).evaluate(repository)
+        let leafReport = try RuleTestHarness(leafRule).evaluate(repository)
+
+        #expect(branchReport.violations.count == 1)
+        #expect(leafReport.violations.isEmpty)
+    }
+
+    @Test
+    func canonicalTraversalRequiresTheCasePatternToMatchTheRootParameter() throws {
+        let rule = Rules.canonicalTraversal(
+            root: "Tree",
+            structuralCase: "branch",
+            owners: .under("Sources/Traversal")
+        )
+        let report = try RuleTestHarness(rule).evaluate(
+            VirtualRepository {
+                VirtualSourceFile.swift(
+                    "Sources/Feature/WrongSubject.swift",
+                    component: "core",
+                    source: """
+                    func visit(tree: Tree, marker: Marker) {
+                        if case .branch = marker {
+                            visit(tree: tree, marker: marker)
+                        }
+                    }
+                    """
+                )
+            }
+        )
+
+        #expect(report.violations.isEmpty)
+    }
+
+    @Test
+    func canonicalTraversalAcceptsSelfAsTheRootMethodSubject() throws {
+        let rule = Rules.canonicalTraversal(
+            root: "Tree",
+            structuralCase: "branch",
+            owners: .under("Sources/Traversal")
+        )
+        let report = try RuleTestHarness(rule).evaluate(
+            VirtualRepository {
+                VirtualSourceFile.swift(
+                    "Sources/Feature/Tree.swift",
+                    component: "core",
+                    source: """
+                    enum Tree {
+                        case branch
+
+                        func visit() {
+                            if case .branch = self {
+                                visit()
+                            }
+                        }
+                    }
+                    """
+                )
+            }
+        )
+
+        #expect(report.violations.count == 1)
+        #expect(report.violations.first?.evidence?.observed.contains("against self") == true)
+    }
+
+    @Test
+    func canonicalTraversalIgnoresRootRecursionWithoutStructuralCaseEvidence() throws {
+        let rule = Rules.canonicalTraversal(
+            root: "Tree",
+            structuralCase: "branch",
+            owners: .under("Sources/Traversal")
+        )
+        let report = try RuleTestHarness(rule).evaluate(
+            VirtualRepository {
+                VirtualSourceFile.swift(
+                    "Sources/Feature/Unstructured.swift",
+                    component: "core",
+                    source: """
+                    func visit(tree: Tree) {
+                        let unrelated = Marker.branch
+                        visit(tree: tree)
+                    }
+                    """
+                )
+            }
+        )
+
+        #expect(report.violations.isEmpty)
     }
 
     @Test
@@ -172,7 +339,9 @@ struct StandardShaperTests {
                     }
 
                     func visit(hierarchy: AccessibilityHierarchy) {
-                        descend(hierarchy: hierarchy)
+                        if case .container = hierarchy {
+                            descend(hierarchy: hierarchy)
+                        }
                     }
                     """
                 )

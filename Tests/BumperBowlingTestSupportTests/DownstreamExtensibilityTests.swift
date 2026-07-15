@@ -99,6 +99,33 @@ struct DownstreamExtensibilityTests {
     }
 
     @Test
+    func downstreamSyntaxScopesAndValueFactsArePublic() throws {
+        let file = SourceFileContext(
+            descriptor: SourceFileDescriptor(
+                path: "Sources/App/Store.swift",
+                component: try ComponentID("app")
+            ),
+            source: """
+            typealias Handler = (@Sendable (Payload) -> Void)?
+
+            struct Store {
+                let onChange: Handler
+            }
+            """
+        )
+
+        let storeMembers = SyntaxScope.typeMembers.intersecting(.enclosed(in: "Store"))
+        let onChange = try #require(
+            variables().lexically(within: storeMembers).matches(in: file).first
+        )
+        #expect(onChange.node.bindings.first?.bumper.explicitTypeShape?.outerTypeName == "Handler")
+
+        let alias = try #require(typeAliases().matches(in: file).first)
+        #expect(alias.node.bumper.aliasedTypeShape.isFunction)
+        #expect(alias.node.bumper.aliasedTypeShape.hasAttribute(matching: "Sendable"))
+    }
+
+    @Test
     func downstreamRuleGroupsEnterOneRuleSet() throws {
         let rules = RuleSet {
             projectRules()
