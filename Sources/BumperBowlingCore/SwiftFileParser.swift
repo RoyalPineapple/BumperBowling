@@ -2,69 +2,17 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 
-public struct SwiftFileSummary: Equatable, Sendable {
-    public let imports: [ModuleName]
-    public let nominalTypes: [NominalType]
-    public let extensionDeclarations: [ExtensionDeclaration]
-    public let publicDeclarations: [PublicDeclaration]
-    public let storedProperties: [StoredProperty]
-    public let enums: [DeclarationName]
-    public let imperativeConstructs: [ImperativeConstruct]
-    public let observedImperativeConstructs: [ObservedImperativeConstruct]
-    public let syntaxNodes: SwiftSyntaxNodeCatalog
-
-    public init(
-        imports: [ModuleName],
-        nominalTypes: [NominalType] = [],
-        extensionDeclarations: [ExtensionDeclaration] = [],
-        publicDeclarations: [PublicDeclaration],
-        storedProperties: [StoredProperty] = [],
-        enums: [DeclarationName] = [],
-        imperativeConstructs: [ImperativeConstruct] = [],
-        observedImperativeConstructs: [ObservedImperativeConstruct] = [],
-        syntaxNodes: SwiftSyntaxNodeCatalog = SwiftSyntaxNodeCatalog()
-    ) {
-        let observedConstructs = observedImperativeConstructs.isEmpty
-            ? imperativeConstructs.map { ObservedImperativeConstruct(construct: $0) }
-            : observedImperativeConstructs
-        self.imports = imports
-        self.nominalTypes = nominalTypes
-        self.extensionDeclarations = extensionDeclarations
-        self.publicDeclarations = publicDeclarations
-        self.storedProperties = storedProperties
-        self.enums = enums
-        self.imperativeConstructs = imperativeConstructs.isEmpty
-            ? observedConstructs.map(\.construct)
-            : imperativeConstructs
-        self.observedImperativeConstructs = observedConstructs
-        self.syntaxNodes = syntaxNodes
-    }
-
-    init(nodes: [CollectedSourceFact]) {
-        let summary = SourceFactSummary(facts: nodes)
-
-        self.init(
-            imports: summary.imports,
-            nominalTypes: summary.nominalTypes,
-            extensionDeclarations: summary.extensionDeclarations,
-            publicDeclarations: summary.publicDeclarations,
-            storedProperties: summary.storedProperties,
-            enums: summary.enums,
-            observedImperativeConstructs: summary.observedImperativeConstructs,
-            syntaxNodes: summary.syntaxNodes
-        )
-    }
-}
-
 public struct SwiftFileParser: Sendable {
     public init() {}
 
-    public func parse(_ source: String) -> SwiftFileSummary {
+    /// Parses in-memory source into the same `SourceFileFacts` the scanner
+    /// produces, under a placeholder path and component.
+    public func parse(_ source: String) -> SourceFileFacts {
         let tree = Parser.parse(source: source)
         let visitor = SourceVisitor(source: source, locationConverter: SourceLocationConverter(fileName: "", tree: tree))
         visitor.walk(tree)
 
-        return SwiftFileSummary(nodes: visitor.nodes)
+        return SourceFileFacts(path: "InMemory.swift", component: .core, source: source, nodes: visitor.nodes)
     }
 
     public func parseFile(

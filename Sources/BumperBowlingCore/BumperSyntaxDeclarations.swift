@@ -140,10 +140,6 @@ public extension BumperSyntaxView where Node == VariableDeclSyntax {
         node.bindingSpecifier.tokenKind == .keyword(.var)
     }
 
-    var isImmutableBinding: Bool {
-        node.bindingSpecifier.tokenKind == .keyword(.let)
-    }
-
     var isMemberDeclaration: Bool {
         node.parent?.as(MemberBlockItemSyntax.self) != nil
     }

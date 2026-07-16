@@ -43,10 +43,6 @@ public struct SourceFileContext: Sendable {
         return SourcePosition(line: sourceLocation.line, column: sourceLocation.column)
     }
 
-    func location(for node: some SyntaxProtocol) -> SourcePosition {
-        position(of: node)
-    }
-
     public func failure(
         at node: some SyntaxProtocol,
         message: String,

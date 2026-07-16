@@ -189,7 +189,7 @@ public struct DeclarationInventoryProvider: FactProvider {
                             kind: declaration.kind,
                             path: file.path,
                             component: file.component,
-                            location: file.location(for: match.node)
+                            location: file.position(of: match.node)
                         )
                     }
                 }
@@ -246,7 +246,7 @@ public struct FunctionCallInventoryProvider: FactProvider {
                         callee: FunctionSymbol(match.node.calleeName),
                         path: file.path,
                         component: file.component,
-                        location: file.location(for: match.node)
+                        location: file.position(of: match.node)
                     )
                 }
             }
@@ -314,7 +314,7 @@ public struct DirectRecursionProvider: FactProvider {
                         },
                         path: file.path,
                         component: file.component,
-                        location: file.location(for: match.node)
+                        location: file.position(of: match.node)
                     )
                 }
             }
