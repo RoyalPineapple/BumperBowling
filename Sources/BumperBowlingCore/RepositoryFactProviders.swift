@@ -45,12 +45,6 @@ public struct ImportInventory: Sendable {
     public init(occurrences: [ImportOccurrence]) {
         self.occurrences = occurrences
     }
-
-    public func imports(of module: ModuleName) -> [ImportOccurrence] {
-        occurrences.filter { occurrence in
-            occurrence.module == module
-        }
-    }
 }
 
 public struct ImportInventoryProvider: FactProvider {
@@ -417,10 +411,6 @@ public struct RecursiveCallGroups: Sendable {
 
     public init(groups: [[CallGraphFunction]]) {
         self.groups = groups
-    }
-
-    public var functions: [CallGraphFunction] {
-        groups.flatMap { $0 }
     }
 }
 

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Removed
+
+- Dead public API with no callers or documentation, found by audit:
+  `SwiftFileSummary` (`SwiftFileParser.parse(_:)` now returns the same
+  `SourceFileFacts` the scanner produces), `SwiftSyntaxNodeCatalog.adding(_:)`,
+  `BumperSyntaxView.isA(_:)`/`hasAncestor(_:)`/`isImmutableBinding`,
+  `FunctionCallQuery.calleeBaseName`, `ImportInventory.imports(of:)`,
+  `RecursiveCallGroups.functions`, `PropertySymbol`, and the
+  `ComponentRequirement` `combined(with:)`/`all(_:)`/`+` combinators (use the
+  variadic initializer).
+
 ## 0.6.0 - 2026-07-15
 
 ### Breaking

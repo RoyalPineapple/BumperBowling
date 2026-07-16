@@ -57,14 +57,6 @@ public struct ComponentRequirement: Equatable, Sendable {
         }
     }
 
-    public func combined(with other: ComponentRequirement) -> ComponentRequirement {
-        ComponentRequirement(factRules: factRules.union(other.factRules))
-    }
-
-    public static func all(_ requirements: ComponentRequirement...) -> ComponentRequirement {
-        ComponentRequirement(requirements)
-    }
-
     public static let noAnyStoredProperties = ComponentRequirement(.disallowStoredProperty(.any))
     public static let noBroadExistentialStoredProperties =
         ComponentRequirement(.disallowStoredProperty(.broadExistential))
@@ -98,8 +90,4 @@ public struct ComponentRequirement: Equatable, Sendable {
         .swiftBasics,
         .functionalCore
     )
-}
-
-public func + (left: ComponentRequirement, right: ComponentRequirement) -> ComponentRequirement {
-    left.combined(with: right)
 }

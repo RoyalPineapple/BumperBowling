@@ -27,10 +27,8 @@ extension SwiftSymbol: ExpressibleByStringLiteral {
 
 public enum NominalSymbolKind: Sendable {}
 public enum FunctionSymbolKind: Sendable {}
-public enum PropertySymbolKind: Sendable {}
 public enum EnumCaseSymbolKind: Sendable {}
 
 public typealias NominalSymbol = SwiftSymbol<NominalSymbolKind>
 public typealias FunctionSymbol = SwiftSymbol<FunctionSymbolKind>
-public typealias PropertySymbol = SwiftSymbol<PropertySymbolKind>
 public typealias EnumCaseSymbol = SwiftSymbol<EnumCaseSymbolKind>

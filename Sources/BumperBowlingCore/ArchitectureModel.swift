@@ -269,13 +269,6 @@ public struct SwiftSyntaxNodeCatalog: Equatable, Sendable {
         self.nodeKinds = nodeKinds
         self.nodes = nodes
     }
-
-    public func adding(_ node: ObservedSyntaxNode) -> SwiftSyntaxNodeCatalog {
-        SwiftSyntaxNodeCatalog(
-            nodeKinds: nodeKinds.union([node.kind]),
-            nodes: nodes.union([node])
-        )
-    }
 }
 
 public struct ObservedSyntaxNode: Hashable, Sendable {

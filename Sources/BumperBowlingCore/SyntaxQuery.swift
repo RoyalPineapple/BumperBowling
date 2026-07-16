@@ -229,13 +229,6 @@ extension FunctionCallExprSyntax {
         calledExpression.calleeName
     }
 
-    /// The final callee component: `decode` for `decoder.decode(...)`.
-    public var calleeBaseName: String {
-        if let member = calledExpression.as(MemberAccessExprSyntax.self) {
-            return member.declName.baseName.text
-        }
-        return calleeName
-    }
 }
 
 private extension ExprSyntax {
