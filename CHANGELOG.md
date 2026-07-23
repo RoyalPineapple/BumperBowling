@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-07-23
+
 ### Removed
 
 - Dead public API with no callers or documentation, found by audit:
