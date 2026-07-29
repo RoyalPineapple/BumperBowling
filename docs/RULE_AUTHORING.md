@@ -425,6 +425,34 @@ Use `ContainSyntaxNode(_:)` when a repository needs a fact Bumper Bowling does
 not name as a built-in rule. `SyntaxNodeMatcher` can match by SwiftSyntax node
 kind, spelling, parent kind, ancestor kind, or any combination.
 
+### Scoped syntax cardinality
+
+For syntax policies that are about how often a pattern occurs per file, use
+`Rules.assert`. It scopes the rule, evaluates a public `SyntaxPattern`, and
+reports the observed count as structured evidence. Excess matches retain their
+source location; missing matches report against the affected file.
+
+```swift
+Rules.assert(
+    functionCalls(),
+    cardinality: .none,
+    id: "domain.no_function_calls",
+    summary: "Domain files do not make function calls.",
+    scope: .under("Sources/Domain")
+)
+
+Rules.assert(
+    SyntaxQuery<EnumDeclSyntax>(),
+    cardinality: .atLeast(1),
+    id: "workflow.has_enum",
+    summary: "Each workflow file declares an enum."
+)
+```
+
+Available cardinalities are `.none`, `.atLeast(_)`, `.atMost(_)`, and
+`.exactly(_)`. This API is neutral over SwiftSyntax node types; domain-specific
+defaults should compose it rather than add privileged rule infrastructure.
+
 ## Boundary
 
 Use SwiftLint for local style, formatting, and code-smell policy.
