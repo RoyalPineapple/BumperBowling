@@ -1,4 +1,4 @@
-# From SwiftSyntax To An Architecture Rule
+# Build An Architecture Rule From The Ground Up
 
 This guide builds one Bumper Bowling rule from the ground up. The rule gives
 one subsystem ownership of recursive tree traversal.
