@@ -23,25 +23,30 @@ import SwiftSyntax
 
 let swiftUIPreviews = Rules.files(
     "app.swiftui_preview",
-    summary: "Each SwiftUI view file contains a preview.",
+    summary: "Each SwiftUI view is constructed by at least one preview.",
     scope: .under("Sources/Features")
 ) { file in
-    let views = SyntaxQuery<StructDeclSyntax>()
-        .filter { match in
-            match.node.inheritanceClause?.inheritedTypes.contains { inherited in
-                inherited.type.trimmedDescription == "View"
-            } == true
+    let views = structs().inheriting("View").matches(in: file)
+
+    let previews = macroExpansions().named("Preview").matches(in: file)
+
+    return views.compactMap { view in
+        let viewName = view.node.name.text
+        let hasMatchingPreview = previews.contains { preview in
+            let constructedTypes = preview.node
+                .descendants(of: FunctionCallExprSyntax.self)
+                .map(\.calleeName)
+
+            return constructedTypes.contains(viewName)
         }
-        .matches(in: file)
 
-    let previews = SyntaxQuery<MacroExpansionDeclSyntax>()
-        .filter { $0.node.macroName.text == "Preview" }
-        .matches(in: file)
+        guard hasMatchingPreview else {
+            return view.failure(
+                message: "\(viewName) needs a #Preview that constructs \(viewName)."
+            )
+        }
 
-    guard !views.isEmpty, previews.isEmpty else { return [] }
-
-    return views.map { view in
-        view.failure(message: "\(view.node.name.text) has no #Preview in this file.")
+        return nil
     }
 }
 ```
@@ -50,7 +55,7 @@ Now the same omission produces source evidence:
 
 ```text
 Sources/Features/Checkout/CheckoutView.swift:1:1
-CheckoutView has no #Preview in this file. (app.swiftui_preview)
+CheckoutView needs a #Preview that constructs CheckoutView. (app.swiftui_preview)
 ```
 
 That rule is ordinary Swift over typed SwiftSyntax nodes. Keep it local, give

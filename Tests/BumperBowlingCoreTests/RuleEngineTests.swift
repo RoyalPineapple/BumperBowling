@@ -84,6 +84,31 @@ struct RuleEngineTests {
     }
 
     @Test
+    func declarationAndMacroQueriesComposeWithProjectSpellings() throws {
+        let file = SourceFileContext(
+            descriptor: SourceFileDescriptor(
+                path: RelativeFilePath("Sources/Features/CheckoutView.swift"),
+                component: try ComponentID("features")
+            ),
+            source: """
+            struct CheckoutView: View {}
+            struct CheckoutState: Equatable {}
+            #Preview("Checkout") { CheckoutView() }
+            """
+        )
+
+        let views = structs()
+            .inheriting("View")
+            .matches(in: file)
+        let previews = macroExpansions()
+            .named("Preview")
+            .matches(in: file)
+
+        #expect(views.map { $0.node.name.text } == ["CheckoutView"])
+        #expect(previews.count == 1)
+    }
+
+    @Test
     func invalidScopePathsFailAtConstruction() {
         // Runtime String values take the throwing initializers; only literals
         // get the trapping literal conversion.

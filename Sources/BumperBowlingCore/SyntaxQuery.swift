@@ -112,6 +112,14 @@ public func typeAliases() -> SyntaxQuery<TypeAliasDeclSyntax> {
     SyntaxQuery()
 }
 
+public func structs() -> SyntaxQuery<StructDeclSyntax> {
+    SyntaxQuery()
+}
+
+public func macroExpansions() -> SyntaxQuery<MacroExpansionExprSyntax> {
+    SyntaxQuery()
+}
+
 public func nominalDeclarations() -> SyntaxQuery<DeclSyntax> {
     SyntaxQuery<DeclSyntax> { file in
         file.syntax.descendants(of: DeclSyntax.self)
@@ -127,6 +135,16 @@ public func functionCalls() -> SyntaxQuery<FunctionCallExprSyntax> {
 }
 
 // MARK: - Capability-specific operations
+
+extension SyntaxQuery where Node: DeclGroupSyntax {
+    public func inheriting(_ type: NominalSymbol) -> Self {
+        filter { match in
+            match.node.inheritanceClause?.inheritedTypes.contains { inheritedType in
+                StringMatcher.exact(type.name).matches(inheritedType.type.trimmedDescription)
+            } == true
+        }
+    }
+}
 
 extension SyntaxQuery where Node == FunctionDeclSyntax {
     public func named(_ name: FunctionSymbol) -> Self {
@@ -160,6 +178,14 @@ extension SyntaxQuery where Node == TypeAliasDeclSyntax {
     public func aliasing(_ type: NominalSymbol) -> Self {
         filter { match in
             StringMatcher.exact(type.name).matches(match.node.initializer.value.trimmedDescription)
+        }
+    }
+}
+
+extension SyntaxQuery where Node == MacroExpansionExprSyntax {
+    public func named(_ name: MacroSymbol) -> Self {
+        filter { match in
+            StringMatcher.exact(name.name).matches(match.node.macroName.text)
         }
     }
 }

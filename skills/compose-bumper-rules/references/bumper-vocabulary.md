@@ -178,7 +178,7 @@ struct DeclarationsPerFile: FactProvider {
 
 `Rules.files(_:severity:summary:_:)` evaluates each selected parsed file. Query roots
 are `functions()`, `initializers()`, `variables()`, `typeAliases()`,
-`nominalDeclarations()`, and `functionCalls()`.
+`structs()`, `macroExpansions()`, `nominalDeclarations()`, and `functionCalls()`.
 
 ```swift
 Rules.files(
@@ -194,8 +194,8 @@ Rules.files(
 }
 ```
 
-Use query operations such as `taking(_:)`, `callingSelf()`, `aliasing(_:)`, and
-`excluding(_:)` to retain the concrete SwiftSyntax node type.
+Use query operations such as `taking(_:)`, `callingSelf()`, `aliasing(_:)`,
+`inheriting(_:)`, and `excluding(_:)` to retain the concrete SwiftSyntax node type.
 
 Use `Rules.assert` for per-file cardinality:
 
