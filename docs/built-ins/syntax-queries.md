@@ -13,6 +13,8 @@ concrete SwiftSyntax node type.
 | `initializers()` | `InitializerDeclSyntax` |
 | `variables()` | `VariableDeclSyntax` |
 | `typeAliases()` | `TypeAliasDeclSyntax` |
+| `structs()` | `StructDeclSyntax` |
+| `macroExpansions()` | `MacroExpansionExprSyntax` |
 | `nominalDeclarations()` | Nominal `DeclSyntax` values |
 | `functionCalls()` | `FunctionCallExprSyntax` |
 | `SyntaxQuery<Node>()` | Any selected SwiftSyntax node type |
@@ -36,6 +38,8 @@ Typed capabilities add these operations:
 | `functions()` | `.taking(_:)` | Functions with a matching explicit parameter type. |
 | `functions()` | `.callingSelf()` | Direct self-recursive functions. |
 | `typeAliases()` | `.aliasing(_:)` | Aliases with a matching explicit target spelling. |
+| `structs()` | `.inheriting(_:)` | Structs with a matching inheritance-clause type. |
+| `macroExpansions()` | `.named(_:)` | Macro expansions with a matching name. |
 
 `BumperSyntaxView` adds value-only syntax facts. Important views include:
 

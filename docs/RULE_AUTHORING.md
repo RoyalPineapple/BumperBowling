@@ -186,7 +186,8 @@ Rules.files(
 ```
 
 Query roots: `functions()`, `initializers()`, `variables()`, `typeAliases()`,
-`nominalDeclarations()`, `functionCalls()`. Queries filter files with
+`structs()`, `macroExpansions()`, `nominalDeclarations()`, `functionCalls()`.
+Queries filter files with
 `within(_:)` and filter nodes with `lexically(within:)` or
 `lexically(excluding:)`. `SyntaxScope`
 composes file, type-member, local, protocol, enclosing-type, and
@@ -198,7 +199,7 @@ referenced type names, the outer type spelling, function-type shape, and
 attributes. Bumper deliberately does not claim type or alias resolution.
 
 Capability-specific operations such as `taking(_:)`, `callingSelf()`,
-`aliasing(_:)`, and `excluding(_:)` narrow matches while keeping the concrete
+`aliasing(_:)`, `inheriting(_:)`, and `excluding(_:)` narrow matches while keeping the concrete
 SwiftSyntax node type, so `match.node` needs no casting.
 
 ### Raw Visitor Escape Hatch
