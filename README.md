@@ -2,37 +2,52 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling turns Swift architecture into tests.
+Bumper Bowling makes Swift architecture executable.
 
-The compiler checks whether code is valid. Tests check how it behaves. Bumper
-Bowling checks whether your repository still follows its own architecture.
+Architecture is a contract for ownership, dependencies, and code shape. A
+useful contract lives with the source, runs in CI, and explains each failure.
+Bumper Bowling gives a Swift repository that contract.
 
-Define repository-specific rules in Swift, prove them with focused fixtures,
-and enforce them in CI. Bumper Bowling parses source with SwiftSyntax and gives
-your rules typed evidence about imports, scopes, types, declarations,
-references, and ownership.
+You write policy in Swift. Bumper Bowling parses source with SwiftSyntax,
+evaluates typed rules, and reports evidence for every failure.
 
-Your rules stay in your repository. Bumper Bowling supplies the engine, not
-the policy.
-
-| Tool | What it protects |
-|------|------------------|
+| Tool | Protects |
+| --- | --- |
 | Swift compiler | Language, type, and concurrency correctness |
-| [SwiftLint](https://github.com/realm/swiftlint) | Shared style and local source conventions |
+| [SwiftLint](https://github.com/realm/swiftlint) | Style and local source conventions |
 | Runtime tests | Application behavior |
-| Bumper Bowling | Repository-specific architectural source invariants |
+| Bumper Bowling | Repository-specific source architecture |
 
-Use Bumper Bowling to express rules such as:
+Use Bumper Bowling for rules such as these:
 
-- Only designated components may import a framework.
-- Dependencies must follow the declared component graph.
-- Unsafe concurrency escape hatches must remain inside named boundaries.
-- Stored callbacks must declare their isolation.
+- Only named components can import a framework.
+- Component dependencies must follow a declared graph.
+- A source path has one component owner.
+- A boundary owns an unsafe concurrency escape hatch.
+- A stored callback declares its isolation.
 
-## Quick Start
+Each repository owns its vocabulary and policy. Bumper Bowling supplies one
+typed rule engine for the architecture that the repository chooses.
 
-SwiftPM is the canonical distribution path for Bumper Bowling. Use the package
-directly from this repository, pinned to a release tag:
+## The Idea
+
+Bumper Bowling turns this declaration:
+
+```text
+Core owns these files.
+CLI can depend on Core.
+Core uses Foundation only.
+```
+
+into a repeatable source check. A failed check identifies the file, source
+location, observed fact, and required architecture.
+
+This makes architecture part of normal development. A developer can change a
+rule, add a focused fixture, run the check, and review a clear result.
+
+## Get Started
+
+Add Bumper Bowling to a Swift package at a release tag:
 
 ```swift
 // Package.swift
@@ -41,10 +56,10 @@ dependencies: [
 ]
 ```
 
-The package exposes:
+The package provides `BumperBowlingCore` for configuration and tests. It also
+provides the `bumper` command-line tool.
 
-- `BumperBowlingCore` for Swift configuration and test integration.
-- `bumper` for command-line linting through `swift run`.
+Run these commands from the repository root:
 
 ```bash
 swift run bumper init .
@@ -52,12 +67,10 @@ swift run bumper lint .
 swift run bumper test .
 ```
 
-`bumper init` writes a starter `BumperBowling.swift`. `bumper lint` checks the
-repository against it. `bumper test` runs the repository-owned tests for your
-rules.
+`bumper init` writes `BumperBowling.swift`. `bumper lint` checks the
+repository. `bumper test` runs repository-owned tests for custom rules.
 
-For CI rollouts, Bumper Bowling can emit JSON, run advisory, and compare against
-a checked-in baseline:
+For an advisory CI rollout, use JSON output and a baseline:
 
 ```bash
 swift run bumper lint . --format json --fail-on none
@@ -65,18 +78,10 @@ swift run bumper baseline create . --output .bumper-baseline.json
 swift run bumper lint . --baseline .bumper-baseline.json --fail-on error
 ```
 
-## Bumper Bowling Checks Itself
+## Declare The Architecture
 
-This repository defines its own component boundaries and project rules with
-Bumper Bowling. CI runs `swift run bumper lint .` alongside the package tests,
-so the repository uses the same public engine and rule APIs it ships to
-consumers.
-
-## Configuration
-
-`BumperBowling.swift` declares one `BumperProject` named `bumper`. Component
-names come from your own `ComponentKey` enum, so `Component(.core)` and
-`MayDependOn(.core)` are typo-checked by the compiler:
+`BumperBowling.swift` declares one `BumperProject` named `bumper`. A
+project-owned `ComponentKey` enum makes component references compiler-checked.
 
 ```swift
 import BumperBowlingCore
@@ -87,9 +92,7 @@ enum AppComponent: String, ComponentKey {
 }
 
 let bumper = BumperProject {
-    Included {
-        "Sources"
-    }
+    Included { "Sources" }
 
     Architecture(AppComponent.self) {
         Component(.core) {
@@ -115,40 +118,28 @@ let bumper = BumperProject {
 }
 ```
 
-The same architecture works in your test suite, so architecture failures are
-just test failures:
+Each component declares three facts:
 
-```swift
-import BumperBowlingCore
-import Testing
+- `Owns` identifies the source paths that belong to the component.
+- `Modules` identifies the imports that represent the component.
+- `MayDependOn` identifies allowed component dependencies.
 
-@Test
-func architectureStaysInLane() async throws {
-    let report = try await BumperCommands.lint(
-        root: projectRoot,
-        configuration: bumper.architecture
-    )
+The engine checks observed imports against this graph. It also checks the
+source facts that each component policy requires.
 
-    for violation in report.violations where violation.severity == .error {
-        let message = "\(violation.path.rawValue): \(violation.message)"
-        Issue.record(Comment(rawValue: message))
-    }
-}
-```
+## Compose Your Own Vocabulary
 
-The DSL reference lives in the [configuration language spec](docs/DSL_SPEC.md).
-Rule-authoring guidance and examples live in
-[rule authoring](docs/RULE_AUTHORING.md).
+Composition is Bumper Bowling's main extension point. The engine provides
+small typed pieces. A repository combines those pieces into names that fit its
+codebase.
 
-## Consumer-Owned Shapes
+| Piece | Groups |
+| --- | --- |
+| `ComponentRequirement` | Source-fact requirements |
+| `ComponentShape` | Component elements |
+| `AssertionShape` | Repository-level rule configuration |
 
-Repositories can keep their own architecture vocabulary in `.bumper/Sources`.
-Those Swift files compile beside `BumperBowling.swift`, so a project can define
-its own `ComponentRequirement`, `ComponentShape`, and `AssertionShape` values
-without waiting for Bumper Bowling to ship a named preset:
-
-Bumper Bowling uses this pattern for itself in
-`.bumper/Sources/BumperArchitecture.swift`.
+For example, a repository can define a reusable domain policy:
 
 ```swift
 // .bumper/Sources/HouseStyle.swift
@@ -171,41 +162,28 @@ extension ComponentShape {
 }
 ```
 
+Apply that policy explicitly:
+
 ```swift
-// BumperBowling.swift
 Component(.core) {
     Owns("Sources/Core")
     Applies(.domain)
 }
 ```
 
-### How Composition Works
+`Applies(.domain)` adds the policy to the current component. The component's
+owned paths provide the default scope for its requirements.
 
-Composition lets a repository define its own architecture language. Bumper
-Bowling supplies the rule engine. The repository supplies the names and policy
-that fit its codebase.
+A shape can apply another shape. Use `RuleDefinition` and `RuleScope` for a
+repository-specific check. Built-in and custom rules use the same parser, fact
+cache, and report format.
 
-- `ComponentRequirement` groups source-fact requirements.
-- `ComponentShape` groups component elements, such as dependencies,
-  capabilities, and requirements.
-- `AssertionShape` groups repository-level rule configuration.
+The project applies each value explicitly. A local file or package provides
+the Swift values that the project chooses to use.
 
-`Applies(.domain)` inserts the elements from `.domain` into the current
-component. It does not create a new component or a new rule engine. The
-component's `Owns(...)` paths provide the default scope for its requirements.
-
-Shapes can compose other shapes. A repository can also use the lower-level
-pieces directly when a shape is not a good fit. Define a `RuleDefinition` with
-a `RuleScope` for a custom check.
-
-This is the extension point that Bumper Bowling adds. A repository can use
-typed Swift to express its own policy. The policy runs through the same parser,
-fact cache, and report format as built-in rules. There is no plugin registry or
-implicit rule loading.
-
-Shared local rule packages can use SwiftPM directly. If `.bumper/Package.swift`
-exists, Bumper Bowling adds it to the generated runner and expects it to export
-a `BumperRules` library product:
+Put repository-only vocabulary in `.bumper/Sources`. For vocabulary shared by
+multiple repositories, use `.bumper/Package.swift` with a `BumperRules`
+library product.
 
 ```text
 .bumper/
@@ -213,34 +191,30 @@ a `BumperRules` library product:
   Sources/BumperRules/Rules.swift
 ```
 
-## Project Rules
+## Add A Custom Rule
 
-When a repository needs a rule Bumper Bowling cannot know in advance, define it
-as an ordinary `RuleDefinition` and add it to the project's `Rules` block. Built-in
-rules and project rules run in one engine and produce one `RuleReport`.
-
-Fact-based rules evaluate memoized typed facts over the parsed repository:
+Use a `RuleDefinition` when the standard architecture DSL cannot state the
+policy. Add that rule to `Rules { ... }` with built-in rules.
 
 ```swift
-// .bumper/Sources/ProjectRules.swift
 import BumperBowlingCore
 
 let projectRules = RuleSet {
     Rules.repository(
-        "the_score.import_allow_list",
+        "project.import_allow_list",
         severity: .error,
-        summary: "TheScore imports only its value-layer dependencies."
+        summary: "The project imports only allowed modules."
     ) { context in
-        let allowedImports = Set(["Foundation"])
+        let allowed = Set(["Foundation"])
         return try context.facts(BuiltInFacts.imports).occurrences
-            .filter { !allowedImports.contains($0.module.rawValue) }
+            .filter { !allowed.contains($0.module.rawValue) }
             .map { occurrence in
                 RuleFailure(
                     path: occurrence.path,
-                    message: "\(occurrence.component.rawValue) imports non-allowlisted module \(occurrence.module.rawValue)",
+                    message: "This import is not allowed.",
                     evidence: ViolationEvidence(
                         observed: occurrence.module.rawValue,
-                        expectation: "allowed imports: Foundation"
+                        expectation: "an allowed import"
                     )
                 )
             }
@@ -249,167 +223,85 @@ let projectRules = RuleSet {
 ```
 
 ```swift
-// BumperBowling.swift
 Rules {
     DependencyBoundaries(.error)
     projectRules
 }
 ```
 
-When projected facts are not enough, write a per-file syntax rule. Each rule
-receives a `SourceFileContext` with the parsed `SourceFileSyntax`, source text,
-component metadata, and location helpers — every file is parsed exactly once
-per run, shared across all rules:
+Every rule can run in memory with `BumperBowlingTestSupport`. See
+[rule authoring](docs/RULE_AUTHORING.md) for the authoring ladder, fixtures,
+typed facts, queries, and raw `SyntaxVisitor` rules.
 
-```swift
-import BumperBowlingCore
-import SwiftSyntax
+## Run In CI
 
-let projectRules = RuleSet {
-    Rules.files(
-        "core.no_tuple_api",
-        severity: .error,
-        summary: "Public core APIs use named result types."
-    ) { file in
-        let visitor = TupleTypeCollector(viewMode: .sourceAccurate)
-        visitor.walk(file.syntax)
+This repository uses its own public API. CI runs package tests and:
 
-        return visitor.tuples.map { tuple in
-            file.failure(
-                at: tuple,
-                message: "Tuple API must use a named type.",
-                evidence: ViolationEvidence(
-                    observed: tuple.trimmedDescription,
-                    expectation: "named type"
-                )
-            )
-        }
-    }
-}
-
-private final class TupleTypeCollector: SyntaxVisitor {
-    private(set) var tuples: [TupleTypeSyntax] = []
-
-    override func visit(_ node: TupleTypeSyntax) -> SyntaxVisitorContinueKind {
-        tuples.append(node)
-        return .skipChildren
-    }
-}
+```bash
+swift run bumper lint .
 ```
 
-Common ownership and traversal invariants ship as prebuilt shapers —
-`Rules.singleDeclaration`, `Rules.constructionOwnership`, `Rules.boundaryOnly`,
-`Rules.noAlternateAliases`, `Rules.canonicalTraversal`,
-`Rules.canonicalConstruction`, and `Rules.singleNominalSpelling` — implemented
-only through the same public rule, fact, and query interfaces.
-
-Every rule can be tested in memory with `BumperBowlingTestSupport`:
+You can run the same architecture check from a Swift test:
 
 ```swift
-import BumperBowlingTestSupport
-
-let report = try RuleTestHarness(rule).evaluate(
-    VirtualRepository {
-        VirtualSourceFile.swift("Sources/Core/Thing.swift", component: "core", source: "struct Thing {}")
-    }
+let report = try await BumperCommands.lint(
+    root: projectRoot,
+    configuration: bumper.architecture
 )
 ```
 
-See [rule authoring](docs/RULE_AUTHORING.md) for the full ladder: DSL, shapers,
-typed facts and queries, and the raw `SyntaxVisitor` escape hatch.
-
-## Agent Skill
-
-Bumper Bowling ships a Codex skill for agents composing repo-owned architecture
-vocabulary:
-
-```text
-skills/compose-bumper-rules/
-```
-
-To install it locally:
-
-```bash
-mkdir -p ~/.codex/skills
-cp -R skills/compose-bumper-rules ~/.codex/skills/
-```
+Record error violations as test failures in the test framework that your
+repository uses.
 
 ## Commands
 
-```bash
-bumper init [root]             # write a starter configuration
-bumper lint [root]             # check the repo against it
-bumper test [root]             # run the repository's Bumper rule tests
-bumper scan [root]             # show the architecture graph the code expresses
-bumper baseline create [root]  # write a JSON baseline for current violations
-bumper snapshot [root]         # render the configured architecture
-bumper config [root]           # how your configuration loads, and whether it is valid
-bumper explain <path>          # what bumper sees in one file
+```text
+bumper init [root]             Write a starter configuration.
+bumper lint [root]             Check the repository.
+bumper test [root]             Run repository-owned rule tests.
+bumper scan [root]             Show the observed architecture graph.
+bumper baseline create [root]  Write a JSON baseline.
+bumper snapshot [root]         Render the declared architecture.
+bumper config [root]           Check configuration loading.
+bumper explain <path>          Show facts for one file.
 ```
 
-`lint` and `scan` accept `--format markdown|json`. `lint` also accepts
-`--fail-on none|note|warning|error`, `--baseline <path>`, and `--progress`.
-`test` runs Swift tests from `.bumper/Tests`, or the package's own test targets
-when `.bumper/Package.swift` is present.
-Use `BUMPER_CACHE_DIR` to put compiled configuration and custom rule runners in
-a stable CI cache location.
+`lint` and `scan` accept `--format markdown|json`. `lint` accepts
+`--fail-on`, `--baseline`, `--progress`, and `--timings`.
 
-## How The Configuration Loads
+## Configuration Execution
 
-`BumperBowling.swift` is a program, not a data file — the same as
-`Package.swift`. So Bumper Bowling loads it the way SwiftPM loads a manifest:
-it compiles the file into one cached project runner and runs that runner in a
-sealed-off process.
+`BumperBowling.swift` is a Swift program, like `Package.swift`. Bumper Bowling
+compiles it into a cached runner and evaluates it in an isolated process.
 
-The runner has two modes. `describe` prints the architecture configuration as
-JSON so the host knows what to scan. `evaluate` receives the scanned source
-files as JSON on stdin, parses each file once, evaluates built-in and project
-rules in one engine, and prints one `RuleReport` as JSON. The sealed-off
-process has no network, nowhere to write, and an empty environment; scanning
-stays in the `bumper` process itself.
+The runner has two modes. `describe` reports the architecture configuration.
+`evaluate` receives scanned source files, parses each file once, and reports
+the rule result. The `bumper` process performs repository scanning. The runner
+uses a restricted environment for configuration evaluation.
 
-The compile is cached against the file's contents and built optimized
-(release configuration), so the one-time build cost is paid once per change
-to `BumperBowling.swift`, not once per lint — and evaluation runs at full
-speed. An unchanged configuration loads from cache with no build at all.
-Hosts where the one-time optimized build is too expensive (small CI runners)
-can set `BUMPER_RUNNER_BUILD_CONFIGURATION=debug`; only `release` and `debug`
-are accepted, and the cache keeps the two configurations separate.
+The runner builds once for an unchanged configuration. By default, it uses a
+release build. Use `BUMPER_RUNNER_BUILD_CONFIGURATION=debug` on a smaller CI
+host to reduce the initial build time.
 
-By default that cache lives under the system temporary directory. Set
-`BUMPER_CACHE_DIR` when CI should persist it between runs:
+Use `BUMPER_CACHE_DIR` to persist the runner cache in CI:
 
 ```bash
 BUMPER_CACHE_DIR=.build/bumper-cache swift run bumper lint .
 ```
 
-Evaluation is always bounded: the runner gets 60 seconds by default. A
-legitimately large repository can raise the budget — the value must be a
-positive, finite number of seconds, and anything else is a loud
-configuration error:
+Evaluation has a 60-second default limit. Set
+`BUMPER_EVALUATION_TIMEOUT_SECONDS` to a positive number of seconds for a
+larger repository.
 
-```bash
-BUMPER_EVALUATION_TIMEOUT_SECONDS=300 swift run bumper lint .
-```
+## Fact Surface
 
-When evaluation is slow, `bumper lint --timings` prints the host phases
-(prepare, scan, evaluate) and the slowest rules and fact providers to
-stderr, so a slow project rule is attributable before the budget needs
-raising.
+Bumper Bowling builds its evidence from SwiftSyntax-visible facts. These facts
+include source ownership, imports, declarations, stored properties, and syntax
+constructs.
 
-`bumper config` loads your configuration and tells you whether it is valid.
-
-One honest caveat: compiling a configuration runs its build. Lint
-repositories you trust.
-
-## What It Can And Cannot See
-
-Bumper Bowling sees what SwiftSyntax sees: files and ownership, imports,
-public declarations, stored properties with explicit types, enum names, and
-selected imperative constructs. It does no type inference and no symbol
-resolution. Rules that need the compiler belong in a compiler-backed
-analyzer, not this pass; the exact fact surface is in
-[SWIFTSYNTAX_SURFACE.md](docs/SWIFTSYNTAX_SURFACE.md).
+Read [the SwiftSyntax surface](docs/SWIFTSYNTAX_SURFACE.md) for the exact fact
+set. Read [the configuration specification](docs/DSL_SPEC.md) for all DSL
+forms.
 
 ## Development
 
@@ -418,18 +310,14 @@ BUMPER_RUNNER_BUILD_CONFIGURATION=debug swift test
 swift run bumper lint .
 ```
 
-The test override avoids repeatedly optimizing isolated fixture runners; policy
-tests still lock the production `release` default, and the self-lint command
-exercises it. The repo lints itself; that is the main product test. Releases are
-SwiftPM tags from this repository. The checked-in architecture snapshot is
-generated by `bumper snapshot`.
+The test override avoids repeated optimized builds for fixture runners. The
+repository also checks its own architecture.
 
-## Docs
+## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Configuration language](docs/DSL_SPEC.md)
 - [Rule authoring](docs/RULE_AUTHORING.md)
-- [Migrating to 0.5](docs/MIGRATION_0.5.md)
 - [SwiftSyntax surface](docs/SWIFTSYNTAX_SURFACE.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 
