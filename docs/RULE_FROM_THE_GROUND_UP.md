@@ -99,8 +99,46 @@ let groups = try context.facts(
 ).groups
 ```
 
+The returned fact has this public definition:
+
+```swift
+public struct RecursiveCallGroups: Sendable {
+    public let groups: [[CallGraphFunction]]
+
+    public init(groups: [[CallGraphFunction]]) {
+        self.groups = groups
+    }
+}
+```
+
+Each inner array is one strongly connected component of the local call graph.
+A one-function group represents direct recursion. A larger group represents
+mutual recursion.
+
 Each `CallGraphFunction` retains its parameters, case patterns, path,
-component, and source location.
+component, and source location:
+
+```swift
+public struct CallGraphFunction: Hashable, Sendable {
+    public let function: FunctionSymbol
+    public let enclosingType: NominalSymbol?
+    public let parameters: [CallGraphParameterEvidence]
+    public let casePatterns: [CasePatternEvidence]
+    public let path: RelativeFilePath
+    public let component: ComponentID
+    public let location: SourcePosition?
+}
+```
+
+The provider performs this transformation:
+
+```text
+FunctionDeclSyntax
+    -> CallGraphFunction
+    -> locally dispatched call edges
+    -> strongly connected components
+    -> RecursiveCallGroups
+```
 
 ## Give The Facts Meaning
 

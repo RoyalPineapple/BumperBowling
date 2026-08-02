@@ -399,51 +399,9 @@ profile with `--timings` before reaching for a bigger budget.
 
 ## Built-In DSL Primitives
 
-Bumper Bowling includes a small set of reusable requirement values. Treat these
-as primitives and examples, not as a canonical architecture.
-
-Current stored-property requirements:
-
-- `.noStoredProperties`
-- `.immutableStoredState`
-- `.noAnyStoredProperties`
-- `.noBroadExistentialStoredProperties`
-- `.noBoolStoredProperties`
-- `.noOptionalStoredProperties`
-- `.noRawStringStoredProperties`
-
-Current semantic conveniences:
-
-- `.explicitDomainSurfaces`: no `Any` or broad existential stored properties.
-- `.typedIdentity`: no stored properties explicitly typed as `String`.
-- `.computedState`: no stored properties.
-- `.functionalCore`: no selected imperative constructs.
-- `.swiftBasics`: `.explicitDomainSurfaces`, `.typedIdentity`, and
-  `.immutableStoredState`.
-- `.parserStateMachine`: requires enum state-machine evidence in scoped parser
-  files.
-- `.pureDomain`: `.swiftBasics` plus `.functionalCore`.
-
-Current graph assertions:
-
-- `DependencyBoundaries`
-- `SingleOwner`
-- `AcyclicDeclaredDependencies`
-
-Current direct syntax helpers:
-
-- `RequireSyntax(_:)`
-- `DisallowSyntax(_:)`
-- `ContainSyntax(_:)`
-- `ContainSyntaxNode(_:)`
-- `Disallows(_:)`
-- `Does(_:)`
-- `DoesNot(_:)`
-- `Declares(_:)`
-
-Use `ContainSyntaxNode(_:)` when a repository needs a fact Bumper Bowling does
-not name as a built-in rule. `SyntaxNodeMatcher` can match by SwiftSyntax node
-kind, spelling, parent kind, ancestor kind, or any combination.
+Read the [built-in rule authoring catalog](built-ins/README.md) for every
+component requirement, graph assertion, shaper, query, scope, and fact
+provider. The catalog maps each convenience to its lower-level pieces.
 
 ### Scoped syntax cardinality
 
