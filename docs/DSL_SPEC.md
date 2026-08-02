@@ -82,11 +82,32 @@ let bumper = BumperProject {
 }
 ```
 
-Those shapes are still just typed Swift values. `ComponentShape` bundles
-component elements such as capabilities, dependencies, and requirements.
-`AssertionShape` bundles repo-level `RuleConfiguration` values. Loading a shape
-does not add hidden facts; it only gives the consumer a reusable spelling for
-the facts and policies Bumper Bowling can already evaluate.
+## Composition
+
+Composition lets a repository define its own architecture language. Bumper
+Bowling supplies the rule engine. The repository supplies the vocabulary and
+policy that fit its codebase.
+
+- `ComponentRequirement` groups source-fact requirements.
+- `ComponentShape` groups component elements, such as capabilities,
+  dependencies, and requirements.
+- `AssertionShape` groups repository-level `RuleConfiguration` values.
+
+`Applies(.domain)` inserts the elements from `.domain` into the current
+component. It does not create a component, a scope, or an evaluator. The
+component's `Owns(...)` paths provide the default scope for its requirements.
+
+A shape can apply another shape. The component builder flattens the result
+into one set of component elements. A shape does not add hidden facts or apply
+rules because a file was imported.
+
+Use the lower-level pieces when a reusable shape is not a good fit. Define a
+`RuleDefinition` with a `RuleScope` for a repository-specific check. Built-in
+and project-defined rules use the same parser, fact cache, and report format.
+
+This composition model is Bumper Bowling's extension point. It gives each
+repository typed, reusable policy without a plugin registry, dynamic rule
+loading, or a second rule engine.
 
 For shared local Swift packages, put a normal SwiftPM package at
 `.bumper/Package.swift`. Bumper Bowling automatically adds that package to the

@@ -58,6 +58,13 @@ let bumper = BumperProject {
 }
 ```
 
+`ComponentShape` groups ordinary component elements. `Applies(.domain)` adds
+those elements to the current component. The current component's `Owns(...)`
+paths set the default scope for its requirements.
+
+A shape can apply another shape. A shape does not create a component, load
+rules by convention, or add a second evaluator.
+
 Use inline values for one-off policy. Use `.bumper/Package.swift` only when the
 vocabulary is shared across repositories; it must expose a `BumperRules`
 library product. A package that names AST types declares its own SwiftSyntax
