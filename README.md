@@ -389,6 +389,7 @@ repository also validates its own architecture.
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Configuration language](docs/DSL_SPEC.md)
+- [Built-in rule authoring catalog](docs/built-ins/README.md)
 - [Rule authoring](docs/RULE_AUTHORING.md)
 - [Build a rule from the ground up](docs/RULE_FROM_THE_GROUND_UP.md)
 - [SwiftSyntax surface](docs/SWIFTSYNTAX_SURFACE.md)
