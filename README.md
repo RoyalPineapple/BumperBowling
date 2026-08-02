@@ -4,27 +4,204 @@
 
 **Turn your Swift repository's unwritten rules into rules everyone can run.**
 
-Every mature codebase relies on truths that live outside its type system.
-Senior developers carry them through review. New contributors learn them after
-mistakes. Agents infer them from scattered examples.
+Your team knows that every SwiftUI screen needs a preview. Then a new screen
+arrives without one:
 
-Bumper Bowling gives those truths names, scopes, tests, and source evidence.
-Developers, reviewers, CI, and agents all use the same architecture policy.
+```swift
+struct CheckoutView: View {
+    var body: some View {
+        CheckoutForm()
+    }
+}
+```
 
-A repository can require facts such as these:
+The compiler accepts it. Bumper Bowling applies the repository's rule:
 
-- Every `Identifiable.id` uses a typed value instead of a raw string.
-- Every parser file declares an enum state machine.
-- Canonical values have one declaration and approved construction owners.
-- Recursive traversal stays with the subsystem that owns the hierarchy.
-- Stored callbacks declare the repository's required isolation.
-- Every feature file contains exactly one reducer.
+```swift
+import BumperBowlingCore
+import SwiftSyntax
 
-Write the policy in Swift. Start with reusable requirements and standard
-rules. Compose them into names from your codebase. Drop down to typed facts,
-SwiftSyntax queries, or a raw visitor when the rule needs more.
+let swiftUIPreviews = Rules.files(
+    "app.swiftui_preview",
+    summary: "Each SwiftUI view file contains a preview.",
+    scope: .under("Sources/Features")
+) { file in
+    let views = SyntaxQuery<StructDeclSyntax>()
+        .filter { match in
+            match.node.inheritanceClause?.inheritedTypes.contains { inherited in
+                inherited.type.trimmedDescription == "View"
+            } == true
+        }
+        .matches(in: file)
 
-Bumper Bowling provides one path from source to evidence:
+    let previews = SyntaxQuery<MacroExpansionDeclSyntax>()
+        .filter { $0.node.macroName.text == "Preview" }
+        .matches(in: file)
+
+    guard !views.isEmpty, previews.isEmpty else { return [] }
+
+    return views.map { view in
+        view.failure(message: "\(view.node.name.text) has no #Preview in this file.")
+    }
+}
+```
+
+Now the same omission produces source evidence:
+
+```text
+Sources/Features/Checkout/CheckoutView.swift:1:1
+CheckoutView has no #Preview in this file. (app.swiftui_preview)
+```
+
+That rule is ordinary Swift over typed SwiftSyntax nodes. Keep it local, give
+it a project name, or compose it with larger architecture policy.
+
+## Describe The Shape Of Your App
+
+A screen preview is one rule. A feature can have a complete architectural
+shape:
+
+```swift
+extension ComponentRequirement {
+    static let featureState = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState
+    )
+}
+
+extension ComponentShape {
+    static let feature = ComponentShape {
+        MayUse(.foundation, .swiftUI)
+        Requires(.featureState)
+        Declares("State", "Action", "View")
+    }
+}
+```
+
+Apply that shape to real parts of the app:
+
+```swift
+enum AppComponent: String, ComponentKey {
+    case domain
+    case catalog
+    case checkout
+    case app
+}
+
+Architecture(AppComponent.self) {
+    Component(.domain) {
+        Owns("Sources/Domain")
+        Modules("Domain")
+        MayUse(.foundation)
+        Requires(.pureDomain)
+    }
+
+    Component(.catalog) {
+        Owns("Sources/Features/Catalog")
+        Modules("CatalogFeature")
+        MayDependOn(.domain)
+        Applies(.feature)
+    }
+
+    Component(.checkout) {
+        Owns("Sources/Features/Checkout")
+        Modules("CheckoutFeature")
+        MayDependOn(.domain, .catalog)
+        Applies(.feature)
+    }
+
+    Component(.app) {
+        Owns("Sources/App")
+        Modules("App")
+        MayDependOn(.domain, .catalog, .checkout)
+        MayUse(.foundation, .swiftUI, .networking)
+    }
+}
+```
+
+The declaration now carries facts that previously lived in code review:
+
+- Catalog and Checkout use the same feature shape.
+- Each feature declares `State`, `Action`, and `View`.
+- Feature state uses explicit types, typed identities, and immutable stored properties.
+- Catalog can depend on Domain.
+- Checkout can depend on Domain and Catalog.
+- App can assemble Domain, Catalog, and Checkout.
+- Networking belongs to App.
+
+Add graph rules to enforce the declared relationships:
+
+```swift
+Rules {
+    DependencyBoundaries(.error)
+    SingleOwner(.error)
+    AcyclicDeclaredDependencies(.error)
+    swiftUIPreviews
+}
+```
+
+A forbidden import, an unowned file, a dependency cycle, or a missing preview
+now produces the same structured report.
+
+## Enforce Patterns Across The Repository
+
+Architecture also appears in construction, ownership, and control flow.
+Bumper Bowling includes composable rules for these patterns.
+
+Keep live service construction at the composition root:
+
+```swift
+Rules.canonicalConstruction(
+    "AppEnvironment",
+    owners: .under("Sources/App/Bootstrap")
+)
+```
+
+Keep decoding at the repository's decoding boundary:
+
+```swift
+Rules.boundaryOnly(
+    function: "JSONDecoder.decode",
+    allowed: .under("Sources/Infrastructure/Decoding")
+)
+```
+
+Give a canonical type one spelling:
+
+```swift
+Rules.noAlternateAliases(
+    "UserID",
+    allowing: .under("Sources/Migrations")
+)
+```
+
+Keep recursive tree traversal with its owner:
+
+```swift
+Rules.canonicalTraversal(
+    root: "RouteTree",
+    structuralCase: "branch",
+    owners: .under("Sources/Navigation/Traversal")
+)
+```
+
+Require one reducer in each feature file:
+
+```swift
+Rules.assert(
+    functions().named("reduce"),
+    cardinality: .exactly(1),
+    id: "app.feature_reducer",
+    summary: "Each feature file declares one reducer.",
+    scope: .under("Sources/Features")
+)
+```
+
+These rules combine declarations, types, imports, calls, paths, syntax scopes,
+and repository-wide facts. Swift supplies the composition language. SwiftSyntax
+supplies the source model. Bumper Bowling supplies the rule engine, scopes,
+tests, and reports.
 
 ```text
 SwiftSyntax -> typed observations -> scopes -> rules -> source evidence
@@ -33,75 +210,32 @@ SwiftSyntax -> typed observations -> scopes -> rules -> source evidence
 **Bumper Bowling makes SwiftSyntax practical for enforcing the truths that
 define your codebase.**
 
-The name describes the workflow. Your team declares the lanes. A developer or
-agent takes the shot. CI catches a wild change before it merges and bumps it
-back toward the lane with exact source evidence.
+## Start With A Built-In Or Drop Down
 
-## Turn One Idea Into One Rule
+Use the highest level that expresses the rule clearly:
 
-Suppose one subsystem owns recursive traversal of a tree:
+| Rule | Building piece |
+| --- | --- |
+| Component ownership and dependencies | Architecture DSL |
+| A reusable feature or domain shape | `ComponentRequirement` and `ComponentShape` |
+| Common ownership and construction patterns | `Rules.*` shapers |
+| A typed syntax pattern | `SyntaxQuery`, `Rules.assert`, and `Rules.forbid` |
+| A rule over each parsed file | `Rules.files` |
+| A rule over repository-wide facts | `BuiltInFacts` and `Rules.repository` |
+| A specialized source walk | `Rules.visitor` and `SyntaxVisitor` |
 
-```swift
-Rules {
-    Rules.canonicalTraversal(
-        root: "Tree",
-        structuralCase: "branch",
-        owners: .under("Sources/TreeTraversal")
-    )
-}
-```
+All levels use the same parsed files, rule protocol, scopes, and report. A
+repository can mix them in one `Rules` block.
 
-Bumper Bowling combines function declarations, parameter types, case patterns,
-and recursive call groups. It then reports a traversal outside the owner:
+The repository owns the vocabulary. Names such as `.feature`,
+`.featureState`, and `app.swiftui_preview` stay beside the code that gives them
+meaning. Shared vocabulary can live in a local Swift package with a
+`BumperRules` library product.
 
-```text
-Sources/Features/Search/Search.swift:3
-search recursively traverses Tree.branch outside its owners.
-```
-
-`Tree`, `branch`, and `Sources/TreeTraversal` belong to the repository. Bumper
-Bowling supplies the SwiftSyntax composition, rule engine, and report.
-
-Read [Build An Architecture Rule From The Ground Up](docs/RULE_FROM_THE_GROUND_UP.md)
-to follow every step behind this convenience.
-
-## Make Architecture A Swift Vocabulary
-
-Small source facts become names that fit the codebase:
-
-```swift
-extension ComponentRequirement {
-    static let valueModel = ComponentRequirement(
-        .explicitDomainSurfaces,
-        .typedIdentity,
-        .immutableStoredState
-    )
-}
-
-extension ComponentShape {
-    static let domain = ComponentShape {
-        MayUse(.foundation)
-        Requires(.valueModel)
-    }
-}
-```
-
-Apply that vocabulary wherever the architecture requires it:
-
-```swift
-Component(.catalog) {
-    Owns("Sources/Catalog")
-    Applies(.domain)
-}
-
-Component(.pricing) {
-    Owns("Sources/Pricing")
-    Applies(.domain)
-}
-```
-
-The repository defines what `valueModel` and `domain` mean. Bumper Bowling
-validates every applied component with the same composed policy.
+Read the [built-in catalog](docs/built-ins/README.md) for every included piece.
+Read [rule authoring](docs/RULE_AUTHORING.md) for custom facts, queries,
+visitors, and fixtures. The [ground-up rule guide](docs/RULE_FROM_THE_GROUND_UP.md)
+shows how recursive calls become one architecture rule.
 
 ## Get Started
 
@@ -127,43 +261,40 @@ swift run bumper lint .
 `bumper init` writes `BumperBowling.swift`. `bumper lint` validates the
 repository.
 
-For an advisory CI rollout, use JSON output and a baseline:
-
-```bash
-swift run bumper lint . --format json --fail-on none
-swift run bumper baseline create . --output .bumper-baseline.json
-swift run bumper lint . --baseline .bumper-baseline.json --fail-on error
-```
-
-## Declare The Architecture
-
-`BumperBowling.swift` declares one `BumperProject` named `bumper`. The compiler
-validates component references through a project-owned `ComponentKey` enum.
+A complete configuration is a Swift program:
 
 ```swift
 import BumperBowlingCore
 
 enum AppComponent: String, ComponentKey {
-    case core
-    case cli
+    case domain
+    case features
+    case app
 }
 
 let bumper = BumperProject {
     Included { "Sources" }
 
     Architecture(AppComponent.self) {
-        Component(.core) {
-            Owns("Sources/Core")
-            Modules("Core")
+        Component(.domain) {
+            Owns("Sources/Domain")
+            Modules("Domain")
             MayUse(.foundation)
-            Requires(.explicitDomainSurfaces, .typedIdentity, severity: .warning)
+            Requires(.pureDomain)
         }
 
-        Component(.cli) {
-            Owns("Sources/CLI")
-            Modules("CLI")
-            MayDependOn(.core)
-            MayUse(.foundation)
+        Component(.features) {
+            Owns("Sources/Features")
+            Modules("Features")
+            MayDependOn(.domain)
+            MayUse(.foundation, .swiftUI)
+        }
+
+        Component(.app) {
+            Owns("Sources/App")
+            Modules("App")
+            MayDependOn(.domain, .features)
+            MayUse(.foundation, .swiftUI, .networking)
         }
     }
 
@@ -171,26 +302,16 @@ let bumper = BumperProject {
         DependencyBoundaries(.error)
         SingleOwner(.error)
         AcyclicDeclaredDependencies(.error)
+
+        Rules.canonicalConstruction(
+            "AppEnvironment",
+            owners: .under("Sources/App/Bootstrap")
+        )
     }
 }
 ```
 
-This example declares five parts of the architecture:
-
-- `Owns` identifies the source paths that belong to the component.
-- `Modules` identifies the imports that represent the component.
-- `MayDependOn` identifies allowed component dependencies.
-- `MayUse` identifies allowed platform capabilities.
-- `Requires` identifies required source facts.
-
-The engine validates each component against its declared ownership, dependencies,
-imports, declarations, stored state, and selected syntax facts. A component
-policy selects the facts that matter for that component.
-
-## Keep The Vocabulary With The Code
-
-Architecture vocabulary is ordinary Swift. Keep repository-specific values in
-`.bumper/Sources` beside the project configuration:
+Keep repository-specific values in `.bumper/Sources`:
 
 ```text
 .bumper/
@@ -200,68 +321,26 @@ Architecture vocabulary is ordinary Swift. Keep repository-specific values in
 BumperBowling.swift
 ```
 
-`BumperBowling.swift` chooses every applied value explicitly. Importing a file
-only makes its Swift values available.
+`BumperBowling.swift` applies each value explicitly. Importing a file makes its
+Swift values available to the configuration.
 
-Share vocabulary across repositories through a local Swift package with a
-`BumperRules` library product:
+## Put The Bumpers In CI
 
-```text
-.bumper/
-  Package.swift
-  Sources/BumperRules/Rules.swift
+Your team declares the lanes. A developer or agent takes the shot. CI catches
+a wild change before merge and points it back toward the declared architecture.
+
+Run the same command locally and in CI:
+
+```bash
+swift run bumper lint .
 ```
 
-The policy remains reviewable Swift code. A change to the architecture, its
-rules, its fixtures, and the affected source can travel together.
+Use a baseline for an advisory rollout:
 
-## Start High And Drop Down When Needed
-
-Bumper Bowling exposes every level of its validation path:
-
-| Need | Use |
-| --- | --- |
-| Component ownership and dependencies | Architecture DSL |
-| Reusable source policy | `ComponentRequirement` and `ComponentShape` |
-| Repository-wide policy | `AssertionShape` |
-| Common ownership, construction, and traversal rules | `Rules.*` shapers |
-| Repository-wide source analysis | `BuiltInFacts` and `Rules.repository` |
-| Typed syntax matches and cardinality | `SyntaxQuery`, `Rules.assert`, and `Rules.forbid` |
-| Per-file source policy | `Rules.files` |
-| Direct SwiftSyntax traversal | `Rules.visitor` and `SyntaxVisitor` |
-
-Use a short standard rule when it fits:
-
-```swift
-Rules.canonicalConstruction(
-    "AppEnvironment",
-    owners: .under("Sources/App/Bootstrap")
-)
-```
-
-Compose a typed syntax rule when the repository has its own concept:
-
-```swift
-Rules.assert(
-    functions().named("reduce"),
-    cardinality: .exactly(1),
-    id: "feature.one_reducer",
-    summary: "Each feature file declares one reducer.",
-    scope: .under("Sources/Features")
-)
-```
-
-Extend a typed query or fact provider when the rule needs a new observation.
-Use a raw `SyntaxVisitor` for a source walk that needs full SwiftSyntax access.
-
-Every level uses the same parser, fact cache, rule protocol, and report. Add
-built-in and repository-defined rules to the same block:
-
-```swift
-Rules {
-    DependencyBoundaries(.error)
-    projectRules
-}
+```bash
+swift run bumper lint . --format json --fail-on none
+swift run bumper baseline create . --output .bumper-baseline.json
+swift run bumper lint . --baseline .bumper-baseline.json --fail-on error
 ```
 
 Test repository rules with focused source fixtures:
@@ -270,53 +349,23 @@ Test repository rules with focused source fixtures:
 swift run bumper test .
 ```
 
-See the [built-in catalog](docs/built-ins/README.md) for every included piece.
-See [rule authoring](docs/RULE_AUTHORING.md) for custom facts, queries, visitors,
-and fixtures.
+This repository validates itself through the same public API.
 
-## Run In CI
+## Keep Agents In The Same Lane
 
-CI is where the bumpers protect the lane. Each proposed change takes a shot at
-the codebase. A rule violation stops the wild shot before merge and points it
-back toward the declared architecture.
+An agent can read the architecture before it edits a file. After the edit, the
+agent runs the same rules as the developer and CI. A finding includes the rule,
+file, location, observed fact, and expected fact.
 
-Run the same validation locally and in CI:
-
-```bash
-swift run bumper lint .
-```
-
-This repository validates itself with its own public API. A Swift test can run
-the same architecture policy:
-
-```swift
-let report = try await BumperCommands.lint(
-    root: projectRoot,
-    configuration: bumper.architecture
-)
-```
-
-Record error violations as failures in the repository's test framework.
-
-## Work With Agents
-
-Bumper Bowling gives an agent the architectural context that code review often
-supplies after a change. The agent reads the lanes before editing, makes the
-change, and validates the result. Source evidence points an invalid change
-back toward the architecture.
-
-The rules are ordinary Swift code. An agent can update them as the architecture
-evolves. The policy, its fixtures, and the source change then appear together
-in review. Human and automated contributors work from the same contract.
+When the architecture changes, the agent can update its vocabulary, rules, and
+fixtures with the source change. Review then shows the new architecture and the
+code that uses it together.
 
 The repository includes a Codex skill for this workflow:
 
 ```text
 skills/compose-bumper-rules/
 ```
-
-The skill guides an agent to reuse local vocabulary, choose the right rule
-level, write focused fixtures, and validate the completed change.
 
 Install the skill from the Bumper Bowling repository root:
 
@@ -326,11 +375,8 @@ ln -s "$PWD/skills/compose-bumper-rules" \
   "${CODEX_HOME:-$HOME/.codex}/skills/compose-bumper-rules"
 ```
 
-Start a new Codex session, then invoke `$compose-bumper-rules` explicitly or
-ask Codex to create, review, or refactor Bumper Bowling policy.
-
-The skill follows the standard Codex skill layout. Its `agents/openai.yaml`
-file supplies skill-list metadata and a default prompt.
+Start a new Codex session. Then invoke `$compose-bumper-rules`, or ask Codex to
+create, review, or revise Bumper Bowling policy.
 
 ## Commands
 
@@ -353,14 +399,13 @@ bumper explain <path>          Show facts for one file.
 `BumperBowling.swift` is a Swift program, like `Package.swift`. Bumper Bowling
 compiles it into a cached runner and evaluates it in an isolated process.
 
-The runner has two modes. `describe` reports the architecture configuration.
-`evaluate` receives scanned source files, parses each file once, and reports
-the rule result. The `bumper` process performs repository scanning. The runner
-uses a restricted environment for configuration evaluation.
+The `bumper` process scans the repository. The runner parses each selected file
+once and shares the syntax trees across rules. An unchanged configuration uses
+the cached runner.
 
-The runner builds once for an unchanged configuration. By default, it uses a
-release build. Use `BUMPER_RUNNER_BUILD_CONFIGURATION=debug` on a smaller CI
-host to reduce the initial build time.
+By default, the runner uses a release build. Use
+`BUMPER_RUNNER_BUILD_CONFIGURATION=debug` on a smaller CI host to reduce the
+initial build time.
 
 Use `BUMPER_CACHE_DIR` to persist the runner cache in CI:
 
@@ -372,29 +417,12 @@ Evaluation has a 60-second default limit. Set
 `BUMPER_EVALUATION_TIMEOUT_SECONDS` to a positive number of seconds for a
 larger repository.
 
-## Fact Surface
-
-Bumper Bowling turns SwiftSyntax into reusable observations. Built-in facts
-cover files, imports, declarations, stored properties, calls, access,
-containment, component edges, and recursive call groups.
-
-Typed queries retain their concrete SwiftSyntax node type through composition.
-Custom fact providers derive repository-wide observations once per run. A raw
-visitor keeps the complete SwiftSyntax tree available for specialized rules.
-
-Read [the SwiftSyntax surface](docs/SWIFTSYNTAX_SURFACE.md) for the exact fact
-set. Read [the configuration specification](docs/DSL_SPEC.md) for all DSL
-forms.
-
 ## Development
 
 ```bash
 BUMPER_RUNNER_BUILD_CONFIGURATION=debug swift test
 swift run bumper lint .
 ```
-
-The test override avoids repeated optimized builds for fixture runners. The
-repository also validates its own architecture.
 
 ## Documentation
 
