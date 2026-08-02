@@ -105,6 +105,9 @@ Rules.canonicalTraversal(
 )
 ```
 
+Read [From SwiftSyntax To An Architecture Rule](CANONICAL_TRAVERSAL.md) for a
+ground-up walkthrough of this rule's syntax, facts, composition, and use.
+
 ## Closure Rules Over Typed Facts
 
 `Rules.repository(_:severity:summary:_:)` evaluates once over the whole repository.
