@@ -390,6 +390,7 @@ repository also validates its own architecture.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Configuration language](docs/DSL_SPEC.md)
 - [Rule authoring](docs/RULE_AUTHORING.md)
+- [From SwiftSyntax to an architecture rule](docs/CANONICAL_TRAVERSAL.md)
 - [SwiftSyntax surface](docs/SWIFTSYNTAX_SURFACE.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 
