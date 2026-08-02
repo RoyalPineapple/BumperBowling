@@ -2,11 +2,13 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling makes Swift architecture executable.
+Bumper Bowling keeps all players in the same lane by codifying and enforcing
+the unwritten rules of your Swift codebase.
 
-Architecture is a contract for ownership, dependencies, and code shape. A
-useful contract lives with the source, runs in CI, and explains each failure.
-Bumper Bowling gives a Swift repository that contract.
+Every codebase has rules for ownership, dependencies, and code shape. Teams
+often learn these rules through review, incidents, and experience. Bumper
+Bowling puts them in source control, validates them in CI, and explains each
+failure with source evidence.
 
 You write policy in Swift. Bumper Bowling parses source with SwiftSyntax,
 evaluates typed rules, and reports evidence for every failure.
@@ -42,8 +44,12 @@ Core uses Foundation only.
 into a repeatable source check. A failed check identifies the file, source
 location, observed fact, and required architecture.
 
-This makes architecture part of normal development. A developer can change a
-rule, add a focused fixture, run the check, and review a clear result.
+Developers, reviewers, CI, and agents use the same contract. A team can change
+a rule, add a focused fixture, run the check, and review a clear result.
+
+The name describes the job. A bowler chooses the throw. The bumpers keep the
+ball in its lane. Bumper Bowling lets a team move quickly inside the boundaries
+that it declares.
 
 ## Get Started
 
@@ -253,6 +259,25 @@ let report = try await BumperCommands.lint(
 
 Record error violations as test failures in the test framework that your
 repository uses.
+
+## Work With Agents
+
+Bumper Bowling gives an agent the architectural context that code review often
+supplies after a change. The agent reads the repository rules, makes a change,
+runs Bumper Bowling, and repairs any violation.
+
+The rules are ordinary Swift code. An agent can evolve them when the
+architecture changes. The policy change, its fixtures, and the source change
+then appear together in review.
+
+The repository includes a Codex skill for this workflow:
+
+```text
+skills/compose-bumper-rules/
+```
+
+The skill guides an agent to reuse local vocabulary, choose the right rule
+level, write focused fixtures, and validate the completed change.
 
 ## Commands
 
