@@ -1,69 +1,117 @@
 ---
 name: compose-bumper-rules
-description: Use when creating, reviewing, or refactoring Bumper Bowling 0.5.2 architecture policy, standard Rules shapers, typed FactProvider rules, SyntaxQuery rules, per-file rules, or raw SyntaxVisitor escape hatches.
+description: Create, review, refactor, and test Bumper Bowling architecture policy. Use when working with BumperBowling.swift, .bumper/Sources, ComponentRequirement, ComponentShape, standard Rules shapers, FactProvider rules, SyntaxQuery rules, per-file rules, or SwiftSyntax visitors.
 ---
 
 # Compose Bumper Rules
 
-Author each invariant at the highest rung that can express it. Read the
-repository's `docs/RULE_AUTHORING.md` when available; it is the canonical API
-reference.
+Codify the repository's architecture with the smallest public pieces that
+express it. Keep developers, reviewers, CI, and agents on the same policy.
 
-## Admission Gate
+Read `references/bumper-vocabulary.md` before choosing an authoring level. Read
+`references/shape-examples.md` when composing repository vocabulary or tests.
 
-Before adding or retaining a rule:
+When the repository includes Bumper Bowling documentation, use
+`docs/built-ins/README.md` for the built-in catalog and `docs/RULE_AUTHORING.md`
+for the complete authoring contract.
 
-1. State the invariant as `observed source fact + declared scope = mismatch`.
-2. Apply the deletion test:
-   - Do not recognize historical spellings or add compatibility aliases.
-   - Do not check states rejected by the Swift compiler.
-   - When a type or architecture change makes the bad state unconstructible,
-     delete the rule and its rule-only support code instead of preserving it.
-3. For a proposed rule below the standard-shaper rung, audit one existing rule
-   at that rung or lower before adding another. Try to delete it, promote it to
-   a higher rung, or share its existing fact/query. Record the audited rule and
-   outcome in the change summary. If none exists, say so.
-4. Explain concretely why the next higher rung cannot express the invariant.
-5. Give every project rule an explicit, specific `summary`. Also document its
-   rationale, scope, repair, proof, and deletion condition in the consumer's
-   rule catalog. A generic factory default or a restatement of the rule ID is
-   not documentation.
+## Composition Model
+
+Build policy through these visible paths:
+
+```text
+SourceFactRule -> ComponentRequirement -> ComponentShape -> Component
+RuleConfiguration -> AssertionShape -> Rules block
+SyntaxQuery -> Rules.assert / Rules.forbid / Rules.files
+FactProvider -> Rules.repository
+RuleDefinition -> RuleSet -> Rules block
+```
+
+Apply every value explicitly. Use `Applies(.shape)` inside a component. Add
+`AssertionShape`, `RuleSet`, and `RuleDefinition` values inside `Rules { ... }`.
+Importing Swift code only makes values available.
 
 ## Authoring Ladder
 
-1. **Architecture DSL**: use typed `Architecture(AppComponent.self)`,
-   `Component`, ownership, dependency, capability, and `Requires(...)`
-   declarations. Use `ComponentShape` or `AssertionShape` only for reusable
-   bundles of this policy.
+Choose the first level that honestly expresses the invariant:
+
+1. **Architecture DSL and composition**: declare components, ownership,
+   dependencies, capabilities, and source requirements. Combine source facts
+   into `ComponentRequirement`. Combine component elements into
+   `ComponentShape`. Combine graph assertions into `AssertionShape`.
 2. **Standard shapers**: prefer an existing `Rules.*` factory such as
-   `Rules.singleDeclaration`, `Rules.constructionOwnership`, or
+   `Rules.singleDeclaration`, `Rules.constructionOwnership`,
+   `Rules.importOwnership`, `Rules.memberReferenceOwnership`, or
    `Rules.canonicalTraversal`.
 3. **Typed facts**: use `Rules.repository(...)` and request memoized providers
    with `context.facts(...)`. Reuse `BuiltInFacts` before defining a new
-   `FactProvider`.
-4. **Typed queries / per-file rules**: use `SyntaxQuery` roots and
-   `Rules.files(...)` when typed facts are insufficient but parsed syntax is
-   enough.
+   `FactProvider`. Let custom providers request other providers.
+4. **Typed queries and per-file rules**: compose `SyntaxQuery` roots, file
+   scopes, lexical scopes, and typed views. Use
+   `Rules.assert(...)`, `Rules.forbid(...)`, or `Rules.files(...)` when typed
+   facts are insufficient but parsed syntax is enough.
 5. **Raw visitor**: use `Rules.visitor(...)` / `VisitorRule` with a real
    SwiftSyntax `SyntaxVisitor` only when typed queries cannot express the walk.
-   This is a permanent escape hatch.
-
-Do not skip a rung for convenience. Keep strings at configuration boundaries;
-use typed symbols, paths, scopes, facts, and syntax nodes in rule logic.
+   Keep failure collection in the visitor.
 
 ## Workflow
 
 1. Read `BumperBowling.swift`, `.bumper/Sources`, and `.bumper/Package.swift`.
-2. Search existing rule IDs, shapes, shapers, providers, queries, and visitors.
-3. Choose the narrowest honest `RuleScope` and the highest viable rung.
-4. Put one-off vocabulary inline, repo-owned reusable code in
+2. Read the repository's rule catalog and existing rule tests.
+3. State the invariant as `observed source fact + declared scope = mismatch`.
+4. Name the expected evidence and the repair before writing code.
+5. Search existing requirements, shapes, rule IDs, shapers, providers, queries,
+   and visitors.
+6. Choose the narrowest honest scope and the highest viable authoring level.
+7. Put one-off vocabulary inline, repository-owned reusable code in
    `.bumper/Sources`, and genuinely cross-repo vocabulary in a local
    `.bumper/Package.swift` product named `BumperRules`.
-5. Add project rules explicitly inside `Rules { ... }`; imports never apply
-   rules automatically.
-6. Update the consumer's rule catalog in the same change. If one visitor
-   enforces several checks for parse efficiency, document each sub-invariant;
-   one umbrella summary does not make hidden policy reviewable.
+8. Apply the value explicitly in `BumperBowling.swift`.
+9. Add positive and mutation tests.
+10. Update the rule catalog with rationale, scope, repair, proof, and deletion
+    condition.
+
+When the architecture changes, update the source, policy, fixtures, and catalog
+in the same change.
+
+## Composition Practices
+
+- Build small requirements, shapes, queries, and fact providers.
+- Name their compositions with repository language such as `.feature`,
+  `.parser`, or `.valueModel`.
+- Make nesting visible with `Applies`, `ComponentRequirement(...)`, and
+  `RuleSet { ... }`.
+- Reuse the engine's parsed syntax and memoized facts. Do not parse files again
+  inside a rule.
+- Keep strings at configuration boundaries. Use typed symbols, paths, scopes,
+  facts, and syntax nodes in rule logic.
+- Keep one evaluator. Built-in and project rules belong in the same `Rules`
+  block and produce the same report.
+
+## Rule Contract
+
+Give every project rule:
+
+- A stable, specific rule ID
+- A `summary` that states the expected invariant
+- The narrowest honest `RuleScope`
+- A source location when SwiftSyntax provides one
+- Evidence that names the observation and expectation
+- A repair that a developer or agent can perform
+
+Let analysis errors fail the run. Never translate a failed derivation into an
+empty match set.
+
+## Sustainability Gate
+
+Before adding or retaining a rule:
+
+1. Reject historical spellings and compatibility aliases.
+2. Reject states already rejected by the Swift compiler.
+3. Delete rules for states that architecture or types made unconstructible.
+4. For a rule below the standard-shaper level, audit an existing rule at that
+   level or lower. Reuse its fact or query when possible.
+5. Record why the next higher level cannot express the invariant.
 
 ## Test Contract
 
@@ -75,13 +123,9 @@ both tests through `RuleTestHarness` and `VirtualRepository`:
   state and assert the exact rule ID, path, message, available location, and
   evidence that the rule promises.
 
-An analysis error must fail the run; never translate it into an empty match
-set. Do not use Bumper Bowling for SwiftLint policy, compiler truth, symbol
-resolution, macro expansion, or build-target truth.
-
 The rule's metadata summary explains a violation at runtime. The catalog
-explains why the project owns the rule and when it should be deleted. Both are
-required; tests do not substitute for either.
+explains why the project owns the rule and when to delete it. Both are required.
+Tests do not substitute for either.
 
 ## Validation
 
@@ -89,8 +133,9 @@ Run the smallest focused rule tests first, then validate the consumer surface:
 
 1. `swift run bumper config .`
 2. Focused `RuleTestHarness` positive and mutation tests
-3. `swift run bumper lint . --timings`
-4. `git diff --check`
+3. `swift run bumper test .`
+4. `swift run bumper lint . --timings`
+5. `git diff --check`
 
 Do not raise evaluation timeouts to hide a slow rule. Read the rule and fact
 provider timings, reuse an existing fact, and remove repeated parsing or
@@ -98,5 +143,5 @@ quadratic accumulation before changing the execution budget.
 
 ## References
 
-- Read `references/bumper-vocabulary.md` for exact 0.5.2 spellings.
+- Read `references/bumper-vocabulary.md` for current public spellings.
 - Read `references/shape-examples.md` for placement and test examples.

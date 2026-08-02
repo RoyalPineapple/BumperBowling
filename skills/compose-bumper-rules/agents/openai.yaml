@@ -1,0 +1,4 @@
+interface:
+  display_name: "Compose Bumper Rules"
+  short_description: "Compose and test Bumper Bowling rules"
+  default_prompt: "Use $compose-bumper-rules to create or revise this repository’s Bumper Bowling policy."
