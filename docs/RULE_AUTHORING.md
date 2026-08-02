@@ -58,6 +58,23 @@ sub-invariant. One umbrella rule ID must not hide undocumented policy.
 - `ComponentShape` / `AssertionShape`: reusable bundles of component and
   repository policy for the architecture DSL.
 
+## Composition
+
+Bumper Bowling does not define a house architecture. A repository composes its
+own vocabulary from typed values.
+
+`ComponentRequirement` groups source-fact requirements. `ComponentShape`
+groups component elements. `AssertionShape` groups repository-level rule
+configuration.
+
+`Applies(...)` inserts a shape into the current component. The component's
+owned paths set the default scope for its requirements. A shape can include
+another shape. Importing a source file or a local rule package does not apply a
+shape.
+
+Define a `RuleDefinition` with a `RuleScope` when composition cannot express a
+check. That rule uses the same engine and report format as a built-in rule.
+
 ## Standard Shaper Catalog
 
 All shapers are static members of `Rules`, implemented only through the public

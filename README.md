@@ -179,6 +179,30 @@ Component(.core) {
 }
 ```
 
+### How Composition Works
+
+Composition lets a repository define its own architecture language. Bumper
+Bowling supplies the rule engine. The repository supplies the names and policy
+that fit its codebase.
+
+- `ComponentRequirement` groups source-fact requirements.
+- `ComponentShape` groups component elements, such as dependencies,
+  capabilities, and requirements.
+- `AssertionShape` groups repository-level rule configuration.
+
+`Applies(.domain)` inserts the elements from `.domain` into the current
+component. It does not create a new component or a new rule engine. The
+component's `Owns(...)` paths provide the default scope for its requirements.
+
+Shapes can compose other shapes. A repository can also use the lower-level
+pieces directly when a shape is not a good fit. Define a `RuleDefinition` with
+a `RuleScope` for a custom check.
+
+This is the extension point that Bumper Bowling adds. A repository can use
+typed Swift to express its own policy. The policy runs through the same parser,
+fact cache, and report format as built-in rules. There is no plugin registry or
+implicit rule loading.
+
 Shared local rule packages can use SwiftPM directly. If `.bumper/Package.swift`
 exists, Bumper Bowling adds it to the generated runner and expects it to export
 a `BumperRules` library product:
