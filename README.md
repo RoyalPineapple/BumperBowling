@@ -6,22 +6,20 @@
 
 **Turn your Swift repository's unwritten rules into rules everyone can run.**
 
-Every Swift codebase depends on truths that the type system cannot express.
-Features follow a shape. Dependencies point in a direction. Live services are
-built at the edge. Views remain previewable.
+Your codebase relies on rules that the compiler cannot see.
 
-These rules often live in review comments, examples, and the heads of
-experienced engineers. Each new contributor, human or agent, must infer the
-lane.
+A feature has `State`, `Action`, and `View`. Dependencies point toward Domain.
+Only `AppBootstrap` constructs live services. Every SwiftUI view can be
+constructed in at least one preview.
 
-Bumper Bowling puts that lane in Swift. It composes typed SwiftSyntax
-observations into scoped rules, then reports violations at the source.
+Those rules are architecture. When they live only in documentation and code
+review, every developer or agent has to rediscover them.
 
-Your team declares the lane. Bumper Bowling keeps every player in it.
+Bumper Bowling turns them into Swift rules with source-level failures. You
+define the lane. Bumper Bowling catches changes that leave it.
 
-Start with one useful truth: every SwiftUI view can be constructed in at least
-one preview. The compiler knows that `CheckoutView` conforms to `View`, but it
-cannot enforce that development pattern.
+Take the preview rule. The compiler knows that `CheckoutView` conforms to
+`View`, but it cannot require a preview that constructs it.
 
 ```swift
 struct CheckoutView: View {
