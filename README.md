@@ -124,8 +124,9 @@ Each component declares three facts:
 - `Modules` identifies the imports that represent the component.
 - `MayDependOn` identifies allowed component dependencies.
 
-The engine checks observed imports against this graph. It also checks the
-source facts that each component policy requires.
+The engine checks each component against its declared ownership, dependencies,
+imports, declarations, stored state, and selected syntax facts. A component
+policy selects the facts that matter for that component.
 
 ## Compose Your Own Vocabulary
 
