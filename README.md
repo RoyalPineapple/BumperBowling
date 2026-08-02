@@ -1,6 +1,9 @@
 # Bumper Bowling
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RoyalPineapple/BumperBowling)](https://github.com/RoyalPineapple/BumperBowling/releases/latest)
+![Swift 6.2](https://img.shields.io/badge/Swift-6.2-F05138?logo=swift&logoColor=white)
+[![License](https://img.shields.io/github/license/RoyalPineapple/BumperBowling)](LICENSE)
 
 **Turn your Swift repository's unwritten rules into rules everyone can run.**
 
