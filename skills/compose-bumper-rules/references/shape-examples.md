@@ -31,10 +31,22 @@ extension ComponentRequirement {
 }
 
 extension ComponentShape {
-    static let domain = ComponentShape {
+    static let foundationOnly = ComponentShape {
         MayUse(.foundation)
         DoesNotUse(.uiKit, .testing)
+    }
+
+    static let domain = ComponentShape {
+        Applies(.foundationOnly)
         Requires(.domainCore, severity: .error)
+    }
+}
+
+extension AssertionShape {
+    static let projectGraph = AssertionShape {
+        DependencyBoundaries(.error)
+        SingleOwner(.error)
+        AcyclicDeclaredDependencies(.error)
     }
 }
 ```
@@ -52,7 +64,7 @@ let bumper = BumperProject {
     }
 
     Rules {
-        DependencyBoundaries(.error)
+        ApplyAssertions(.projectGraph)
         projectRules
     }
 }
@@ -66,7 +78,7 @@ A shape can apply another shape. A shape does not create a component, load
 rules by convention, or add a second evaluator.
 
 Use inline values for one-off policy. Use `.bumper/Package.swift` only when the
-vocabulary is shared across repositories; it must expose a `BumperRules`
+vocabulary is shared across repositories. It must expose a `BumperRules`
 library product. A package that names AST types declares its own SwiftSyntax
 dependency. Importing the product does not apply any rules.
 

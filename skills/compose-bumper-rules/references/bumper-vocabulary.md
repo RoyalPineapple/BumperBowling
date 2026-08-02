@@ -1,12 +1,14 @@
-# Bumper Bowling 0.5.2 Vocabulary
+# Bumper Bowling Vocabulary
 
 ## Contents
 
 - [Core Types](#core-types)
+- [Composition Model](#composition-model)
 - [Architecture DSL](#architecture-dsl)
 - [Standard Rules Shapers](#standard-rules-shapers)
 - [Typed Facts](#typed-facts)
 - [Typed Queries And Per-File Rules](#typed-queries-and-per-file-rules)
+- [Scopes And Typed Views](#scopes-and-typed-views)
 - [Raw Visitor Escape Hatch](#raw-visitor-escape-hatch)
 
 ## Core Types
@@ -14,13 +16,69 @@
 - `RuleDefinition`: metadata, scope, and `evaluate(in:)`.
 - `RuleContext`: immutable configuration, parse-once repository syntax, and
   memoized facts.
-- `RuleFailure`: one project-rule finding; the engine attaches metadata to
+- `RuleFailure`: one project-rule finding. The engine attaches metadata to
   produce a `RuleViolation` in a `RuleReport`.
 - `RuleSet`: ordered `RuleDefinition` values.
 - `FactProvider`: typed, memoized repository derivation.
 - `RuleScope`: `.repository`, `.under(path)`, `.component(id)`,
   `.files(paths)`, or a predicate.
 - `ComponentShape` / `AssertionShape`: reusable Architecture DSL policy.
+
+## Composition Model
+
+Small source requirements become repository vocabulary:
+
+```swift
+extension ComponentRequirement {
+    static let valueModel = ComponentRequirement(
+        .explicitDomainSurfaces,
+        .typedIdentity,
+        .immutableStoredState
+    )
+}
+```
+
+Component shapes combine requirements, capabilities, and other shapes:
+
+```swift
+extension ComponentShape {
+    static let foundationOnly = ComponentShape {
+        MayUse(.foundation)
+        DoesNotUse(.uiKit, .testing)
+    }
+
+    static let domain = ComponentShape {
+        Applies(.foundationOnly)
+        Requires(.valueModel)
+    }
+}
+```
+
+Apply a shape to each component that uses the vocabulary:
+
+```swift
+Component(.catalog) {
+    Owns("Sources/Catalog")
+    Applies(.domain)
+}
+```
+
+Group heterogeneous rules with `RuleSet`:
+
+```swift
+let identityRules = RuleSet {
+    Rules.singleDeclaration("UserID", owner: "Sources/Identity")
+    Rules.noAlternateAliases("UserID")
+}
+
+Rules {
+    identityRules
+}
+```
+
+Custom `FactProvider` values can request other providers. `SyntaxQuery` values
+compose filters, transforms, file scopes, and lexical scopes. Every path ends
+in a `RuleDefinition` evaluated by the same engine.
 
 ## Architecture DSL
 
@@ -55,6 +113,8 @@ Prefer these before writing a closure rule. Each accepts optional `id:` and
 
 | Shaper | Purpose |
 | --- | --- |
+| `Rules.importOwnership(_:allowed:)` | Selected imports stay inside their owners. |
+| `Rules.memberReferenceOwnership(_:allowed:)` | Selected member references stay inside their owners. |
 | `Rules.singleDeclaration(_:owner:)` | One declaration under its owner path. |
 | `Rules.constructionOwnership(_:allowed:)` | Construction only in the allowed scope. |
 | `Rules.canonicalConstruction(_:owners:)` | Canonical-value construction ownership. |
@@ -76,13 +136,13 @@ Rules.canonicalTraversal(
 ## Typed Facts
 
 Use `Rules.repository(_:severity:summary:_:)`. Request facts with
-`context.facts(_:)`; providers derive at most once per evaluation.
+`context.facts(_:)`. Providers derive at most once per evaluation.
 
 ```swift
 Rules.repository(
     "project.no_uikit",
     severity: .error,
-    summary: "UIKit imports stay at the application boundary."
+    summary: "The repository does not import UIKit."
 ) { context in
     try context.facts(BuiltInFacts.imports).occurrences
         .filter { $0.module.rawValue == "UIKit" }
@@ -137,6 +197,46 @@ Rules.files(
 Use query operations such as `taking(_:)`, `callingSelf()`, `aliasing(_:)`, and
 `excluding(_:)` to retain the concrete SwiftSyntax node type.
 
+Use `Rules.assert` for per-file cardinality:
+
+```swift
+Rules.assert(
+    functions().named("reduce"),
+    cardinality: .exactly(1),
+    id: "feature.one_reducer",
+    summary: "Each feature file declares one reducer.",
+    scope: .under("Sources/Features")
+)
+```
+
+Use `Rules.forbid` when every query match is a violation:
+
+```swift
+Rules.forbid(
+    typeAliases().aliasing("UserID"),
+    id: "identity.one_spelling",
+    summary: "UserID has one spelling.",
+    message: { match in
+        "\(match.node.name.text) aliases UserID."
+    }
+)
+```
+
+## Scopes And Typed Views
+
+`RuleScope` selects files. Compose `.repository`, `.productionSources`,
+`.component(_:)`, `.under(_:)`, and `.files(_:)` with union, intersection, or
+exclusion.
+
+`SyntaxScope` selects nodes inside a file. Use `.fileScope`, `.typeMembers`,
+`.local`, `.protocolMembers`, `.enclosed(in:)`, and
+`.insideFunction(matching:)` through `lexically(within:)` or
+`lexically(excluding:)`.
+
+`BumperSyntaxView` exposes value-only facts without discarding the concrete
+SwiftSyntax node type. `TypeShape` describes explicit type spelling, referenced
+type names, function shape, and attributes.
+
 ## Raw Visitor Escape Hatch
 
 Use `Rules.visitor(...)` when the visitor owns arbitrary analysis and failure
@@ -175,4 +275,4 @@ final class ForceUnwrapVisitor: SyntaxVisitor, RuleFailureSource {
 ```
 
 `VisitorRule` is the concrete rule type returned by this factory. Raw visitors
-remain supported; the escalation gate controls when to use them.
+remain supported. The escalation gate controls when to use them.

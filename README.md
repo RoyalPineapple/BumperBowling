@@ -325,6 +325,20 @@ skills/compose-bumper-rules/
 The skill guides an agent to reuse local vocabulary, choose the right rule
 level, write focused fixtures, and validate the completed change.
 
+Install the skill from the Bumper Bowling repository root:
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+ln -s "$PWD/skills/compose-bumper-rules" \
+  "${CODEX_HOME:-$HOME/.codex}/skills/compose-bumper-rules"
+```
+
+Start a new Codex session, then invoke `$compose-bumper-rules` explicitly or
+ask Codex to create, review, or refactor Bumper Bowling policy.
+
+The skill follows the standard Codex skill layout. Its `agents/openai.yaml`
+file supplies skill-list metadata and a default prompt.
+
 ## Commands
 
 ```text
