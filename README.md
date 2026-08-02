@@ -6,8 +6,22 @@
 
 **Turn your Swift repository's unwritten rules into rules everyone can run.**
 
-The compiler knows that `CheckoutView` conforms to `View`. It does not know
-that someone must be able to construct it in a preview.
+Every Swift codebase depends on truths that the type system cannot express.
+Features follow a shape. Dependencies point in a direction. Live services are
+built at the edge. Views remain previewable.
+
+These rules often live in review comments, examples, and the heads of
+experienced engineers. Each new contributor, human or agent, must infer the
+lane.
+
+Bumper Bowling puts that lane in Swift. It composes typed SwiftSyntax
+observations into scoped rules, then reports violations at the source.
+
+Your team declares the lane. Bumper Bowling keeps every player in it.
+
+Start with one useful truth: every SwiftUI view can be constructed in at least
+one preview. The compiler knows that `CheckoutView` conforms to `View`, but it
+cannot enforce that development pattern.
 
 ```swift
 struct CheckoutView: View {
@@ -17,7 +31,7 @@ struct CheckoutView: View {
 }
 ```
 
-Bumper Bowling can know:
+Write that rule in Swift:
 
 ```swift
 import BumperBowlingCore
