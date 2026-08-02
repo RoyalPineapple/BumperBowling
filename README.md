@@ -2,8 +2,11 @@
 
 [![CI](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml/badge.svg)](https://github.com/RoyalPineapple/BumperBowling/actions/workflows/ci.yml)
 
-Bumper Bowling keeps all players in the same lane by codifying and enforcing
-the unwritten rules of your Swift codebase.
+**Bumper Bowling keeps all players in the same lane.**
+
+Bumper Bowling is a programmable architecture validator for Swift codebases.
+It codifies and enforces the unwritten rules that developers, reviewers, CI,
+and agents rely on.
 
 Every codebase has rules for ownership, dependencies, and code shape. Teams
 often learn these rules through review, incidents, and experience. Bumper
@@ -12,13 +15,6 @@ failure with source evidence.
 
 You write policy in Swift. Bumper Bowling parses source with SwiftSyntax,
 evaluates typed rules, and reports evidence for every failure.
-
-| Tool | Protects |
-| --- | --- |
-| Swift compiler | Language, type, and concurrency correctness |
-| [SwiftLint](https://github.com/realm/swiftlint) | Style and local source conventions |
-| Runtime tests | Application behavior |
-| Bumper Bowling | Repository-specific source architecture |
 
 Use Bumper Bowling for rules such as these:
 
@@ -31,7 +27,7 @@ Use Bumper Bowling for rules such as these:
 Each repository owns its vocabulary and policy. Bumper Bowling supplies one
 typed rule engine for the architecture that the repository chooses.
 
-## The Idea
+## From Rule To Evidence
 
 Bumper Bowling turns this declaration:
 
@@ -41,15 +37,27 @@ CLI can depend on Core.
 Core uses Foundation only.
 ```
 
-into a repeatable source check. A failed check identifies the file, source
+into repeatable source validation. A failure identifies the file, source
 location, observed fact, and required architecture.
 
+```text
+Sources/CLI/Command.swift:14
+CLI imports undeclared component Database (database)
+```
+
 Developers, reviewers, CI, and agents use the same contract. A team can change
-a rule, add a focused fixture, run the check, and review a clear result.
+a rule, add a focused fixture, run the validation, and review a clear result.
 
 The name describes the job. A bowler chooses the throw. The bumpers keep the
 ball in its lane. Bumper Bowling lets a team move quickly inside the boundaries
 that it declares.
+
+| Tool | Protects |
+| --- | --- |
+| Swift compiler | Language, type, and concurrency correctness |
+| [SwiftLint](https://github.com/realm/swiftlint) | Style and local source conventions |
+| Runtime tests | Application behavior |
+| Bumper Bowling | Repository-specific source architecture |
 
 ## Get Started
 
@@ -70,11 +78,10 @@ Run these commands from the repository root:
 ```bash
 swift run bumper init .
 swift run bumper lint .
-swift run bumper test .
 ```
 
-`bumper init` writes `BumperBowling.swift`. `bumper lint` checks the
-repository. `bumper test` runs repository-owned tests for custom rules.
+`bumper init` writes `BumperBowling.swift`. `bumper lint` validates the
+repository.
 
 For an advisory CI rollout, use JSON output and a baseline:
 
@@ -86,8 +93,8 @@ swift run bumper lint . --baseline .bumper-baseline.json --fail-on error
 
 ## Declare The Architecture
 
-`BumperBowling.swift` declares one `BumperProject` named `bumper`. A
-project-owned `ComponentKey` enum makes component references compiler-checked.
+`BumperBowling.swift` declares one `BumperProject` named `bumper`. The compiler
+validates component references through a project-owned `ComponentKey` enum.
 
 ```swift
 import BumperBowlingCore
@@ -124,13 +131,15 @@ let bumper = BumperProject {
 }
 ```
 
-Each component declares three facts:
+This example declares five parts of the architecture:
 
 - `Owns` identifies the source paths that belong to the component.
 - `Modules` identifies the imports that represent the component.
 - `MayDependOn` identifies allowed component dependencies.
+- `MayUse` identifies allowed platform capabilities.
+- `Requires` identifies required source facts.
 
-The engine checks each component against its declared ownership, dependencies,
+The engine validates each component against its declared ownership, dependencies,
 imports, declarations, stored state, and selected syntax facts. A component
 policy selects the facts that matter for that component.
 
@@ -161,9 +170,13 @@ extension ComponentRequirement {
 }
 
 extension ComponentShape {
-    static let domain = ComponentShape {
+    static let foundationOnly = ComponentShape {
         MayUse(.foundation)
         DoesNotUse(.uiKit, .testing)
+    }
+
+    static let domain = ComponentShape {
+        Applies(.foundationOnly)
         Requires(.domainCore, severity: .error)
     }
 }
@@ -182,7 +195,7 @@ Component(.core) {
 owned paths provide the default scope for its requirements.
 
 A shape can apply another shape. Use `RuleDefinition` and `RuleScope` for a
-repository-specific check. Built-in and custom rules use the same parser, fact
+repository-specific rule. Built-in and custom rules use the same parser, fact
 cache, and report format.
 
 The project applies each value explicitly. A local file or package provides
@@ -198,36 +211,63 @@ library product.
   Sources/BumperRules/Rules.swift
 ```
 
-## Add A Custom Rule
-
-Use a `RuleDefinition` when the standard architecture DSL cannot state the
-policy. Add that rule to `Rules { ... }` with built-in rules.
+Apply the same policy to each component that shares this architecture:
 
 ```swift
-import BumperBowlingCore
+Component(.pricing) {
+    Owns("Sources/Pricing")
+    Applies(.domain)
+}
 
-let projectRules = RuleSet {
-    Rules.repository(
-        "project.import_allow_list",
-        severity: .error,
-        summary: "The project imports only allowed modules."
-    ) { context in
-        let allowed = Set(["Foundation"])
-        return try context.facts(BuiltInFacts.imports).occurrences
-            .filter { !allowed.contains($0.module.rawValue) }
-            .map { occurrence in
-                RuleFailure(
-                    path: occurrence.path,
-                    message: "This import is not allowed.",
-                    evidence: ViolationEvidence(
-                        observed: occurrence.module.rawValue,
-                        expectation: "an allowed import"
-                    )
-                )
-            }
-    }
+Component(.catalog) {
+    Owns("Sources/Catalog")
+    Applies(.domain)
 }
 ```
+
+Small source-fact requirements become reusable vocabulary. That vocabulary
+becomes component policy. The project then validates each component with the
+same policy.
+
+## Use The Right Level
+
+Bumper Bowling gives each repository several levels of rule authoring:
+
+| Need | Use |
+| --- | --- |
+| Component ownership and dependencies | Architecture DSL |
+| Reusable source policy | `ComponentRequirement` and `ComponentShape` |
+| Repository-wide policy | `AssertionShape` |
+| Standard ownership and traversal rules | `Rules.*` shapers |
+| Repository-specific fact rules | `RuleDefinition` |
+| File-level syntax rules | `Rules.files` and `SyntaxQuery` |
+| Direct syntax traversal | `SyntaxVisitor` |
+
+These standard shapers validate ownership beyond imports:
+
+```swift
+Rules.singleDeclaration(
+    "AppEnvironment",
+    owner: "Sources/App"
+)
+
+Rules.constructionOwnership(
+    "URLSession",
+    allowed: .under("Sources/Networking")
+)
+```
+
+Component requirements can validate code shape:
+
+```swift
+Component(.core) {
+    Owns("Sources/Core")
+    RequiresScoped(.enumStateMachine, "Sources/Core/Parser")
+}
+```
+
+Use a `RuleDefinition` when the repository needs a new typed fact rule. Add
+the rule to the same `Rules` block as the standard rules:
 
 ```swift
 Rules {
@@ -236,9 +276,15 @@ Rules {
 }
 ```
 
-Every rule can run in memory with `BumperBowlingTestSupport`. See
-[rule authoring](docs/RULE_AUTHORING.md) for the authoring ladder, fixtures,
-typed facts, queries, and raw `SyntaxVisitor` rules.
+All levels use the same parser, fact cache, and report format. Every custom
+rule can run in memory with `BumperBowlingTestSupport`:
+
+```bash
+swift run bumper test .
+```
+
+See [rule authoring](docs/RULE_AUTHORING.md) for fixtures, typed facts,
+queries, and direct `SyntaxVisitor` rules.
 
 ## Run In CI
 
@@ -248,7 +294,7 @@ This repository uses its own public API. CI runs package tests and:
 swift run bumper lint .
 ```
 
-You can run the same architecture check from a Swift test:
+You can run the same architecture validation from a Swift test:
 
 ```swift
 let report = try await BumperCommands.lint(
@@ -337,7 +383,7 @@ swift run bumper lint .
 ```
 
 The test override avoids repeated optimized builds for fixture runners. The
-repository also checks its own architecture.
+repository also validates its own architecture.
 
 ## Documentation
 
